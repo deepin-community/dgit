@@ -1,0 +1,27 @@
+#!/bin/sh
+set -e
+
+cd "$DGIT_TEST_TMP"
+
+exec >sendmail.last
+date
+printf "sendmail %s\n" "$*"
+cat
+
+exec >>sendmail.all
+echo '----------------------------------------------------------------'
+cat sendmail.last
+echo
+
+if [ "$DGIT_TEST_MUNPACK" ]; then
+	set -x
+	rm -rf sendmail.munpack
+	mkdir sendmail.munpack
+
+	sed 1,2d <sendmail.last | \
+	$DGIT_TEST_MUNPACK -t -C sendmail.munpack
+
+	test -f sendmail.munpack/part1
+	test -f sendmail.munpack/t2u_fake-job_tag.txt
+	# there might be a log transcript too
+fi

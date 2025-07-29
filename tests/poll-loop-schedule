@@ -1,0 +1,57 @@
+#!/usr/bin/perl -w
+#
+# Prints out a series of arguments suitable for passing to sleep,
+# as poll intervals.  Helper for t-poll-loop in tests/lib.
+#
+# Separate script becauwe (a) shell is very bad at FP arithmetic and
+# (b) printing the arithmetic in shell debug output wouldn't be nice either.
+
+use strict;
+use IO::Handle;
+
+open DEBUG, ">/dev/null" or die $!;
+
+while (@ARGV) {
+    last unless $ARGV[0] =~ m/^-/;
+    $_ = shift @ARGV;
+    if ($_ eq '--') {
+	last;
+    } elsif (m/^--debug$/) {
+	open DEBUG, ">&2" or die $!;
+    } else {
+	die "$0: unknown option $_\n";
+    }
+}
+
+die "$0: need (only) timeout argument" unless @ARGV==1;
+
+our ($overall_timeout) = @ARGV;
+
+my @output;
+my $left = 1;
+
+# Parameters (fixed)
+#
+# These parameters lead to 11 attempts,
+# with a first interval of          0.0236  T (0.707s with T=30)
+# and a final one of                0.25    T (7.5s   with T=30)
+# On timeout, we sleep too long by  0.00475 T (0.143s with T=30)
+# This all seems reasonable.
+my $sleep = 0.25;
+my $ratio = 1.3;
+
+printf DEBUG "# %10s %10s %12s\n", 'total', 'interval', 'actual';
+
+for (;;) {
+    my $actual_sleep = $sleep * $overall_timeout;
+    printf DEBUG "# %10.7f %10.7f %12.7f\n", $left, $sleep, $actual_sleep;
+    push @output, $actual_sleep;
+    $left -= $sleep;
+    $sleep /= $ratio;
+    last if $left < 0;
+};
+printf DEBUG "# %10.7f  %-9d %12.7f\n", $left, 0, $left * $overall_timeout;
+
+@output = reverse @output;
+print "0 @output\n" or die $!;
+flush STDOUT or die $!;

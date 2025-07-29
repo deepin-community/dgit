@@ -1,0 +1,57 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import examplegit
+t-tstunt-parsechangelog
+
+cd $p
+
+rsta=$(t-git-get-ref refs/remotes/dgit/dgit/stable)
+rsid=$(t-git-get-ref refs/remotes/dgit/dgit/sid)
+
+multi-good () {
+	t-refs-same-start
+	t-refs-same refs/remotes/dgit/dgit/stable
+	t-ref-same-val "previous stable" $rsta
+
+	t-refs-same-start
+	t-refs-same refs/remotes/dgit/dgit/sid
+	t-ref-same-val "previous sid" $rsid
+
+	t-refs-same-start
+	t-refs-same refs/remotes/dgit/dgit/stable,sid
+	t-ref-same-val "previous combined" $rcombined
+}
+
+t-dgit fetch stable,unstable
+
+rcombined=$(t-git-get-ref refs/remotes/dgit/dgit/stable,sid)
+
+multi-good
+
+cd ..
+
+t-dgit clone $p stable,unstable ./$p.clone
+
+cd $p.clone
+
+multi-good
+
+t-commit bogus 3.0 stable,unstable
+t-expect-fail "does not support multiple" \
+t-dgit -wgf build
+
+cd ..
+
+t-dgit clone --no-rm-on-error $p stable ./$p.pull
+cd $p.pull
+git checkout -b x
+git commit --allow-empty -m X
+t-dgit pull stable,unstable
+
+multi-good
+
+t-has-parent-or-is HEAD $rcombined
+
+t-ok

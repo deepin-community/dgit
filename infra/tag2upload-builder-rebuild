@@ -1,0 +1,82 @@
+#!/bin/bash
+# -*- fill-column: 78 -*-
+
+# Copyright (C) 2025  Sean Whitton <spwhitton@spwhitton.name>
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+set -eo pipefail
+shopt -s inherit_errexit # #514862, wtf
+
+release=bookworm
+mirror=http://deb.debian.org/debian
+variant=minbase
+early_pkgs=(
+    # This ensures /etc/ssh exists for copying in /etc/ssh/ssh_known_hosts.
+    openssh-client
+
+    python3-pygit2
+)
+customize_hooks=(
+    "upload /etc/ssh/ssh_known_hosts /etc/ssh/ssh_known_hosts"
+    'chroot "$1" adduser --gecos builder --disabled-password builder'
+
+    'mkdir "$1"/home/builder/.ssh'
+    "copy-in $HOME/.ssh/id_ed25519 /home/builder/.ssh/"
+    "copy-in $HOME/.ssh/id_ed25519.pub /home/builder/.ssh/"
+    'chroot "$1" chown -R --reference=/home/builder /home/builder/.ssh'
+
+    'mkdir "$1"/home/builder/.gnupg'
+    "copy-in $HOME/.gnupg/pubring.kbx /home/builder/.gnupg/"
+    'chroot "$1" chown -R --reference=/home/builder /home/builder/.gnupg'
+)
+late_pkgs=(
+    # We can't just have mmdebstrap include dgit and git-debrebase because
+    # autopkgtest-build-podman tries to do some ad hoc cleaning up which
+    # uninstalls some of their dependencies, thus uninstalling them, too.
+    #
+    # It also deletes our /etc/apt/sources.list.d/*.list and rewrites
+    # mmdebstrap's /etc/apt/sources.list
+    dgit/testing
+    git-debrebase/testing
+)
+
+mkdir -p ~/.local/share/containers
+touch ~/.local/share/containers/.nobackup
+
+# Live testing is much easier if this script is self-contained,
+# so we're not using mmdebstrap's support for hook directories.
+for t in setup extract essential customize; do
+    declare -n a=${t}_hooks
+    for i in "${!a[@]}"; do
+	printf -v a[i] -- "--$t-hook=%s" "${a[i]}"
+    done
+done
+set -x
+mmdebstrap \
+    --variant=$variant --include=$(set +x; IFS=,; echo "${early_pkgs[*]}") \
+    "${setup_hooks[@]}" "${extract_hooks[@]}" \
+    "${essential_hooks[@]}" "${customize_hooks[@]}" \
+    $release - $mirror | autopkgtest-build-podman \
+    --release=$release --tarball=- \
+    --post-command='printf "%s\n" >/etc/apt/preferences.d/20testing.pref \
+			   "Package: *" \
+			   "Pin: release a=testing" \
+			   "Pin-Priority: -10" \
+		 && printf "%s\n" >/etc/apt/sources.list.d/testing.list \
+			   "deb '$mirror' testing main" \
+		 && apt-get update \
+		 && apt-get -y install '"${late_pkgs[*]}" \
+    -- --network=host
+podman image prune --force

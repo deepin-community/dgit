@@ -1,0 +1,160 @@
+=head1 NAME
+
+dgit-nmu-simple - tutorial for DDs wanting to NMU with git
+
+=head1 INTRODUCTION AND SCOPE
+
+This tutorial describes how a Debian Developer can do
+a straightforward NMU
+of a package in Debian, using dgit.
+
+This document won't help you decide whether
+an NMU is a good idea or
+whether it be well received.
+The Debian Developers' Reference has some
+(sometimes questionable) guidance on this.
+
+Conversely, you do not need to know anything
+about the usual maintainer's git workflow.
+If appropriate, you can work on many different packages,
+making similar changes,
+without worrying about the individual maintainers' git practices.
+
+This tutorial only covers changes which
+can sensibly be expressed as a
+reasonably small number of linear commits
+(whether to Debian packaging or to upstream files or both).
+
+If you want to do a new upstream version,
+you probably want to do as the maintainer would have done.
+You'll need to find out what the maintainer's
+git practices are
+and 
+consult the appropriate C<dgit-maint-*(7)> workflow tutorial,
+
+=head1 SUMMARY
+
+=over 4
+
+    % dgit clone glibc jessie
+    % cd glibc
+    % git am ~/glibc-security-fix.diff
+    % dch --nmu "Apply upstream's fix for foo bug."
+    % git add debian/changelog && git commit -m"NMU changelog entry"
+    % dpkg-buildpackage -uc -b
+    [ run your tests ]
+    % dch -r && git add debian/changelog && git commit -m"Finalise NMU"
+    % dgit -wgf sbuild -A -c jessie
+    [ any final tests on generated .debs ]
+    % dgit -wgf [--delayed=5] push-source jessie
+    [ enter your gnupg passphrase as prompted ]
+    [ see that push and upload are successful ]
+    [ prepare and email NMU diff (git-diff, git-format-patch) ]
+
+=back
+
+=head1 WHAT KIND OF CHANGES AND COMMITS TO MAKE
+
+When preparing an NMU, the git commits you make on the dgit branch
+should be simple linear series of commits with good commit messages.
+The commit messages will be published in various ways,
+including perhaps being used as the cover messages for
+generated quilt patches.
+
+Do not make merge commits.
+Do not try to rebase to drop existing patches - if you need to revert a
+change which is actually a Debian patch,
+use git-revert.
+
+If you need to modify a Debian patch,
+make a new commit which fixes what needs fixing,
+and explain in the commit message which patch it should be
+squashed with
+(perhaps by use of a commit message in C<git rebase --autosquash -i>
+format).
+
+(Of course if you have specific instructions from the maintainer,
+you can follow those instead.
+But the procedure in this tutorial is legitimate for any maintainer,
+in the sense that it should generate an upload to which the
+maintainer cannot reasonably object.)
+
+=head1 PREPARING AND REVISING THE LOCAL BRANCH
+
+The dgit/sid branch is
+a normal local git branch tracking a (synthetic) upstream branch.
+So you can freely rewrite any commits that you have made locally
+and haven't pushed anywhere,
+as normal,
+
+The one thing that's weird is the "quilt fixup" commits
+(that turn up if you do eg dgit sbuild).
+If you're rebasing them at all, you can and should just drop them;
+dgit will then regenerate them as needed.
+
+All of this follows from one underlying fact:
+
+dgit doesn't have invisible git state somewhere.
+So if you rebase away the quilt fixup, and rework your branch,
+your branch is still good because it looks just like it would do,
+if you'd just made those commits straight off.
+(NB git-debrebase B<does> have weird off-branch state.)
+
+=head1 RELEVANT BRANCHES
+
+dgit clone will put you on a branch like C<dgit/sid>.
+There is a pseudo-remote called C<dgit> which also contains a branch
+like C<dgit/sid>, so you do things like
+C<git diff dgit/dgit/sid>
+to see what changes you have made.
+
+=head1 KEEPING YOUR WORKING TREE TIDY
+
+Don't forget to C<git add> any new files you create.
+Otherwise git clean
+(which is requested with the C<-wgf> option in the recipe above)
+will delete them.
+
+Many package builds leave dirty git trees.
+So, commit before building.
+That way you can use C<git reset --hard>.
+
+If you follow this approach
+you don't need to care about the build dirtying the
+tree.
+It also means you don't care about the package clean target,
+which is just as well because many package clean targets are broken.
+
+=head1 OTHER GIT BRANCHES
+
+The dgit git history
+(visible in gitk and git log)
+is not necessarily related to the maintainer's
+or upstream's git history (if any).
+
+If the maintainer has advertised a git repo with
+Vcs-Git
+dgit will set up a remote for it,
+so you can do
+
+=over 4
+
+    % git fetch vcs-git
+
+=back
+
+You can cherry pick changes from there, for example. 
+Note that the maintainer's git history may not be
+suitable for use with dgit.
+For example, it might be a patches-unapplied branch
+or even contain only a debian/ directory.
+
+=head1 UPLOADING TO DELAYED
+
+You can use dgit's I<--delayed> option
+to upload to the DELAYED queue.
+However, you should read the warning about this option in dgit(1).
+
+=head1 SEE ALSO
+
+dgit(1), dgit(7), dgit-maint-*(7)

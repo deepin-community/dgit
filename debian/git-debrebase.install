@@ -1,0 +1,4 @@
+usr/share/locale/*/LC_MESSAGES/git-debrebase.mo
+
+# usr/share/man/*/man*/git-debrebase.[1-9]
+# ^ translated manpages.  This has to be un-commented when they appear.

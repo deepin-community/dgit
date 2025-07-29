@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# usage:
+#   rm -rf .git/some/play/thing
+#   git-playtree-setup .git/some/play/thing
+# or:
+#   mkdir .git/some/play/thing
+#   cd .git/some/play/thing
+#   git-playtree-setup .
+#
+# Honours GIT_PLAYTREE_DEFAULT_BRANCH, which currently defaults to "master"
+
+set -e${GIT_PLAYTREE_SETUP_DEBUG}
+
+target=$1; shift
+
+case "$#.$target" in
+0.[^-]*) ;;
+*) echo >&2 'bad usage' ; exit 8 ;;
+esac
+
+[ "x$target" = x. ] || mkdir $target
+cd $target
+
+gcd=$(cd .. && git rev-parse --git-common-dir)
+case "$gcd" in
+/*) ;;
+*) gcd="../$gcd" ;;
+esac
+
+git -c init.defaultBranch=${GIT_PLAYTREE_DEFAULT_BRANCH-master} init -q
+git config gc.auto 0
+git config diff.noprefix 0
+
+unset_all () { git config --local --unset-all $key || [ $? = 5 ]; }
+
+for key in \
+                         user.email user.name user.useConfigOnly \
+                         core.sharedRepository                   \
+                         core.compression core.looseCompression  \
+                         core.bigFileThreshold core.fsyncObjectFiles \
+; do
+	unset_all
+	(
+		git --git-dir="$gcd" config -z --get-all $key || [ $? = 1 ]
+	) | xargs -n1 -0r -- \
+		git config --local --add $key
+done
+
+rm -rf .git/objects
+ln -s "$gcd/objects" .git/objects

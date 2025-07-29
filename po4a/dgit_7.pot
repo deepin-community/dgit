@@ -1,0 +1,887 @@
+# SOME DESCRIPTIVE TITLE
+# Copyright (C) YEAR Free Software Foundation, Inc.
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2024-04-11 22:39+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. type: TH
+#: ../dgit.1:2 ../dgit.7:1
+#, no-wrap
+msgid "dgit"
+msgstr ""
+
+#. type: TH
+#: ../dgit.1:2 ../dgit.7:1
+#, no-wrap
+msgid "Debian Project"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:3 ../dgit.7:2 ../dgit-user.7.pod:1 ../dgit-nmu-simple.7.pod:1
+#: ../dgit-maint-native.7.pod:1 ../dgit-maint-merge.7.pod:1
+#: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
+#: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
+#: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#: ../git-debpush.1.pod:1
+#, no-wrap
+msgid "NAME"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:1694 ../dgit.7:23 ../dgit-user.7.pod:447
+#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:125
+#: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
+#: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
+#: ../dgit-sponsorship.7.pod:325 ../dgit-maint-bpo.7.pod:140
+#: ../git-debrebase.1.pod:643 ../git-debrebase.5.pod:678
+#: ../git-debpush.1.pod:261
+#, no-wrap
+msgid "SEE ALSO"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:4
+msgid "dgit - principles of operation"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.7:4 ../dgit-user.7.pod:27 ../dgit-nmu-simple.7.pod:35
+#, no-wrap
+msgid "SUMMARY"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:14
+msgid ""
+"B<dgit> treats the Debian archive as a version control system, and "
+"bidirectionally gateways between the archive and git.  The git view of the "
+"package can contain the usual upstream git history, and will be augmented by "
+"commits representing uploads done by other developers not using dgit.  This "
+"git history is stored in a canonical location known as B<dgit-repos> which "
+"lives on a dedicated git server."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:23
+msgid ""
+"git branches suitable for use with dgit can be edited directly in git, and "
+"used directly for building binary packages.  They can be shared using all "
+"conventional means for sharing git branches.  It is not necessary to use "
+"dgit to work with dgitish git branches.  However, dgit is (usually) needed "
+"in order to convert to or from Debian-format source packages."
+msgstr ""
+
+#. type: TP
+#: ../dgit.7:24
+#, no-wrap
+msgid "B<dgit>(1)"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:27
+msgid "Reference manual and documentation catalogue."
+msgstr ""
+
+#. type: TP
+#: ../dgit.7:27
+#, no-wrap
+msgid "B<dgit-*(7)>"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:30
+msgid "Tutorials and workflow guides.  See dgit(1) for a list."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:30
+#, no-wrap
+msgid "MODEL"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:33
+msgid ""
+"You may use any suitable git workflow with dgit, provided you satisfy dgit's "
+"requirements:"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:38
+msgid ""
+"dgit maintains a pseudo-remote called B<dgit>, with one branch per suite.  "
+"This remote cannot be used with plain git."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:45
+msgid ""
+"The B<dgit-repos> repository for each package contains one ref per suite "
+"named B<refs/dgit/>I<suite>.  These should be pushed to only by dgit.  They "
+"are fast forwarding.  Each push on this branch corresponds to an upload (or "
+"attempted upload)."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:50
+msgid ""
+"However, it is perfectly fine to have other branches in dgit-repos; the dgit-"
+"repos repo for the package can even be the same as the `origin' remote, "
+"although this is not generally the case in Debian."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:56
+msgid ""
+"dgit push-* will also make signed tags called B<archive/debian/>I<version> "
+"(with version encoded a la DEP-14)  and push them to dgit-repos.  These are "
+"used at the server to authenticate pushes."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:66
+msgid ""
+"Uploads made by dgit contain an additional field B<Dgit> in the source "
+"package .dsc.  (This is added by dgit push-*.)  This specifies: a commit (an "
+"ancestor of the dgit/suite branch) whose tree is identical to the unpacked "
+"source upload; the distro to which the upload was made; a tag name which can "
+"be used to fetch the git commits; and a url to use as a hint for the dgit "
+"git server for that distro."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:78
+msgid ""
+"Uploads not made by dgit are represented in git by commits which are "
+"synthesised by dgit.  The tree of each such commit corresponds to the "
+"unpacked source; there is a commit with the contents, and a pseudo-merge "
+"from last known upload - that is, from the contents of the dgit/suite "
+"branch.  Depending on the source package format, the contents commit may "
+"have a more complex structure, but ultimately it will be a convergence of "
+"stubby branches from origin commits representing the components of the "
+"source package."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:83
+msgid ""
+"dgit expects trees that it works with to have a B<dgit> (pseudo) remote.  "
+"This refers to the dgit-created git view of the corresponding archive."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:92
+msgid ""
+"The dgit archive tracking view is synthesised locally, on demand, by each "
+"copy of dgit.  The tracking view is always a descendant of the dgit-repos "
+"suite branch (if one exists), but may be ahead of it if uploads have been "
+"done without dgit.  The archive tracking view is always fast forwarding "
+"within each suite."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:95
+msgid ""
+"dgit push-* can operate on any commit which is a descendant of the suite "
+"tracking branch."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:106
+msgid ""
+"dgit does not make a systematic record of its imports of orig tarball(s).  "
+"So it does not work by finding git tags or branches referring to orig "
+"tarball(s).  The orig tarballs are downloaded (by dgit clone) into the "
+"parent directory, as with a traditional (non-gitish) dpkg-source workflow.  "
+"You need to retain these tarballs in the parent directory for dgit build and "
+"dgit push-*.  (They are not needed for purely-git-based workflows.)"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:113
+msgid ""
+"dgit repositories could be cloned with standard (git) methods.  However, the "
+"dgit repositories do not contain uploads not made with dgit.  And for "
+"sourceful builds / uploads the orig tarball(s) will need to be present in "
+"the parent directory."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:120
+msgid ""
+"To a user looking at the archive, changes pushed in a simple NMU using dgit "
+"look like reasonable changes made in an NMU: in a `3.0 (quilt)' package the "
+"delta from the previous upload is recorded in new patch(es) constructed by "
+"dpkg-source."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:120
+#, no-wrap
+msgid "COMBINED SUITES"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:125
+msgid ""
+"dgit can synthesize a combined view of several underlying suites.  This is "
+"requested by specifying, for I<suite,> a comma-separated list:"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:127
+msgid "I<mainsuite>B<,>I<subsuite>..."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:129
+msgid "This facility is available with dgit clone, fetch and pull, only."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:139
+msgid ""
+"dgit will fetch the same package from each specified underlying suite, "
+"separately (as if with dgit fetch).  dgit will then generate a pseudomerge "
+"commit on the tracking branch B<remotes/dgit/dgit/>I<suite> which has the "
+"tip of each of the underlying suites as an ancestor, and which contains the "
+"same as the suite which has the highest version of the package."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:142
+msgid ""
+"The package must exist in mainsuite, but need not exist in the subsuites."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:146
+msgid "If a specified subsuite starts with B<-> then mainsuite is prepended."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:154
+msgid ""
+"So, for example, B<stable,-security> means to look for the package in "
+"stable, and stable-security, taking whichever is newer.  If stable is "
+"currently jessie, dgit clone would leave you on the branch B<dgit/jessie,-"
+"security>."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:162
+msgid ""
+"Combined suites are not supported by the dgit build operations.  This is "
+"because those options are intended for building for uploading source "
+"packages, and look in the changelog to find the relevant suite.  It does not "
+"make sense to name a dgit-synthesised combined suite in a changelog, or to "
+"try to upload to it."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:167
+msgid ""
+"When using this facility, it is important to always specify the same suites "
+"in the same order: dgit will not make a coherent fast-forwarding history "
+"view otherwise."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:171
+msgid ""
+"The history generated by this feature is not normally suitable for merging "
+"back into upstreams, as it necessarily contains unattractive pseudomerges."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:171
+#, no-wrap
+msgid "LIMITATIONS"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:184
+msgid ""
+"Because the synthesis of the suite tracking branches is done locally based "
+"only on the current archive state, it will not necessarily see every upload "
+"not done with dgit.  Also, different versions of dgit (or the software it "
+"calls)  might import the same .dscs differently (although we try to minimise "
+"this).  As a consequence, the dgit tracking views of the same suite, made by "
+"different instances of dgit, may vary.  They will have the same contents, "
+"but may have different history."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:193
+msgid ""
+"There is no uniform linkage between the tracking branches for different "
+"suites.  The Debian infrastructure does not do any automatic import of "
+"uploads made without dgit.  It would be possible for a distro's "
+"infrastructure to do this; in that case, different dgit client instances "
+"would see exactly the same history."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:201
+msgid ""
+"There has been no bulk import of historical uploads into Debian's dgit "
+"infrastructure.  To do this it would be necessary to decide whether to "
+"import existing vcs history (which might not be faithful to dgit's "
+"invariants)  or previous non-Dgit uploads (which would not provide a very "
+"rich history)."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:212
+msgid ""
+"git represents only file executability.  git does not represent empty "
+"directories, or any leaf objects other than plain files and symlinks.  The "
+"behaviour of Debian source package formats on objects with unusual "
+"permissions is complicated.  Some pathological Debian source packages will "
+"no longer build if empty directories are pruned (or if other things not "
+"reproduced by git are changed).  Such sources cannot be worked with properly "
+"in git, and therefore not with dgit either."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:212
+#, no-wrap
+msgid "READ-ONLY DISTROS"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:216
+msgid ""
+"Distros which do not maintain a set of dgit history git repositories can "
+"still be used in a read-only mode with dgit.  Currently Ubuntu is configured "
+"this way."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:216
+#, no-wrap
+msgid "GITATTRIBUTES"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:224
+msgid ""
+"git has features which can automatically transform files as they are being "
+"copied between the working tree and the git history.  The attributes can be "
+"specified in the source tree itself, in B<.gitattributes>.  See "
+"B<gitattributes>(5)."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:233
+msgid ""
+"These transformations are context-sensitive and not, in general, reversible, "
+"so dgit operates on the principle that the dgit git history contains the "
+"actual contents of the package.  (When dgit is manipulating a .dsc, it does "
+"so in a private area, where the transforming gitattributes are defused, to "
+"achieve this.)"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:242
+msgid ""
+"If transforming gitattributes are used, they can cause trouble, because the "
+"working tree files can differ from the git revision history (and therefore "
+"from the source packages).  dgit warns if it finds a .gitattributes file (in "
+"a package being fetched or imported), unless the transforming gitattributes "
+"have been defused."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:253
+msgid ""
+"dgit clone and dgit setup-new-tree disable transforming gitattributes by "
+"default, by creating a suitable .git/info/attributes.  See B<dgit setup-new-"
+"tree> and B<dgit setup-gitattributes> in dgit(1)."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:263
+msgid ""
+"Note that dgit does not disable gitattributes unless they would actually "
+"interfere with your work on dgit branches.  In particular, gitattributes "
+"which affect B<git archive> are not disabled, so .origs you generate by hand "
+"can be wrong.  You should consider using B<git-deborig (1)> which gets this "
+"right, suppressing the attributes."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:263
+#, no-wrap
+msgid "PACKAGE SOURCE FORMATS"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:268
+msgid ""
+"If you are not the maintainer, you do not need to worry about the source "
+"format of the package.  You can just make changes as you like in git.  If "
+"the package is a `3.0 (quilt)' package, the patch stack will usually not be "
+"represented in the git history."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:268
+#, no-wrap
+msgid "FILE EXECUTABILITY"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:275
+msgid ""
+"Debian source package formats do not always faithfully reproduce changes to "
+"executability.  But dgit insists that the result of dgit clone is identical "
+"(as far as git can represent - see Limitations, above)  to the result of "
+"dpkg-source -x."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:281
+msgid ""
+"So files that are executable in your git tree must be executable in the "
+"result of dpkg-source -x (but often aren't).  If a package has such "
+"troublesome files, they have to be non-executable in dgit-compatible git "
+"branches."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:281
+#, no-wrap
+msgid "FORMAT 3.0 (QUILT)"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:285
+msgid ""
+"For a format `3.0 (quilt)' source package, dgit may have to make a commit on "
+"your current branch to contain metadata used by quilt and dpkg-source."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:292
+msgid ""
+"This is because `3.0 (quilt)' source format represents the patch stack as "
+"files in debian/patches/ actually inside the source tree.  This means that, "
+"taking the whole tree (as seen by git or ls) (i)  dpkg-source cannot "
+"represent certain trees, and (ii) packing up a tree in `3.0 (quilt)' and "
+"then unpacking it does not always yield the same tree."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:297
+msgid ""
+"dgit will automatically work around this for you when building and pushing.  "
+"The only thing you need to know is that dgit build, sbuild, etc., may make "
+"new commits on your HEAD.  If you're not a quilt user this commit won't "
+"contain any changes to files you care about."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:304
+msgid ""
+"Simply committing to source files (whether in debian/ or not, but not to "
+"patches)  will result in a branch that dgit quilt-fixup can linearise.  "
+"Other kinds of changes, including editing patches or merging, cannot be "
+"handled this way."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:307
+msgid ""
+"You can explicitly request that dgit do just this fixup, by running dgit "
+"quilt-fixup."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:314
+msgid ""
+"If you are a quilt user you need to know that dgit's git trees are `patches "
+"applied packaging branches' and do not contain the .pc directory (which is "
+"used by quilt to record which patches are applied).  If you want to "
+"manipulate the patch stack you probably want to be looking at tools like git-"
+"debrebase, gbp pq, or git-dpm."
+msgstr ""
+
+#. type: SS
+#: ../dgit.7:315
+#, no-wrap
+msgid "quilt fixup error messages"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:317
+msgid "When dgit's quilt fixup fails, it prints messages like this:"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:323
+#, no-wrap
+msgid ""
+"dgit: base trees orig=5531f03d8456b702eab6 o+d/p=135338e9cc253cc85f84\n"
+"dgit: quilt differences: src:  == orig ##     gitignores:  == orig ##\n"
+"dgit: quilt differences:      HEAD ## o+d/p               HEAD ## o+d/p\n"
+"starting quiltify (multiple patches, linear mode)\n"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:326
+#, no-wrap
+msgid ""
+"dgit: error: quilt fixup cannot be linear.  Stopped at:\n"
+"dgit:  696c9bd5..84ae8f96: changed debian/patches/test-gitignore\n"
+msgstr ""
+
+#. type: TP
+#: ../dgit.7:328
+#, no-wrap
+msgid "B<orig>"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:334
+msgid ""
+"is an import of the .orig tarballs dgit found, with the debian/ directory "
+"from your HEAD substituted.  This is a git tree object, not a commit: you "
+"can pass its hash to git-diff but not git-log."
+msgstr ""
+
+#. type: TP
+#: ../dgit.7:335
+#, no-wrap
+msgid "B<o+d/p>"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:340
+msgid ""
+"is another tree object, which is the same as orig but with the patches from "
+"debian/patches applied."
+msgstr ""
+
+#. type: TP
+#: ../dgit.7:341
+#, no-wrap
+msgid "B<HEAD>"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:344
+msgid "is of course your own git HEAD."
+msgstr ""
+
+#. type: TP
+#: ../dgit.7:345
+#, no-wrap
+msgid "B<quilt differences>"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:354
+msgid ""
+"shows whether each of the these trees differs from the others (i) in "
+"upstream files excluding .gitignore files; (ii) in upstream .gitignore "
+"files.  B<==> indicates equality; B<##> indicates inequality."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:361
+msgid ""
+"dgit quilt-fixup --quilt=linear walks commits backwards from your HEAD "
+"trying to construct a linear set of additional patches, starting at the "
+"end.  It hopes to eventually find an ancestor whose tree is identical to o+d/"
+"p in all upstream files."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:372
+msgid ""
+"In the error message, 696c9bd5..84ae8f96 is the first commit child-parent "
+"edge which cannot sensibly be either ignored, or turned into a patch in "
+"debian/patches.  In this example, this is because it itself changes files in "
+"debian/patches, indicating that something unusual is going on and that "
+"continuing is not safe.  But you might also see other kinds of troublesome "
+"commit or edge."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:391
+msgid ""
+"Your appropriate response depends on the cause and the context.  If you have "
+"been freely merging your git branch and do not need need a pretty linear "
+"patch queue, you can use B<--quilt=single> or B<--quilt=smash>.  (Don't use "
+"the B<single-debian-patch> dpkg source format option; it has strange "
+"properties.)  If you want a pretty linear series, and this message is "
+"unexpected, it can mean that you have unwittingly committed changes that are "
+"not representable by dpkg-source (such as some mode changes).  Or maybe you "
+"just forgot a necessary B<--quilt=> option."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:397
+msgid ""
+"Finally, this problem can occur if you have provided Debian git tooling such "
+"as git-debrebase, git-dpm or git-buildpackage with upstream git commit(s) or "
+"tag(s)  which are not 100% identical to your orig tarball(s)."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:397
+#, no-wrap
+msgid "SPLIT VIEW AND SPLITTING QUILT MODES"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:404
+msgid ""
+"When working with git branches intended for use with the `3.0 (quilt)' "
+"source format dgit can automatically convert a suitable maintainer-provided "
+"git branch (in one of a variety of formats)  into a dgit branch."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:411
+msgid ""
+"When a splitting quilt mode is selected dgit build commands and dgit push-* "
+"will, on each invocation, convert the user's HEAD into the dgit view, so "
+"that it can be built and/or uploaded."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:417
+msgid ""
+"Split view mode can also be enabled explicitly with the --split-view command "
+"line option and the .split-view access configuration key."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:430
+msgid ""
+"When split view is in operation, regardless of the quilt mode, any dgit-"
+"generated pseudomerges and any quilt fixup commits will appear only in the "
+"dgit view.  dgit push-* will push the dgit view to the dgit git server.  The "
+"dgit view is always a descendant of the maintainer view.  dgit push-* will "
+"also make a maintainer view tag according to DEP-14 and push that to the "
+"dgit git server."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:438
+msgid ""
+"Splitting quilt modes must be enabled explicitly (by the use of the "
+"applicable command line options, subcommands, or configuration).  This is "
+"because it is not possible to reliably tell (for example)  whether a git "
+"tree for a dpkg-source `3.0 (quilt)' package is a patches-applied or patches-"
+"unapplied tree."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:442
+msgid ""
+"Split view conversions are cached in the ref dgit-intern/quilt-cache.  This "
+"should not be manipulated directly."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:442
+#, no-wrap
+msgid "FILES IN THE ORIG TARBALL BUT NOT IN GIT - AUTOTOOLS ETC."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:445
+msgid ""
+"This section is mainly of interest to maintainers who want to use dgit with "
+"their existing git history for the Debian package."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:451
+msgid ""
+"Some developers like to have an extra-clean git tree which lacks files which "
+"are normally found in source tarballs and therefore in Debian source "
+"packages.  For example, it is conventional to ship ./configure in the source "
+"tarball, but some people prefer not to have it present in the git view of "
+"their project."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:457
+msgid ""
+"dgit requires that the source package unpacks to exactly the same files as "
+"are in the git commit on which dgit push-* operates.  So if you just try to "
+"dgit push-* directly from one of these extra-clean git branches, it will "
+"fail."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:459
+msgid "As the maintainer you therefore have the following options:"
+msgstr ""
+
+#. type: TP
+#: ../dgit.7:459 ../dgit.7:470 ../dgit.7:519 ../dgit.7:527
+#, no-wrap
+msgid "\\(bu"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:470
+msgid ""
+"Delete the files from your git branches, and your Debian source packages, "
+"and carry the deletion as a delta from upstream.  (With `3.0 (quilt)' this "
+"means representing the deletions as patches.  You may need to pass --include-"
+"removal to dpkg-source --commit, or pass corresponding options to other "
+"tools.)  This can make the Debian source package less useful for people "
+"without Debian build infrastructure."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:476
+msgid ""
+"Persuade upstream that the source code in their git history and the source "
+"they ship as tarballs should be identical.  Of course simply removing the "
+"files from the tarball may make the tarball hard for people to use."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:482
+msgid ""
+"One answer is to commit the (maybe autogenerated)  files, perhaps with some "
+"simple automation to deal with conflicts and spurious changes.  This has the "
+"advantage that someone who clones the git repository finds the program just "
+"as easy to build as someone who uses the tarball."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:487
+msgid ""
+"Of course it may also be that the differences are due to build system bugs, "
+"which cause unintended files to end up in the source package.  dgit will "
+"notice this and complain.  You may have to fix these bugs before you can "
+"unify your existing git history with dgit's."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:488
+#, no-wrap
+msgid "FILES IN THE SOURCE PACKAGE BUT NOT IN GIT - DOCS, BINARIES ETC."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:492
+msgid ""
+"Some upstream tarballs contain build artifacts which upstream expects some "
+"users not to want to rebuild (or indeed to find hard to rebuild), but which "
+"in Debian we always rebuild."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:502
+msgid ""
+"Examples sometimes include crossbuild firmware binaries and documentation.  "
+"To avoid problems when building updated source packages (in particular, to "
+"avoid trying to represent as changes in the source package uninteresting or "
+"perhaps unrepresentable changes to such files)  many maintainers arrange for "
+"the package clean target to delete these files."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:510
+msgid ""
+"dpkg-source does not (with any of the commonly used source formats)  "
+"represent deletion of binaries (outside debian/) present in upstream.  Thus "
+"deleting such files in a dpkg-source working tree does not actually result "
+"in them being deleted from the source package.  Thus deleting the files in "
+"rules clean sweeps this problem under the rug."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:516
+msgid ""
+"However, git does always properly record file deletion.  Since dgit's "
+"principle is that the dgit git tree is the same of dpkg-source -x, that "
+"means that a dgit-compatible git tree always contains these files."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:519
+msgid ""
+"For the non-maintainer, this can be observed in the following suboptimal "
+"occurrences:"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:527
+msgid ""
+"The package clean target often deletes these files, making the git tree "
+"dirty trying to build the source package, etc.  This can be fixed by using "
+"B<dgit -wg> aka B<--clean=git>, so that the package clean target is never "
+"run."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:534
+msgid ""
+"The package build modifies these files, so that builds make the git tree "
+"dirty.  This can be worked around by using `git reset --hard' after each "
+"build (or at least before each commit or push)."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:544
+msgid ""
+"From the maintainer's point of view, the main consequence is that to make a "
+"dgit-compatible git branch it is necessary to commit these files to git.  "
+"The maintainer has a few additional options for mitigation: for example, it "
+"may be possible for the rules file to arrange to do the build in a temporary "
+"area, which avoids updating the troublesome files; they can then be left in "
+"the git tree without seeing trouble."
+msgstr ""
+
+#. type: SH
+#: ../dgit.7:544
+#, no-wrap
+msgid "PROBLEMS WITH PACKAGE CLEAN TARGETS ETC."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:552
+msgid ""
+"A related problem is other unexpected behaviour by a package's B<clean> "
+"target.  If a package's rules modify files which are distributed in the "
+"package, or simply forget to remove certain files, dgit will complain that "
+"the tree is dirty."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:560
+msgid ""
+"Again, the solution is to use B<dgit -wg> aka B<--clean=git>, which "
+"instructs dgit to use git clean instead of the package's build target, along "
+"with perhaps B<git reset --hard> before each build."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.7:564
+msgid ""
+"This is 100% reliable, but has the downside that if you forget to git add or "
+"to commit, and then use B<dgit -wg> or B<git reset --hard>, your changes may "
+"be lost."
+msgstr ""

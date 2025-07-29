@@ -1,0 +1,41 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-import-chk
+
+t-tstunt-parsechangelog
+
+t-select-package example
+v=1.0
+t-worktree $v
+
+cd $p
+
+dsc=${p}_${v}.dsc
+
+chk () {
+	local perl="$1"
+	local unperl="$2"
+	git checkout master~0
+	perl -i -pe "next unless m/^ -- /; $perl" debian/changelog
+	git commit --allow-empty -a -m "perl $perl"
+	(cd ..; dpkg-source -i\.git -I.git -b $p)
+	t-dgit import-dsc ../$dsc +x
+	git checkout x~0
+	t-import-chk-authorship
+}
+
+massage () {
+	perl -i~ -pe "$unperl" "$1"
+}
+
+import_chk_changelog_massage=massage
+
+chk
+
+chk 	's/Ian Jackson/Ian Jackson, SPQR/' \
+	's/Ian Jackson, SPQR/Ian Jackson SPQR/'
+
+chk 	's/Ian Jackson/"Ian Jackson, SPQR"/'
+
+t-ok

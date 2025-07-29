@@ -1,0 +1,1400 @@
+# SOME DESCRIPTIVE TITLE
+# Copyright (C) YEAR Free Software Foundation, Inc.
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2025-03-28 17:38+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. type: =head1
+#: ../dgit.1:3 ../dgit.7:2 ../dgit-user.7.pod:1 ../dgit-nmu-simple.7.pod:1
+#: ../dgit-maint-native.7.pod:1 ../dgit-maint-merge.7.pod:1
+#: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
+#: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
+#: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#: ../git-debpush.1.pod:1 ../tag2upload.5.pod:1
+#, no-wrap
+msgid "NAME"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:1826 ../dgit.7:23 ../dgit-user.7.pod:463
+#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:125
+#: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
+#: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
+#: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
+#: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
+#: ../git-debpush.1.pod:272 ../tag2upload.5.pod:224
+#, no-wrap
+msgid "SEE ALSO"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-user.7.pod:5 ../dgit-maint-native.7.pod:5
+#: ../dgit-maint-merge.7.pod:5 ../dgit-maint-gbp.7.pod:5
+#: ../dgit-maint-debrebase.7.pod:5 ../dgit-downstream-dsc.7.pod:5
+#: ../dgit-maint-bpo.7.pod:5 ../git-debrebase.5.pod:5 ../tag2upload.5.pod:5
+msgid "INTRODUCTION"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-native.7.pod:37 ../dgit-maint-gbp.7.pod:16
+#: ../dgit-maint-debrebase.7.pod:38
+msgid ""
+"Benefit from dgit's safety catches.  In particular, ensure that your upload "
+"always matches exactly your git HEAD."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-merge.7.pod:47 ../dgit-maint-debrebase.7.pod:61
+msgid "INITIAL DEBIANISATION"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:49 ../dgit-maint-debrebase.7.pod:63
+msgid ""
+"This section explains how to start using this workflow with a new package.  "
+"It should be skipped when converting an existing package to this workflow."
+msgstr ""
+
+#. type: =head3
+#: ../dgit-maint-merge.7.pod:53 ../dgit-maint-merge.7.pod:347
+#: ../dgit-maint-merge.7.pod:426 ../dgit-maint-debrebase.7.pod:67
+#: ../dgit-maint-debrebase.7.pod:362
+msgid "When upstream tags releases in git"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:55 ../dgit-maint-debrebase.7.pod:69
+msgid ""
+"Suppose that the latest stable upstream release is 1.2.2, and this has been "
+"tagged '1.2.2' by upstream."
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:60 ../dgit-maint-debrebase.7.pod:74
+#, no-wrap
+msgid ""
+"    % git clone -oupstream https://some.upstream/foo.git\n"
+"    % cd foo\n"
+"    % git verify-tag 1.2.2\n"
+"    % git reset --hard 1.2.2\n"
+"    % git branch --unset-upstream\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:93 ../dgit-maint-debrebase.7.pod:102
+msgid "Finally, you need an orig tarball:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:97 ../dgit-maint-merge.7.pod:420
+#: ../dgit-maint-debrebase.7.pod:106 ../dgit-maint-debrebase.7.pod:429
+#, no-wrap
+msgid ""
+"    % git deborig\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:101 ../dgit-maint-debrebase.7.pod:110
+msgid "See git-deborig(1) if this fails."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:103 ../dgit-maint-debrebase.7.pod:112
+msgid ""
+"This tarball is ephemeral and easily regenerated, so we don't commit it "
+"anywhere (e.g. with tools like pristine-tar(1))."
+msgstr ""
+
+#. type: =head3
+#: ../dgit-maint-merge.7.pod:123 ../dgit-maint-debrebase.7.pod:137
+msgid "Using untagged upstream commits"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:127 ../dgit-maint-debrebase.7.pod:141
+msgid ""
+"Sometimes upstream does not tag their releases, or you want to package an "
+"unreleased git snapshot.  In such a case you can create your own upstream "
+"release tag, of the form B<upstream/>I<ver>, where I<ver> is the upstream "
+"version you plan to put in I<debian/changelog>.  The B<upstream/> prefix "
+"ensures that your tag will not clash with any tags upstream later creates."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:134 ../dgit-maint-debrebase.7.pod:148
+msgid ""
+"For example, suppose that the latest upstream release is 1.2.2 and you want "
+"to package git commit ab34c21 which was made on 2013-12-11.  A common "
+"convention is to use the upstream version number 1.2.2+git20131211.ab34c21 "
+"and so you could use"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:141 ../dgit-maint-debrebase.7.pod:155
+#, no-wrap
+msgid ""
+"    % git tag -s upstream/1.2.2+git20131211.ab34c21 ab34c21\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:145 ../dgit-maint-debrebase.7.pod:159
+msgid "to obtain a release tag, and then proceed as above."
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:151 ../dgit-maint-debrebase.7.pod:165
+#, no-wrap
+msgid ""
+"    % git tag -s upstream/$(git show --date=format:%Y%m%d --pretty=format:\"1.2.2+git%cd.%h\" --quiet upstream/main) upstream/main\n"
+"\n"
+msgstr ""
+
+#. type: =head3
+#: ../dgit-maint-merge.7.pod:157 ../dgit-maint-merge.7.pod:359
+#: ../dgit-maint-merge.7.pod:451 ../dgit-maint-debrebase.7.pod:171
+#: ../dgit-maint-debrebase.7.pod:374
+msgid "When upstream releases only tarballs"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:174 ../dgit-maint-debrebase.7.pod:216
+#, no-wrap
+msgid ""
+"    [DEFAULT]\n"
+"    upstream-branch = upstream\n"
+"    debian-branch = master\n"
+"    upstream-tag = upstream/%(version)s\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:179 ../dgit-maint-debrebase.7.pod:221
+#, no-wrap
+msgid ""
+"    sign-tags = True\n"
+"    pristine-tar = False\n"
+"    pristine-tar-commit = False\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:215 ../dgit-maint-debrebase.7.pod:199
+#, no-wrap
+msgid ""
+"    % git remote add -f origin salsa.debian.org:debian/foo.git\n"
+"    % git push --follow-tags -u origin master upstream\n"
+"\n"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-merge.7.pod:223 ../dgit-maint-debrebase.7.pod:243
+msgid "CONVERTING AN EXISTING PACKAGE"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:225 ../dgit-maint-debrebase.7.pod:245
+msgid ""
+"This section explains how to convert an existing Debian package to this "
+"workflow.  It should be skipped when debianising a new package."
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:264 ../dgit-maint-debrebase.7.pod:276
+#, no-wrap
+msgid ""
+"    % git remote add -f upstream https://some.upstream/foo.git\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:277 ../dgit-maint-debrebase.7.pod:330
+msgid ""
+"To achieve this, you might need to delete I<debian/source/local-options>.  "
+"One way to have dgit check your progress is to run B<dgit build-source>."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-merge.7.pod:320 ../dgit-maint-debrebase.7.pod:482
+msgid "BUILDING AND UPLOADING"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-merge.7.pod:345 ../dgit-maint-debrebase.7.pod:360
+msgid "Obtaining the release"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:351 ../dgit-maint-debrebase.7.pod:366
+#, no-wrap
+msgid ""
+"    % git fetch --tags upstream\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:355 ../dgit-maint-debrebase.7.pod:370
+msgid ""
+"If you want to package an untagged upstream commit (because upstream does "
+"not tag releases or because you want to package an upstream development "
+"snapshot), see \"Using untagged upstream commits\" above."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:361 ../dgit-maint-debrebase.7.pod:376
+msgid ""
+"You will need the I<debian/gbp.conf> from \"When upstream releases only "
+"tarballs\", above.  You will also need your upstream branch.  Above, we "
+"pushed this to B<salsa.debian.org>.  You will need to clone or fetch from "
+"there, instead of relying on B<dgit clone>/B<dgit fetch> alone."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:366 ../dgit-maint-debrebase.7.pod:381
+msgid "Then, either"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:370 ../dgit-maint-debrebase.7.pod:385
+#, no-wrap
+msgid ""
+"    % gbp import-orig ../foo_1.2.3.orig.tar.xz\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:374 ../dgit-maint-debrebase.7.pod:389
+msgid "or if you have a working watch file"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-merge.7.pod:378 ../dgit-maint-debrebase.7.pod:393
+#, no-wrap
+msgid ""
+"    % gbp import-orig --uscan\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:414 ../dgit-maint-debrebase.7.pod:423
+msgid ""
+"If you obtained a tarball from upstream, you are ready to try a build.  If "
+"you merged a git tag from upstream, you will first need to generate a "
+"tarball:"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-merge.7.pod:424 ../dgit-maint-debrebase.7.pod:517
+msgid "HANDLING DFSG-NON-FREE MATERIAL"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:453 ../dgit-maint-debrebase.7.pod:591
+msgid ""
+"The easiest way to handle this is to add a B<Files-Excluded> field to "
+"I<debian/copyright>, and a B<uversionmangle> setting in I<debian/watch>.  "
+"See uscan(1).  Alternatively, see the I<--filter> option detailed in gbp-"
+"import-orig(1)."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-merge.7.pod:498 ../dgit-maint-gbp.7.pod:133
+#: ../dgit-maint-debrebase.7.pod:596
+msgid "INCORPORATING NMUS"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-merge.7.pod:513 ../dgit-maint-gbp.7.pod:143
+#: ../dgit-maint-debrebase.7.pod:796 ../dgit-maint-bpo.7.pod:144
+#: ../git-debpush.1.pod:277
+msgid "AUTHOR"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-merge.7.pod:515 ../dgit-maint-debrebase.7.pod:798
+msgid ""
+"This tutorial was written and is maintained by Sean Whitton "
+"<spwhitton@spwhitton.name>.  It contains contributions from other dgit "
+"contributors too - see the dgit copyright file."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-gbp.7.pod:32 ../dgit-maint-debrebase.7.pod:334
+msgid "GIT CONFIGURATION"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:3
+msgid ""
+"dgit - tutorial for package maintainers, using a workflow centered around "
+"git-debrebase(1)"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:7
+msgid ""
+"This document describes elements of a workflow for maintaining a non-native "
+"Debian package using B<dgit>.  We maintain the Debian delta as a series of "
+"git commits on our master branch.  We use git-debrebase(1) to shuffle our "
+"branch such that this series of git commits appears at the end of the "
+"branch.  All the public git history is fast-forwarding, i.e., we do not "
+"rewrite and force-push."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:14
+msgid "Some advantages of this workflow:"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:20
+msgid ""
+"Manipulate the delta queue using the full power of git-rebase(1), instead of "
+"relying on quilt(1), and without having to switch back and forth between "
+"patches-applied and patches-unapplied branches when committing changes and "
+"trying to build, as with gbp-pq(1)."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:27
+msgid ""
+"If you are using 3.0 (quilt), provide your delta queue as a properly "
+"separated series of quilt patches in the source package that you upload to "
+"the archive (unlike with dgit-maint-merge(7))."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:33
+msgid ""
+"Avoid the git tree being dirtied by the application or unapplication of "
+"patches, as they are always applied."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:43
+msgid ""
+"Provide your full git history in a standard format on B<dgit-repos>, where "
+"it can benefit downstream dgit users, such as people using dgit to do an NMU "
+"(see dgit-nmu-simple(7) and dgit-user(7))."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:49
+msgid ""
+"Minimise the amount you need to know about 3.0 (quilt) in order to maintain "
+"Debian source packages which use that format."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:54
+msgid ""
+"This workflow is appropriate for packages where the Debian delta contains "
+"multiple pieces which interact, or which you don't expect to be able to "
+"upstream soon.  For packages with simple and/or short-lived Debian deltas, "
+"use of git-debrebase(1) introduces unneeded complexity.  For such packages, "
+"consider the workflow described in dgit-maint-merge(7)."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:82
+msgid ""
+"The final command detaches your master branch from the upstream remote, so "
+"that git doesn't try to push anything there, or merge unreleased upstream "
+"commits.  To maintain a copy of your packaging branch on B<salsa.debian.org> "
+"in addition to B<dgit-repos>, you can do something like this:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:90
+#, no-wrap
+msgid ""
+"    % git remote add -f origin git@salsa.debian.org:debian/foo.git\n"
+"    % git push --follow-tags -u origin master\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:95
+msgid ""
+"Now go ahead and Debianise your package.  Make commits on the master branch, "
+"adding things in the I<debian/> directory, or patching the upstream source.  "
+"For technical reasons, B<it is essential that your first commit introduces "
+"the debian/ directory containing at least one file, and does nothing else.> "
+"In other words, make a commit introducing I<debian/> before patching the "
+"upstream source."
+msgstr ""
+
+#. type: =head3
+#: ../dgit-maint-debrebase.7.pod:115
+msgid "Comparing upstream's tarball releases"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:119
+msgid ""
+"The above assumes that you know how to build the package from git and that "
+"doing so is straightforward."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:122
+msgid ""
+"If, as a user of the upstream source, you usually build from upstream "
+"tarball releases, rather than upstream git tags, you will sometimes find "
+"that the git tree doesn't contain everything that is in the tarball."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:127
+msgid ""
+"Additional build steps may be needed.  For example, you may need your "
+"I<debian/rules> to run autotools."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:130
+msgid ""
+"You can compare the upstream tarball release, and upstream git tag, within "
+"git, by importing the tarball into git as described in the next section, "
+"using a different value for 'upstream-tag', and then using git-diff(1) to "
+"compare the imported tarball to the release tag."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:161
+msgid ""
+"One can generate such a versioned tag using git show's --pretty option. e.g.:"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:173
+msgid ""
+"Because we want to work in git, we need a virtual upstream branch with "
+"virtual release tags.  gbp-import-orig(1) can manage this for us.  To begin"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:179
+#, no-wrap
+msgid ""
+"    % mkdir foo\n"
+"    % cd foo\n"
+"    % git init\n"
+"    % git checkout -b upstream\n"
+"    % gbp import-orig \\\n"
+"        --upstream-branch=upstream --debian-branch=master \\\n"
+"        --upstream-tag='upstream/%(version)s' \\\n"
+"        --sign-tags --no-pristine-tar \\\n"
+"        ../foo_1.2.2.orig.tar.xz\n"
+"    % git branch -f upstream\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:192
+msgid ""
+"This should leave you on the master branch.  Next, our upstream branch "
+"cannot be pushed to B<dgit-repos>, but since we will need it whenever we "
+"import a new upstream version, we must push it somewhere.  The usual choice "
+"is B<salsa.debian.org>:"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:204
+msgid ""
+"You are now ready to proceed as above, making commits to the I<debian/> "
+"directory and to the upstream source.  As above, for technical reasons, B<it "
+"is essential that your first commit introduces the debian/ directory "
+"containing at least one file, and does nothing else.> In other words, make a "
+"commit introducing I<debian/> before patching the upstream source."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:211
+msgid ""
+"A convenient way to ensure this requirement is satisfied is to start by "
+"creating I<debian/gbp.conf>:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:225
+#, no-wrap
+msgid ""
+"    [import-orig]\n"
+"    merge = False\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:230
+msgid "and commit that:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:234
+#, no-wrap
+msgid ""
+"    % git add debian/gbp.conf && git commit -m \"create gbp.conf\"\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:238
+msgid ""
+"Note that we couldn't create I<debian/gbp.conf> before now for the same "
+"technical reasons which require our first commit to introduce I<debian/> "
+"without patching the upstream source.  That's why we had to pass a lot of "
+"options to our first call to gbp-import-orig(1)."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:248
+msgid ""
+"If you have an existing git history that you have pushed to an ordinary git "
+"server like B<salsa.debian.org>, we start with that.  If you don't already "
+"have it locally, you'll need to clone it, and obtain the corresponding "
+"orig.tar from the archive:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:255
+#, no-wrap
+msgid ""
+"    % git clone salsa.debian.org:debian/foo\n"
+"    % cd foo\n"
+"    % dgit setup-new-tree\n"
+"    % origtargz\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:262
+msgid ""
+"If you don't have any existing git history, or you have history only on the "
+"special B<dgit-repos> server, we start with B<dgit clone>:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:267
+#, no-wrap
+msgid ""
+"    % dgit clone foo\n"
+"    % cd foo\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:272
+msgid "Then we make new upstream tags available:"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:280
+msgid ""
+"We now use a B<git debrebase convert-from-*> command to convert your "
+"existing history to the git-debrebase(5) data model.  Which command you "
+"should use depends on some facts about your repository:"
+msgstr ""
+
+#. type: =item
+#: ../dgit-maint-debrebase.7.pod:286
+msgid "(A) There is no delta queue."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:288
+msgid "If there do not exist any Debian patches, use"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:292 ../dgit-maint-debrebase.7.pod:304
+#, no-wrap
+msgid ""
+"    % git debrebase convert-from-gbp\n"
+"\n"
+msgstr ""
+
+#. type: =item
+#: ../dgit-maint-debrebase.7.pod:296
+msgid "(B) There is a delta queue, and patches are unapplied."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:298
+msgid ""
+"This is the standard git-buildpackage(1) workflow: there are Debian patches, "
+"but the upstream source is committed to git without those patches applied.  "
+"Use"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:308
+msgid ""
+"If you were not previously using dgit to upload your package (i.e. you were "
+"not using the workflow described in dgit-maint-gbp(7)), and you happen to "
+"have run B<dgit fetch sid> in this clone of the repository, you will need to "
+"pass I<--fdiverged> to this command."
+msgstr ""
+
+#. type: =item
+#: ../dgit-maint-debrebase.7.pod:313
+msgid "(C) There is a delta queue, and patches are applied."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:315
+msgid "Use"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:319
+#, no-wrap
+msgid ""
+"    % git debrebase convert-from-dgit-view\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:325
+msgid ""
+"Finally, you need to ensure that your git HEAD is dgit-compatible, i.e., it "
+"is exactly what you would get if you deleted .git, invoked B<dpkg-"
+"buildpackage -S>, and then unpacked the resultant source package."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:336
+msgid ""
+"git-debrebase(1) does not yet support using B<git merge> to merge divergent "
+"branches of development (see \"OTHER MERGES\" in git-debrebase(5)).  You "
+"should configure git such that B<git pull> does not try to merge:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:343
+#, no-wrap
+msgid ""
+"    % git config --local pull.rebase true\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:347
+msgid ""
+"Now when you pull work from other Debian contributors, git will rebase your "
+"work on top of theirs."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:350
+msgid ""
+"If you use this clone for upstream development in addition to Debian "
+"packaging work, you may not want to set this global setting.  Instead, see "
+"the B<branch.autoSetupRebase> and B<branch.E<lt>nameE<gt>.rebase> settings "
+"in git-config(5)."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-debrebase.7.pod:355
+msgid "IMPORTING NEW UPSTREAM RELEASES"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:357
+msgid ""
+"There are two steps: obtaining git refs that correspond to the new release, "
+"and importing that release using git-debrebase(1)."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:397
+msgid "Importing the release"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:401
+#, no-wrap
+msgid ""
+"    % git debrebase new-upstream 1.2.3\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:405
+msgid ""
+"This invocation of git-debrebase(1) involves a git rebase.  You may need to "
+"resolve conflicts if the Debian delta queue does not apply cleanly to the "
+"new upstream source."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:409
+msgid ""
+"If all went well, you can now review the merge of the new upstream release:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:414
+#, no-wrap
+msgid ""
+"    git diff debian/1.2.2-1..HEAD -- . ':!debian'\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:418
+msgid ""
+"Also, diff with I<--name-status> and I<--diff-filter=ADR> to see just the "
+"list of added or removed files, which is useful to determine whether there "
+"are any new or deleted files that may need accounting for in your copyright "
+"file."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-debrebase.7.pod:433
+msgid "EDITING THE DEBIAN PACKAGING"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:435
+msgid "Just make commits on master that change the contents of I<debian/>."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-debrebase.7.pod:437
+msgid "EDITING THE DELTA QUEUE"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:439
+msgid "Adding new patches"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:441
+msgid ""
+"Adding new patches is straightforward: just make commits touching only files "
+"outside of the I<debian/> directory.  You can also use tools like git-"
+"revert(1), git-am(1) and git-cherry-pick(1)."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:445
+msgid "Editing patches: starting a debrebase"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:447
+msgid ""
+"git-debrebase(1) is a wrapper around git-rebase(1) which allows us to edit, "
+"re-order and delete patches.  Run"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:452 ../dgit-maint-debrebase.7.pod:759
+#, no-wrap
+msgid ""
+"    % git debrebase -i\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:456
+msgid ""
+"to start an interactive rebase.  You can edit, re-order and delete commits "
+"just as you would during B<git rebase -i>."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:459
+msgid "Editing patches: finishing a debrebase"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:461
+msgid ""
+"After completing the git rebase, your branch will not be a fast-forward of "
+"the git HEAD you had before the rebase.  This means that we cannot push the "
+"branch anywhere.  If you are ready to upload, B<dgit push-source> (or B<dgit "
+"push-built>) will take care of fixing this up for you."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:467
+msgid ""
+"If you are not yet ready to upload, and want to push your branch to a git "
+"remote such as B<salsa.debian.org>,"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:472
+#, no-wrap
+msgid ""
+"    % git debrebase conclude\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:476
+msgid ""
+"Note that each time you conclude a debrebase you introduce a pseudomerge "
+"into your git history, which may make it harder to read.  Try to do all of "
+"the editing of the delta queue that you think will be needed for this "
+"editing session in a single debrebase, so that there is a single debrebase "
+"stitch."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:484
+msgid ""
+"You can use dpkg-buildpackage(1) for test builds.  When you are ready to "
+"build for an upload, use B<dgit sbuild>, B<dgit pbuilder> or B<dgit "
+"cowbuilder>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:488
+msgid ""
+"Upload with B<dgit push-source> or B<dgit push-built>.  Remember to pass I<--"
+"new> if the package is new in the target suite."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:491
+msgid ""
+"In some cases where you used B<git debrebase convert-from-gbp> since the "
+"last upload, it is not possible for dgit to make your history fast-"
+"forwarding from the history on B<dgit-repos>.  In such cases you will have "
+"to pass I<--trust-changelog> to dgit.  git-debrebase will normally tell you "
+"if this will be needed."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:497
+msgid ""
+"If you want to upload with git-debpush(1), for the first upload you should "
+"pass the B<--quilt=linear> quilt mode option (see git-debpush(1))."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:501
+msgid ""
+"Right before uploading, if you did not just already do so, you might want to "
+"have git-debrebase(1) shuffle your branch such that the Debian delta queue "
+"appears right at the tip of the branch you will push:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:507
+#, no-wrap
+msgid ""
+"    % git debrebase\n"
+"    % dgit push-source\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:512
+msgid "Note that this will introduce a new pseudomerge."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:514
+msgid ""
+"After dgit pushing, be sure to git push to B<salsa.debian.org>, if you're "
+"using that."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:519
+msgid "Illegal material"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:521
+msgid ""
+"Here we explain how to handle material that is merely DFSG-non-free.  "
+"Material which is legally dangerous (for example, files which are actually "
+"illegal) cannot be handled this way."
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:525
+#, no-wrap
+msgid ""
+"If you encounter possibly-legally-dangerous material in the upstream\n"
+"source code you should seek advice.  It is often best not to make a\n"
+"fuss on a public mailing list (at least, not at first).  Instead,\n"
+"email your archive administrators.  For Debian that is\n"
+" To: dgit-owner@debian.org, ftpmaster@ftp-master.debian.org\n"
+"\n"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:531
+msgid "DFSG-non-free: When upstream tags releases in git"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:533
+msgid ""
+"Our approach is to maintain a DFSG-clean upstream branch, and create tags on "
+"this branch for each release that we want to import.  We then import those "
+"tags per \"Importing the release\", above.  In the case of a new package, we "
+"base our initial Debianisation on our first DFSG-clean tag."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:539
+msgid "For the first upstream release that requires DFSG filtering:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:543
+#, no-wrap
+msgid ""
+"    % git checkout -b upstream-dfsg 1.2.3\n"
+"    % git rm evil.bin\n"
+"    % git commit -m \"upstream version 1.2.3 DFSG-cleaned\"\n"
+"    % git tag -s 1.2.3+dfsg\n"
+"    % git checkout master\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:551
+msgid ""
+"Now either proceed with \"Importing the release\" on the 1.2.3+dfsg tag, or "
+"in the case of a new package,"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:556
+#, no-wrap
+msgid ""
+"    % git branch --unset-upstream\n"
+"    % git reset --hard 1.2.3+dfsg\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:561
+msgid "and proceed with \"INITIAL DEBIANISATION\"."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:563
+msgid ""
+"For subsequent releases (whether or not they require additional filtering):"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:568
+#, no-wrap
+msgid ""
+"    % git checkout upstream-dfsg\n"
+"    % git merge 1.2.4\n"
+"    % git rm further-evil.bin # if needed\n"
+"    % git commit -m \"upstream version 1.2.4 DFSG-cleaned\" # if needed\n"
+"    % git tag -s 1.2.4+dfsg\n"
+"    % git checkout master\n"
+"    % # proceed with \"Importing the release\" on 1.2.4+dfsg tag\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:578
+msgid ""
+"Our upstream-dfsg branch cannot be pushed to B<dgit-repos>, but since we "
+"will need it whenever we import a new upstream version, we must push it "
+"somewhere.  Assuming that you have already set up an origin remote per the "
+"above,"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:585
+#, no-wrap
+msgid ""
+"    % git push --follow-tags -u origin master upstream-dfsg\n"
+"\n"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:589
+msgid "DFSG-non-free: When upstream releases only tarballs"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:598
+msgid "In the simplest case,"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:602
+#, no-wrap
+msgid ""
+"    % dgit fetch\n"
+"    % git merge --ff-only dgit/dgit/sid\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:607
+msgid ""
+"If that fails, because your branch and the NMUers' work represent divergent "
+"branches of development, you have a number of options.  Here we describe the "
+"two simplest."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:611
+msgid ""
+"Note that you should not try to resolve the divergent branches by editing "
+"files in I<debian/patches>.  Changes there would either cause trouble, or be "
+"overwritten by git-debrebase(1)."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:615
+msgid "Rebasing your work onto the NMU"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:619
+#, no-wrap
+msgid ""
+"    % git rebase dgit/dgit/sid\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:623
+msgid ""
+"If the NMUer added new commits modifying the upstream source, you will "
+"probably want to debrebase before your next upload to tidy those up."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:626
+msgid ""
+"For example, the NMUer might have used git-revert(1) to unapply one of your "
+"patches.  A debrebase can be used to strip both the patch and the reversion "
+"from the delta queue."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:630
+msgid "Manually applying the debdiff"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:632
+msgid ""
+"If you cannot rebase because you have already pushed to B<salsa.debian.org>, "
+"say, you can manually apply the NMU debdiff, commit and debrebase.  The next "
+"B<dgit push> will require I<--trust-changelog>."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-debrebase.7.pod:637
+msgid "HINTS AND TIPS"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:639
+msgid "Minimising pseudomerges"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:641
+msgid ""
+"Above we noted that each time you conclude a debrebase, you introduce a "
+"pseudomerge into your git history, which may make it harder to read."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:644
+msgid ""
+"A simple convention you can use to minimise the number of pseudomerges is to "
+"B<git debrebase conclude> only right before you upload or push to "
+"B<salsa.debian.org>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:648
+msgid ""
+"It is possible, though much less convenient, to reduce the number of "
+"pseudomerges yet further.  We debrebase only (i) when importing a new "
+"release, and (ii) right before uploading.  Instead of editing the existing "
+"delta queue, you append fixup commits (and reversions of commits) that alter "
+"the upstream source to the required state.  You can push and pull to and "
+"from B<salsa.debian.org> during this.  Just before uploading, you debrebase, "
+"once, to tidy everything up."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:656
+msgid "The debian/patches directory"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:658
+msgid ""
+"In this workflow, I<debian/patches> is purely an output of git-"
+"debrebase(1).  You should not make changes there.  They will either cause "
+"trouble, or be ignored and overwritten by git-debrebase(1)."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:663
+msgid ""
+"I<debian/patches> will often be out-of-date because git-debrebase(1)  will "
+"only regenerate it when it needs to.  So you should not rely on the "
+"information in that directory.  When preparing patches to forward upstream, "
+"you should use git-format-patch(1) on git commits, rather than sending files "
+"from I<debian/patches>."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:669
+msgid "Upstream branches"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:671
+msgid "In this workflow, we specify upstream tags rather than any branches."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:673
+msgid ""
+"Except when (i) upstream releases only tarballs, (ii) we require DFSG "
+"filtering, or (iii) you also happen to be involved in upstream development, "
+"we do not maintain any local branch corresponding to upstream, except "
+"temporary branches used to prepare patches for forwarding, and the like."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:679
+msgid ""
+"The idea here is that from Debian's point of view, upstream releases are "
+"immutable points in history.  We want to make sure that we are basing our "
+"Debian package on a properly identified upstream version, rather than some "
+"arbitrary commit on some branch.  Tags are more useful for this."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:685
+msgid ""
+"Upstream's branches remain available as the git remote tracking branches for "
+"your upstream remote, e.g. I<remotes/upstream/master>."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:688
+msgid "The first ever dgit push"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:690
+msgid ""
+"If this is the first ever dgit push of the package to this suite, consider "
+"passing I<--deliberately-not-fast-forward> instead of I<--trust-changelog>.  "
+"This avoids introducing a new origin commit into your git history.  (This "
+"origin commit would represent the most recent non-dgit upload of the "
+"package, but this should already be represented in your git history.)"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:696
+msgid "Inspecting the history"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:698
+msgid ""
+"The git history made by git-debrebase can seem complicated.  Here are some "
+"suggestions for helpful invocations of gitk and git.  They can be adapted "
+"for other tools like tig(1), git-log(1), magit, etc."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:702
+msgid "History of package in Debian, disregarding history from upstream:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:706
+#, no-wrap
+msgid ""
+"    % gitk --first-parent\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:708
+msgid "In a laundered branch, the delta queue is at the top."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:712
+msgid "History of the packaging, excluding the delta queue:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:714
+#, no-wrap
+msgid ""
+"    % gitk :/debian :!/debian/patches\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:716
+msgid "Just the delta queue (i.e. Debian's changes to upstream):"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:718
+#, no-wrap
+msgid ""
+"    % gitk --first-parent -- :/ :!/debian\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:720
+msgid "Full history including old versions of the delta queue:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:724
+#, no-wrap
+msgid ""
+"    % gitk --date-order\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:726
+msgid ""
+"The \"Declare fast forward\" commits you see have an older history (usually, "
+"an older delta queue) as one parent, and a newer history as the other.  --"
+"date-order makes gitk show the delta queues in the right order."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:733
+msgid "Complete diff since the last upload:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:737
+#, no-wrap
+msgid ""
+"    % git diff dgit/dgit/sid..HEAD -- :/ :!/debian/patches\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:739
+msgid "This includes changes to upstream files."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:743
+msgid "Interdiff of delta queue since last upload, if you really want it:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:745
+#, no-wrap
+msgid ""
+"    % git debrebase make-patches\n"
+"    % git diff dgit/dgit/sid..HEAD -- debian/patches\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:748
+msgid "And of course there is:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:750
+#, no-wrap
+msgid ""
+"    % git debrebase status\n"
+"\n"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-maint-debrebase.7.pod:752
+msgid "Alternative ways to start a debrebase"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:754
+msgid ""
+"Above we started an interactive debrebase by invoking git-debrebase(1)  like "
+"this:"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:763
+msgid "It is also possible to perform a non-interactive rebase, like this:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:767
+#, no-wrap
+msgid ""
+"    % git debrebase -- [git-rebase options...]\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:772
+msgid ""
+"A third alternative is to have git-debrebase(1) shuffle all the Debian "
+"changes to the end of your branch, and then manipulate them yourself using "
+"git-rebase(1) directly.  For example,"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-debrebase.7.pod:778
+#, no-wrap
+msgid ""
+"    % git debrebase\n"
+"    % git rebase -i HEAD~5      # there are 4 Debian patches\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:783
+msgid ""
+"If you take this approach, you should be very careful not to start the "
+"rebase too early, including before the most recent pseudomerge.  git-rebase "
+"without a base argument will often start the rebase too early, and should be "
+"avoided.  Run git-debrebase instead.  See also \"ILLEGAL OPERATIONS\" in git-"
+"debrebase(5)."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-maint-debrebase.7.pod:794
+msgid "dgit(1), dgit(7), git-debrebase(1), git-debrebase(5), gitrevisions(7)"
+msgstr ""

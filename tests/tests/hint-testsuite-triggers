@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+: "exists only to trigger ci.debian.net retests for some indirect deps"
+
+t-restrict hint-testsuite-triggers
+t-dependencies NO-DEFAULT gnupg patch diffutils
+
+t-ok

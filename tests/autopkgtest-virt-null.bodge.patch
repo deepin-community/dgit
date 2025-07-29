@@ -1,0 +1,11 @@
+--- /usr/bin/autopkgtest-virt-null	2024-10-25 09:04:32.000000000 +0100
++++ autopkgtest-virt-null	2025-01-11 12:40:19.549365093 +0000
+@@ -66,7 +66,7 @@
+ def hook_cleanup():
+     global capabilities
+ 
+-    VirtSubproc.downtmp_remove()
++#    VirtSubproc.downtmp_remove()
+     capabilities = [c for c in capabilities if not c.startswith('downtmp-host')]
+ 
+ 

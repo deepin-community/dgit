@@ -1,0 +1,78 @@
+#!/usr/bin/perl -w
+#
+# In an example:
+#
+# $ time dpkg-parsechangelog >/dev/null
+#
+# real    0m0.712s
+# user    0m0.656s
+# sys     0m0.048s
+# $ time ~/things/Dgit/dgit/tests/tstunt/dpkg-parsechangelog >/dev/null
+#
+# real    0m0.016s
+# user    0m0.000s
+# sys     0m0.012s
+# $
+
+$SIG{__WARN__} = sub { die $_[0]; }; # no use of system, so we avoid #793471
+
+my $infile = "debian/changelog";
+
+#print STDERR ">@ARGV<\n";
+
+my @orgargv = @ARGV;
+
+if (@ARGV && $ARGV[0] =~ s/^-l//) {
+    $infile = shift @ARGV;
+}
+
+if (@ARGV) {
+    my $strip = $0;
+    $strip =~ s#/[^/]+$## or die "$0 ?";
+    foreach my $k (qw(PATH PERLLIB)) {
+	my @opath = defined $ENV{$k} ? split /\:/, $ENV{$k} : ();
+	my @npath = grep { $_ ne $strip } @opath;
+	@npath != @opath  or die "$0 $k ".($ENV{$k}//"(undef)")." ?";
+	$ENV{$k} = join ':', @npath;
+	delete $ENV{$k} if !@npath;
+    }
+    die if $ENV{'DGIT_NO_TSTUNT_CLPARSE'}++;
+    exec 'dpkg-parsechangelog', @orgargv;
+}
+
+use strict;
+open C, $infile or die $!;
+
+$!=0; $_ = <C>;
+m/^(\S+) \(([^()]+)\) (\S+)\; urgency=(\S+)$/ or die "$!, $_ ?";
+print <<END or die $!;
+Source: $1
+Version: $2
+Distribution: $3
+Urgency: $4
+Changes: 
+ $&
+END
+
+my $blanks = 0;
+for (;;) {
+    $!=0; $_ = <C>;
+    if (m/^ -- ([^<>]+\<\S+\>)  (\w[^<>]+\w)$/) {
+	print <<END or die $!;
+Maintainer: $1
+Date: $2
+END
+	print "Timestamp: " or die $!;
+	exec qw(date +%s -d), $2; die $!;
+    } elsif (m/^ --\s*$/) {
+	last;
+    } elsif (!m/\S/) {
+	$blanks++;
+    } elsif (m/^  .*\n/) {
+	print " .\n" x $blanks or die $!;
+	$blanks=0;
+	print " $_" or die $!;
+    } else {
+	die "$!, $_ ?";
+    }
+}

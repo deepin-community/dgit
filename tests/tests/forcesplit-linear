@@ -1,0 +1,45 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+t-buildproductsdir-config
+
+t-archive example 1.0-1
+t-select-package example
+t-git-none
+
+t-dgit clone $p
+cd $p
+
+echo '/* More patch */' >>src.c
+git add src.c
+
+t-commit 'More patch' 1.0-2
+
+t-refs-same-start
+t-ref-head
+t-dgit --split-view push-source
+t-ref-head
+
+
+t-commit 'More more patch' 1.0-3
+
+t-dgit --split-view --save-dgit-view=split.b quilt-fixup
+
+git reflog expire --expire=all refs/dgit-intern/quilt-cache
+test "x$(git reflog refs/dgit-intern/quilt-cache)" = x
+
+t-refs-same-start
+t-ref-head
+t-dgit --split-view --save-dgit-view=split.p push-source
+t-ref-head
+
+suite=sid
+
+t-splitbrain-pushed-good-start
+t-splitbrain-pushed-good--unpack
+t-splitbrain-rm-1-patch more-patch.patch
+t-splitbrain-pushed-good-end-made-dep14
+
+t-ok

@@ -1,0 +1,72 @@
+[Unit]
+Description=tag2upload Oracle daemon
+Documentation=https://salsa.debian.org/dgit-team/dgit/-/blob/master/TAG2UPLOAD-DESIGN.txt
+Documentation=https://salsa.debian.org/dgit-team/dgit-infra-notes-scripts/-/blob/main/README.t2u-oracle.update
+Documentation=https://salsa.debian.org/dgit-team/tag2upload-service-manager/-/blob/main/INSTALL.md
+Documentation=https://salsa.debian.org/dgit-team/dgit-infra-notes-scripts/-/blob/main/README.t2u-builder.update
+
+[Service]
+
+# Re --workers=1:        This is because tag2upload-builder-01 has just
+#                        one core, at present.
+#
+# Re --reply-to:         We want to catch miscellaneous queries and
+#                        problem reports.  Currently we think that using
+#                        this @packages.d.o address will be an effective
+#                        way to do this.  Also cf. #1089757.
+#
+# Re --noreply:          Use role address here because lists.d.o rejects
+#                        mail From @packages.d.o.
+#
+# Re --force-production: This option should NEVER APPEAR in the version
+#                        of this file committed to src:dgit's repository.
+#
+#                        It may be added only to an uncommitted copy of
+#                        this file made on tag2upload-oracle-01 in
+#                        ~tag2upload-oracle/.config/systemd/user/.
+ExecStart=/usr/bin/tag2upload-oracled					\
+	--processing-timeout=2000					\
+	--workers=1							\
+	--autopkgtest-virt=autopkgtest-virt-podman			\
+	--autopkgtest-arg=localhost/autopkgtest/debian:bookworm		\
+	--autopkgtest-arg=--						\
+	--autopkgtest-arg=--network=host				\
+	--manager=tag2upload-manager@tag2upload-manager-01.debian.org	\
+	--manager-socket=/srv/manager.tag2upload.debian.org/run/o2m.s	\
+	--builder=tag2upload-builder@tag2upload-builder-01.debian.org	\
+	--noreply="Debian tag2upload service <dgit-owner@debian.org>"	\
+	--reply-to=git-debpush@packages.debian.org			\
+	--copies=debian-tag2upload@lists.debian.org			\
+	debian								\
+	/srv/oracle.tag2upload.debian.org/distro=debian			\
+	"/srv/keyring.debian.org/keyrings/debian-keyring.gpg,a:/srv/keyring.debian.org/keyrings/debian-maintainers.gpg,m/srv/oracle.tag2upload.debian.org/data/dm.txt:/srv/keyring.debian.org/keyrings/debian-nonupload.gpg,m/srv/oracle.tag2upload.debian.org/data/dm.txt"
+IgnoreSIGPIPE=false
+
+# Let workers finish up any builds they might be doing.
+# tag2upload-oracled is designed such that upon receipt of SIGTERM,
+# the workers will finish their builds but not take on any new jobs.
+TimeoutStopSec=2000
+
+StandardInput=null
+StandardOutput=journal
+StandardError=journal
+
+# This deals with two things:
+#
+# (1) 'podman exec' on (at least) bookworm fails to set HOME.
+#     Git in the container immediately errors out in that case.
+#     su starting a login shell handles that.
+#
+# (2) Appending --autopkgtest-arg=--user=builder:builder above means
+#     that after sending 'open', autopkgtest-virt-podman dies, because
+#     it gets EPERM when it tries to create the temporary directory.
+#
+# What's encoded here is |su - builder -- -ec 'exec "$@";x' --|.
+# If we need more, consider
+#     echo '-e$ENV{HOME}//="/nonexistent";...;exec @ARGV' \
+#         | perl -MURI::Escape \
+#                -wlne'$_ = uri_escape $_; s#%2F#/#g; s#%#%%#g; print ",perl,$_"'
+Environment=DGIT_DRS_T2U_VIRT_EXEC_CMD_SUFFIX=,su,-,builder,--,-ec,exec%%20%%22%%24%%40%%22%%3Bx,--
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,68 @@
+# -*- sh -*-
+# designed to be .'d
+
+t-tstunt-parsechangelog
+
+t-archive example 1.0-1
+t-git-none
+
+t-dgit clone $p
+
+origs='orig orig-docs'
+usvsns='1.0 1.1'
+
+for o in $origs; do
+	cp ${p}_{1.0,1.1}.${o}.tar.gz
+done
+
+mkdir -p "$tmp/aq/file_in_archive/%"
+
+cd $p
+
+test-push-1 () {
+	v=$1
+	ch=$2
+	suite=$3
+
+	t-commit $v $v $suite
+	t-dgit $ch build
+}
+
+test-push-2 () {
+	$test_push_2_hook
+	t-dgit $ch "$@" push-built
+}
+
+test-push-1 1.0-2 --ch:-sa
+
+grep orig ../${p}_${v}_*.changes
+
+test-push-2
+
+origs_findls () {
+	find $tmp/mirror -name '*orig*' -ls \
+	| perl -pe 's/^(\s*\d+\s+\d+\s+\S+\s)\s*\d+(\s)/$1$2/'
+}
+
+# check that dgit stripped out the orig update
+origs_findls >../before
+
+t-archive-process-incoming sid
+
+origs_findls >../after
+diff -u ../before ../after
+
+test-push-1 1.1-1.2 --ch:-sd
+
+test-push-2
+
+t-archive-process-incoming sid
+
+cd ..
+mkdir get
+cd get
+
+t-dgit clone $p
+# ^ checks that all the origs are there, ie that dgit added the origs
+
+cd ..

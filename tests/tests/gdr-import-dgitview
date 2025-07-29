@@ -1,0 +1,52 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-gdr
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+
+t-archive example 1.0-1
+t-git-none
+
+t-dgit clone $p
+
+cd $p
+
+t-git-debrebase status
+
+t-expect-fail E:'bare dgit dsc import' \
+t-git-debrebase
+
+LC_MESSAGES=C t-git-debrebase status |tee ../bare-output
+grep 'bare dgit dsc import with no prior history' ../bare-output
+
+git branch before
+
+t-expect-fail E:'Could not find or construct a suitable upstream commit' \
+t-git-debrebase convert-from-dgit-view $GDR_DIAGNOSE --no-origs
+
+t-git-debrebase convert-from-dgit-view $GDR_DIAGNOSE
+t-gdr-good laundered
+
+t-expect-fail E:'already seems to be in git-debrebase format' \
+t-git-debrebase convert-from-dgit-view $GDR_DIAGNOSE
+
+t-refs-same-start
+t-ref-head
+t-git-debrebase --noop-ok convert-from-dgit-view $GDR_DIAGNOSE
+t-ref-head
+
+t-expect-fail E:'Output of conversion does not match input' \
+t-git-debrebase -falready-converted convert-from-dgit-view $GDR_DIAGNOSE \
+	 --always-convert-anyway
+
+t-git-debrebase make-patches
+
+t-git-debrebase -falready-converted convert-from-dgit-view $GDR_DIAGNOSE \
+	 --always-convert-anyway
+t-expect-fail E:'ref varies' t-ref-head
+t-gdr-good laundered
+
+t-ok

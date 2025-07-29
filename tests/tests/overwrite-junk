@@ -1,0 +1,22 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import examplegit
+
+cd example
+
+suite=stable
+
+t-commit 'No changes, just send to stable' '' stable
+
+t-dgit -wgf build
+
+(
+ : "make a bit of a wrongness, which we still want to be able to overwrite"
+ cd $tmp/git/$p.git; git tag -f $tagpfx/1.2 $tagpfx/1.1
+)
+
+t-dgit push-built --overwrite=1.2 stable
+
+t-ok

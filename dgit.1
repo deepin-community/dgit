@@ -1,0 +1,1836 @@
+'\" t
+.TH dgit 1 "" "Debian Project" "dgit"
+.SH NAME
+dgit \- git integration with the Debian archive
+.
+.SH SYNOPSIS
+.B dgit
+[\fIdgit\-opts\fP] \fBclone\fP [\fIdgit\-opts\fP]
+\fIpackage\fP [\fIsuite\fP] [\fB./\fP\fIdir|\fB/\fP\fIdir\fR]
+.br
+.B dgit
+[\fIdgit\-opts\fP] \fBfetch\fP|\fBpull\fP [\fIdgit\-opts\fP]
+[\fIsuite\fP]
+.br
+.B dgit
+[\fIdgit\-opts\fP] \fBbuild\fP|\fBsbuild\fP|\fBbuild-source\fP
+[\fIbuild\-opts\fP]
+.br
+.B dgit
+[\fIdgit\-opts\fP] \fBpbuilder\fP|\fBcowbuilder\fP
+[\fIdebbuildopts\fP]
+.br
+.B dgit
+[\fIdgit\-opts\fP] \fBpush-source\fP|\fBpush-built\fP [\fIdgit\-opts\fP]
+[\fIsuite\fP]
+.br
+.B dgit
+[\fIdgit\-opts\fP] \fBrpush-source\fR|\fBrpush-built\fP \fIbuild-host\fR\fB:\fR\fIbuild-dir\fR
+[\fIpush args...\fR]
+.br
+.B dgit
+[\fIdgit\-opts\fP] \fIaction\fR ...
+.SH DESCRIPTION
+.B dgit
+allows you to treat the Debian archive as if it were a git
+repository.
+Conversely,
+it allows Debian to publish the source of its packages
+as git branches, in a format which is directly usable
+by ordinary people.
+
+This is the command line reference.
+Please read the tutorial(s):
+.TS
+lb2 l.
+dgit-user(7)	for users: edit, build and share packages
+dgit-nmu-simple(7)	for DDs: do a straightforward NMU
+dgit-maint-native(7)	for maintainers of Debian-native packages
+dgit-maint-debrebase(7)	for maintainers: a pure-git rebasish workflow
+dgit-maint-merge(7)	for maintainers: a pure-git merging workflow
+dgit-maint-gbp(7)	for maintainers already using git-buildpackage
+dgit-sponsorship(7)	for sponsors and sponsored contributors
+dgit-downstream-dsc(7)	setting up dgit push for a new distro
+.TE
+.LP
+See \fBdgit(7)\fP for detailed information about the data
+model,
+common problems likely to arise with certain kinds of package,
+etc.
+.SH OPERATIONS
+.TP
+\fBdgit clone\fR \fIpackage\fP [\fIsuite\fP] [\fB./\fP\fIdir|\fB/\fP\fIdir\fR]
+Consults the archive and dgit-repos to construct the git view of
+history for
+.I package
+in
+.I suite
+.RB ( sid
+by default)
+in a new directory (named
+.BI ./ package
+by default);
+also, downloads any necessary orig tarballs.
+
+The suite's git tip is
+left on the local branch
+.BI dgit/ suite
+ready for work, and on the corresponding dgit remote tracking branch.
+The
+.B origin
+remote will be set up to point to the package's dgit-repos tree
+for the distro to which
+.I suite
+belongs.
+
+.I suite
+may be a combination of several underlying suites in the form
+.IR mainsuite \fB,\fR subsuite ...;
+see COMBINED SUITES in dgit(7).
+
+For your convenience, the
+.B vcs-git
+remote will be set up from the package's Vcs-Git field, if there is
+one - but note that in the general case the history found there may be
+different to or even disjoint from dgit's view.
+(See also dgit update-vcs-git.)
+.TP
+\fBdgit fetch\fR [\fIsuite\fP]
+Consults the archive and git-repos to update the git view of
+history for a specific suite (and downloads any necessary orig
+tarballs), and updates the remote tracking branch
+.BR remotes/dgit/dgit/ \fIsuite\fR.
+If the current branch is
+.BI dgit/ suite
+then dgit fetch defaults to
+.IR suite ;
+otherwise it parses debian/changelog and uses the suite specified
+there.
+suite may be a combined suite, as for clone.
+.TP
+\fBdgit pull\fR [\fIsuite\fP]
+Does dgit fetch, and then merges the new head of the remote tracking
+branch
+.BI remotes/dgit/dgit/ suite
+into the current branch.
+.TP
+\fBdgit checkout\fR \fIsuite\fR
+Checks out the local branch
+.BR dgit/ \fIsuite\fR.
+
+If the branch does not exist,
+dgit checkout creates it,
+and sets it up the same way as dgit clone would.
+In that case, if
+the archive remote tracking branch does not exist,
+dgit checkout will do a dgit fetch first.
+
+NB: dgit checkout will only do a fetch if it has to.
+If you already have the suite branch,
+and want to merge your branch with updates from the archive,
+use dgit pull.
+
+dgit checkout will normally need to access the archive server,
+to canonicalise the provided suite name.
+The exception is if you specify the canonical name,
+and the branch (or tracking branch) already exists.
+.TP
+\fBdgit build\fR ...
+Runs
+.B dpkg-buildpackage
+with some suitable options.  Options and arguments after build
+will be passed on to dpkg-buildpackage.  It is not necessary to use
+dgit build when using dgit; it is OK to use any approach which ensures
+that the generated source package corresponds to the relevant git
+commit.
+
+Tagging, signing and actually uploading should be left to dgit push.
+
+dgit's build operations access the network,
+to get the \-v option right.
+See \-v, below.
+.TP
+\fBdgit build-source\fR ...
+Builds the source package, and a changes file for a prospective
+source-only upload, using
+.BR dpkg-source .
+The output is left in
+.IR package \fB_\fR version \fB.dsc\fR
+and
+.IR package \fB_\fR version \fB_source.changes\fR.
+
+Tagging, signing and actually uploading should be left to dgit
+push-source, or dgit push.
+.TP
+.B dgit clean
+Cleans the current working tree (according to the \-\-clean= option in
+force).
+.TP
+\fBdgit update-vcs-git\fR [\fIsuite\fP|\fB.\fR] [\fB\-\-\fR] [\fIgit fetch options\fR]
+.TQ
+\fBdgit update-vcs-git\fR [\fIsuite|\fP\fB.\fR] \fB\-\fR
+Sets up, or updates the url of, the vcs-git remote, and
+(unless \fB-\fR was specified)
+runs git fetch on it.
+
+By default, the Vcs-Git field of the .dsc from Debian sid is used,
+as that is probably most up to date.
+Another suite may be specified, or
+.B .
+to indicate that the Vcs-Git of the cwd's debian/control should
+be used instead.
+.TP
+.B dgit help
+Print a usage summary.
+.TP
+\fBdgit sbuild\fR ...
+Constructs the source package, uses
+.B  sbuild
+to do a binary build, and uses mergechanges to merge the source and
+binary changes files.  Options and arguments after sbuild will be
+passed on to sbuild.
+The output is left in
+.IR package \fB_\fR version \fB_multi.changes\fR.
+.IP
+Tagging, signing and actually uploading should be left to dgit push.
+.TP
+\fBdgit pbuilder\fR [\fIdebbuildopts\fP]
+Constructs the source package, uses
+.B  pbuilder
+to do a binary build, and uses mergechanges to merge the source and
+binary changes files.
+The output is left in
+.IR package \fB_\fR version \fB_multi.changes\fR.
+
+You should ensure that your dgit \-\-build-products-dir setting matches
+your pbuilder \-\-buildresult.
+
+The \fIdebbuildopts\fP are passed to pbuilder using its \-\-debbuildopts
+option.  If you want to pass other options to pbuilder, use the
+\fB\-\-pbuilder:\fR dgit option as described below
+(remember that dgit options should appear between \fBdgit\fR and
+\fBpbuilder\fR).
+
+You should ensure that in your pbuilderrc you do
+.B not
+have the setting
+.B SOURCE_ONLY_CHANGES=yes
+as this may cause trouble.
+.TP
+\fBdgit cowbuilder\fR [\fIdebbuildopts\fP]
+Like \fBdgit pbuilder\fR, but uses
+.B cowbuilder
+instead of
+.B pbuilder.
+.TP
+\fBdgit gbp-build\fR ...
+Runs
+.B git-buildpackage
+with some suitable options.  Options and arguments after gbp-build
+will be passed on to git-buildpackage.
+
+By default this uses \-\-quilt=gbp, so HEAD should be a
+git-buildpackage style branch, not a patches-applied branch.
+
+Tagging, signing and actually uploading should be left to dgit push.
+.TP
+\fBdgit push-source\fR [\fIsuite\fP]
+Does an `upload': sends the current HEAD
+to dgit-repos (as git commits),
+and to the archive (as a source package, built by this command).
+
+This is the usual way to upload to Debian.  It is like saying "update the
+source code in the archive to match my git HEAD, and let the autobuilders do
+the rest."
+
+In more detail: dgit push-source
+builds a source package from HEAD.
+It then pushes the HEAD to the suite's dgit-repos branch,
+adjusts the .changes to include any .origs which the archive lacks
+and exclude .origs which the archive has
+(so \-sa and \-sd are not needed when building for dgit push),
+makes a signed git tag, edits the .dsc to contain the dgit metadata
+field, runs debsign to sign the upload (.dsc and .changes), pushes the
+signed tag, and finally uses dput to upload the .changes to the
+archive.
+
+dgit push always uses the package, suite and version specified in the
+debian/changelog and the .dsc, which must agree.  If the command line
+specifies a suite then that must match too.
+
+When used on a git-debrebase branch,
+dgit calls git-debrebase
+to prepare the branch
+for source package upload and push.
+
+With \fB\-C\fR, dgit push-source performs a dgit push-built,
+additionally ensuring that no
+binary packages are uploaded.
+.TP
+\fBdgit push-built\fR [\fIsuite\fP]
+Does an `upload' of a previously built package,
+possibly including binaries.
+Sends the current HEAD to dgit-repos (as git commits);
+and, sends the previously built source package and binaries
+to the archive.
+
+The package must already
+have been built ready for upload, with the .dsc and .changes
+left in the parent directory.  It is normally best to do the build
+with dgit too (e.g. with dgit sbuild): some existing build tools pass
+unhelpful options to dpkg-source et al by default, which can result in
+the built source package not being identical to the git tree.
+
+dgit will check that the .dsc corresponds exactly to the current HEAD,
+ensuring that all users, whether of the dgit git view,
+or of the traditional archive,
+see the same source package.
+.TP
+\fBdgit rpush-source\fR|\fBrpush-built\fR \fIbuild-host\fR\fB:\fR\fIsrc-dir\fR [\fIpush args...\fR]
+Pushes the contents of the specified directory on a remote machine.
+This is like running dgit push on build-host with src-dir as the
+current directory; however, signing operations are done on the
+invoking host.  This allows you to do a push when the system which has
+the source code (and any built binaries) has no access to the key:
+
+.TS
+l l.
+1.	Clone on build host (dgit clone)
+2.	Edit code on build host (edit, git commit)
+3.	Build package on build host (dgit build)
+4.	Test package on build host or elsewhere (dpkg \-i, test)
+5.	Upload by invoking dgit rpush on host with your GPG key.
+.TE
+
+However, the build-host must be able to ssh to the dgit repos.  If
+this is not already the case, you must organise it separately, for
+example by the use of ssh agent forwarding.
+
+The remaining arguments are treated just as dgit push-source
+or dgit push-built would handle
+them.
+
+build-host and build\-dir can be passed as separate
+arguments; this is assumed to be the case if the first argument
+contains no : (except perhaps one in [ ], to support IPv6 address
+literals).
+
+You will need similar enough versions of dgit on the build-host and
+the invocation host.
+The build-host needs gnupg installed,
+with your public key, and that of any sponsee,
+in its keyring (but not your private key, obviously).
+.TP
+\fBdgit push\fR|\fBrpush\fR \fI...\fP
+Configurable aliases for
+.BR "dgit push-built"
+and
+.BR "dgit rpush-built".
+These aliases will in the future change to mean
+.BR "dgit push-source"
+and
+.BR "dgit rpush-source" ,
+and therefore they currently generate a warning.
+
+The behaviour of dgit push is controlled by the
+.B dgit.default.push-subcmd
+git config option:
+.TS
+l l l .
+\fBsource\fR	runs \fBdgit push-source\fR	future default
+\fBbuilt\fR	and runs \fBdgit push-built\fR
+\fBbuilt,warn\fR	warns, and runs \fBdgit push-built\fR	current default
+\fBreject\fR	fails
+.TE
+
+For dgit rpush, the behaviour is controlled by
+.BR dgit.default.rpush-subcmd ,
+falling back to 
+.BR dgit.default.push-subcmd
+if that is not set.
+Because dgit rpush is not typically run in a git working tree,
+only global git config options
+(and \fB-c\fR command line options) are relevant.
+
+These settings can safely be passed to older dgit (via
+.BR -c);
+the value
+.B built
+will be supported indefinitely.
+This should be used in scripts that need to work with both
+old versions of dgit (that don't have \fBpush-built\fR)
+and
+new versions (where \fBpush-source\fR is the default).
+.TP
+.B dgit setup-new-tree
+Configure the current working tree the way that dgit clone would have
+set it up.  Like running
+.BR "dgit setup-useremail" ,
+.B setup-mergechangelogs
+and
+.B setup-gitattributes
+(but only does each thing if dgit is configured to do it automatically).
+You can use these in any git repository, not just ones used with
+the other dgit operations.
+Does
+.B not
+run
+.B update-vcs-git
+(as that requires Debian packaging information).
+.TP
+.B dgit setup-useremail
+Set the working tree's user.name and user.email from the
+distro-specific dgit configuration
+.RB ( dgit-distro. \fIdistro\fR .user-name " and " .user-email ),
+or DEBFULLNAME or DEBEMAIL.
+.TP
+.B dgit setup-mergechangelogs
+Configures a git merge helper for the file
+.B debian/changelog
+which uses
+.BR dpkg-mergechangelogs .
+.TP
+.B dgit setup-gitattributes
+Set up the working tree's
+.B .git/info/attributes
+to disable all transforming attributes for all files.
+This is done by defining a macro attribute,
+.B dgit-defuse-attrs,
+and applying it to
+.BR * .
+For why, see
+.B GITATTRIBUTES
+in
+.BR dgit(7) .
+Note that only attributes affecting the working tree are suppressed.
+git-archive may remain exciting.
+
+If there is an existing macro attribute line
+.B [attr]dgit-defuse-attrs
+in .git/info/attributes,
+but it is insufficient,
+because it was made by an earlier version of dgit
+and git has since introduced new transforming attributes,
+this modifies the macro to disable the newer transformations.
+
+(If there is already a macro attribute line
+.B [attr]dgit-defuse-attrs
+in .git/info/attributes
+which does what dgit requires
+(whatever files it effects),
+this operation does nothing further.
+This fact can be used to defeat or partially defeat
+dgit setup-gitattributes
+and hence
+dgit setup-new-tree.)
+.TP
+.B dgit quilt-fixup
+`3.0 (quilt)' format source packages need changes representing not
+only in-tree but also as patches in debian/patches.  dgit quilt-fixup
+checks whether this has been done; if not, dgit will make appropriate
+patches in debian/patches and also commit the resulting changes to
+git.
+
+This is normally done automatically by dgit build and dgit push.
+
+dgit will try to turn each relevant commit in your git history into a
+new quilt patch.  dgit cannot convert nontrivial merges, or certain
+other kinds of more exotic history.  If dgit can't find a suitable
+linearisation of your history, by default it will fail, but you can
+ask it to generate a single squashed patch instead.
+
+When used with a git-debrebase branch,
+dgit will ask git-debrebase to prepare patches.
+However,
+dgit can make patches in some situations where git-debrebase fails,
+so dgit quilt-fixup can be useful in its own right.
+To always use dgit's own patch generator
+instead of git-debrebase make-patches,
+pass \-\-git-debrebase=true to dgit.
+
+See
+.B FORMAT 3.0 (QUILT)
+in
+.BR dgit(7) .
+.TP
+\fBdgit import-dsc\fR [\fIsub-options\fR] \fI../path/to/.dsc\fR [\fB+\fR|\fB..\fR]branch
+Import a Debian-format source package,
+specified by its .dsc,
+into git,
+the way dgit fetch would do.
+
+This does about half the work of dgit fetch:
+it will convert the .dsc into a new, orphan git branch.
+Since dgit has no access to a corresponding source package archive
+or knowledge of the history
+it does not consider whether this version is newer
+than any previous import
+or corresponding git branches;
+and it therefore does not
+make a pseudomerge to bind the import
+into any existing git history.
+
+Because a .dsc can contain a Dgit field naming a git commit
+(which you might not have),
+and specifying where to find that commit
+(and any history rewrite table),
+import-dsc might need online access.
+If this is a problem
+(or dgit's efforts to find the commit fail),
+consider \-\-no-chase-dsc-distro
+or \-\-force-import-dsc-with-dgit-field.
+
+There is only one sub-option:
+
+.B \-\-require-valid-signature
+causes dgit to insist that the signature on the .dsc is valid
+(using the same criteria as dpkg-source \-x).
+Otherwise, dgit tries to verify the signature but
+the outcome is reported only as messages to stderr.
+
+If
+.I branch
+is prefixed with
+.B +
+then if it already exists, it will be simply overwritten,
+no matter its existing contents.
+If
+.I branch
+is prefixed with
+.B ..
+then if it already exists
+and dgit actually imports the dsc
+(rather than simply reading the git commit out of the Dgit field),
+dgit will make a pseudomerge
+so that the result is necessarily fast forward
+from the existing branch.
+Otherwise, if \fIbranch\fR already exists,
+dgit will stop with an error message.
+
+If
+.I branch
+does not start with refs/, refs/heads/ is prepended.
+.TP
+.B dgit version
+Prints version information and exits.
+.TP
+.BI "dgit clone-dgit-repos-server" " destdir"
+Tries to fetch a copy of the source code for the dgit-repos-server,
+as actually being used on the dgit git server, as a git tree.
+.TP
+.BI "dgit print-dgit-repos-server-source-url"
+Prints the url used by dgit clone-dgit-repos-server.
+This is hopefully suitable for use as a git remote url.
+It may not be usable in a browser.
+.TP
+.BI "dgit print-dpkg-source-ignores"
+Prints the \-i and \-I arguments which must be passed to dpkg-souce
+to cause it to exclude exactly the .git directory
+and nothing else.
+The separate arguments are unquoted, separated by spaces,
+and do not contain spaces.
+.TP
+.B dgit print-unapplied-treeish
+Constructs a tree-ish approximating the patches-unapplied state
+of your 3.0 (quilt) package,
+and prints the git object name to stdout.
+This requires appropriate .orig tarballs.
+This tree object is identical to your .origs
+as regards upstream files.
+The contents of the debian subdirectory is not interesting
+and should not be inspected;
+except that debian/patches will be identical to your HEAD.
+
+To make this operate off-line,
+the access configuration key
+which is used to determine the build-products-dir
+is the uncanonicalised version of the suite name from the changelog,
+or (of course) dgit.default.build-products-dir.
+See ACCESS CONFIGURATION, below.
+
+This function is primarily provided for the benefit of git-debrebase.
+.SH OPTIONS
+.TP
+.BI \-k keyid
+Use
+.I keyid
+for signing the tag and the upload.  The default comes from the
+distro's
+.B keyid
+config setting (see CONFIGURATION, below), or failing that, the
+uploader trailer line in debian/changelog.
+.TP
+.BR --no-sign
+does not sign tags or uploads (meaningful only with push).
+.TP
+.TP
+.BI -p package
+Specifies that we should process source package
+.IR package .
+
+For dgit fetch and dgit pull,
+uses this value
+rather than looking in debian/control or debian/changelog.
+
+For dgit rpush,
+specifies that the invoking host should
+be willing to sign only a .dsc or .changes file
+for the source package \fIpackage\fR.
+.TP
+.BR --clean=git " | " -wg
+Use
+.BR "git clean -xdf"
+to clean the working tree,
+rather than running the package's rules clean target.
+
+This will delete all files which are not tracked by git.
+(Including any files you forgot to git add.)
+
+.BI --clean= ...
+options other than dpkg-source
+are useful when the package's clean target is troublesome, or
+to avoid needing the build-dependencies.
+
+dgit will only actually clean the tree if it needs to
+(because it needs to build the source package
+or binaries from your working tree).
+Otherwise
+it will just check that there are no untracked unignored files.
+See --clean=git[-ff],always, below.
+.TP
+.BR --clean=git-ff " | " -wgf
+Use
+.BR "git clean -xdff"
+to clean the working tree.
+Like
+git clean -xdf
+but it also removes any subdirectories containing different git
+trees (which only unusual packages are likely to create).
+.TP
+.BR --clean=git "[" -ff "]" ,always " | " -wga " | " -wgfa
+Like --clean=git, but always does the clean and not just a check,
+deleting any untracked un-ignored files.
+.TP
+.BR --clean=check " | " --clean=check,ignores " | " -wc " | " -wci
+Merely check that the tree is clean (does not contain uncommitted
+files).
+Avoids running rules clean,
+and can avoid needing the build-dependencies.
+
+With
+.BR ,ignores
+or
+.BR \-wci ,
+untracked files covered by .gitignore are tolerated,
+so only files which show up as
+.B ?
+in git status
+(ie, ones you maybe forgot to git add)
+are treated as a problem.
+.TP
+.BR \-\-clean=none " | " \-wn
+Do not clean the tree, nor check that it is clean.
+Avoids running rules clean,
+and can avoid needing the build-dependencies.
+If there are
+files which are not in git, or if the build creates such files, a
+subsequent dgit push will fail.
+.TP
+.BR --clean=dpkg-source "[" -d "] | " -wd " | " -wdd
+Use dpkg-buildpackage to do the clean, so that the source package
+is cleaned by dpkg-source running the package's clean target.
+--clean=dpkg-source is the default.
+
+Without the extra
+.BR d ,
+requires the package's build dependencies.
+
+With
+.BR ... -d
+or
+.BR -wdd ,
+the build-dependencies are not checked
+(due to passing
+.BR -d
+to dpkg-buildpackage),
+which violates policy, but may work in practice.
+
+The rules clean target will only be run if it is needed:
+when dgit is going to build source or binary packages
+from your working tree,
+rather than from your git branch
+(for example because of \-\-include-dirty
+or because the binary package build uses your working tree).
+
+In all cases,
+dgit will check that there are (after rules clean, if applicable) no
+untracked un-ignored files,
+in case these are files you forgot to git add.
+(Except that this check is not done
+for a `3.0 (quilt)' package
+when dgit has to apply patches, dirtily, to the working tree.)
+If your package does not have a good .gitignore
+you will probably need --clean=dpkg-source,no-check aka -wdn.
+.TP
+.BR --clean=dpkg-source "[" -d "]" ,no-check " | " -wdn " | " -wddn
+Like --clean=dpkg-source, but
+does not care about untracked un-ignored files.
+.TP
+.BR --clean=dpkg-source "[" -d "]" ,all-check " | " -wda " | " -wdda
+Like --clean=dpkg-source, but
+fails even on ignored untracked files.
+This could perhaps be used to detect bugs in your rules clean target.
+.TP
+.BR -N " | " --new
+The package is, or may be, new in this suite.  Without this, dgit will
+refuse to push.
+Needing --new is not unusual; for example,
+it is frequently needed for uploading to Debian experimental.
+
+Note that dgit may be unable to access the git
+history for an entirely new package which has not been accepted by
+the archive.
+So for an entirely new package you need to properly coordinate
+with anyone else who might upload.
+.TP
+.BR --include-dirty
+Do not complain if the working tree does not match your git HEAD,
+and when building,
+include the changes from your working tree.
+This can be useful with build, if you plan to commit later.  (dgit
+push will still ensure that the .dsc you upload and the git tree
+you push are identical, so this option won't make broken pushes.)
+
+Note that this does
+.BR not
+prevent dgit from cleaning your tree, so if the changes in your
+working tree are in the form of untracked files, those might still be
+deleted, especially with --clean=git.
+If you want to include untracked files in the build, you can
+use --clean=none or --clean=dpkg-source[-d]
+in addition to --include-dirty.
+Note that this
+combination can fail if the untracked files are under
+\fIdebian/patches/\fR.
+.TP
+.BR --ignore-dirty
+Deprecated alias for --include-dirty.
+.TP
+.BR --collab-non-dgit
+Make
+.BR "dgit push" ,
+behave more suitably for collaborating
+(using shared git history)
+with git-using co-developers who aren't using dgit.
+
+With this option,
+dgit won't mind that the git history you're using
+isn't necessarily fast forward from the dgit view;
+instead, it will rely on the changelog
+to prevent accidentally overwriting changes.
+
+And, the
+synthetic commits needed to
+make the dgit git history fast forward
+will appear only on the dgit git server,
+and local dgit suite branches,
+not on your own main branch.
+So they won't end up in the maintainer-visible history,
+when you push your own branch to make a merge request.
+
+This is equivalent to
+.BR "--split-view=always --trust-changelog" .
+.TP
+.BR --trust-changelog " | " --overwrite =\fIprevious-version\fR
+Declare that your HEAD really does contain
+all the (wanted) changes
+from all versions listed in its changelog;
+or, all (wanted) changes from
+.IR previous-version .
+This promise is needed when
+your git branch is not a descendant
+of the version in the archive
+according to the git revision history.
+
+It is safer to specify
+.BR \-\-trust-changelog ,
+than
+.BR \-\-overwrite= \fIprevious-version\fR,
+and usually the latter is not needed.
+
+.B --trust-changelog
+is useful if you are the maintainer, and you have
+incorporated NMU changes into your own git workflow in a way that
+doesn't make your branch a fast forward from the NMU.
+It can also be useful when there was an upload made without dgit
+since the most recent upload made with dgit.
+
+It is also usually necessary
+the first time a package is pushed with dgit push
+to a particular suite.
+See
+.BR dgit-maint- \fI*\fR (7) .
+
+With
+.BR \-\-trust-changelog
+dgit will check that the version in the archive is
+mentioned in your debian/changelog.
+(This will avoid losing
+changes,
+unless someone committed to git a finalised changelog
+entry, and then made later changes to that version.)
+
+With
+.BI \-\-overwrite= previous-version
+that version ought to be the version currently in the archive,
+and it will be unconditionally overwritten,
+regardless of what's in the changelog.
+
+These options
+will, if necessary, make a
+pseudo-merge (that is, something that looks like the result
+of git merge -s ours) to stitch the archive's version into your own
+git history, so that your push is a fast forward from the archive.
+
+(In quilt mode
+.BR gbp ", " dpm ", " unpatched " or " baredebian *,
+implying a split between the dgit view and the
+maintainer view, the pseudo-merge will appear only in the dgit view;
+.B --split-view=always
+can be used to force that behaviour, e.g. in other quilt modes.)
+
+.B \-\-overwrite
+without a version number is an obsolete way of specifying
+.BR \-\-trust-changelog .
+.TP
+.BR \-\-delayed =\fIdays\fR
+Upload to a DELAYED queue.
+
+.B WARNING:
+If the maintainer responds by cancelling
+your upload from the queue,
+and does not make an upload of their own,
+this will not rewind the git branch on the dgit git server.
+Other dgit users will then see your push
+(with a warning message from dgit)
+even though the maintainer wanted to abolish it.
+Such users might unwittingly reintroduce your changes.
+
+If this situation arises,
+someone should make a suitable dgit push
+to update the contents of dgit-repos
+to a version without the controversial changes.
+.TP
+.BR --no-chase-dsc-distro
+Tells dgit not to look online
+for additional git repositories
+containing information about a particular .dsc being imported.
+Chasing is the default.
+
+For most operations
+(such as fetch and pull),
+disabling chasing
+means dgit will access only the git server
+for the distro you are directly working with,
+even if the .dsc was copied verbatim from another distro.
+For import-dsc,
+disabling chasing
+means dgit will work completely offline.
+
+Disabling chasing can be hazardous:
+if the .dsc names a git commit which has been rewritten
+by those in charge of the distro,
+this option may prevent that rewrite from being effective.
+Also,
+it can mean that
+dgit fails to find necessary git commits.
+.TP
+.BR \-\-save-dgit-view= \fIbranch\fR|\fIref\fR
+Specifies that when split view is in operation,
+and dgit calculates
+(or looks up in its cache)
+a dgit view corresponding to your HEAD,
+the dgit view will be left in
+.IR ref .
+The specified ref is unconditionally overwritten,
+so don't specify a branch you want to keep.
+
+This option is effective only with the following operations:
+quilt-fixup; push; all builds.
+And it is only effective when split view is actually in operation.
+
+If ref does not start with refs/
+it is taken to be a branch -
+i.e. refs/heads/ is prepended.
+
+.B \-\-dgit-view-save
+is a deprecated alias for
+\-\-save-dgit-view.
+.TP
+.BI \-\-deliberately- something
+Declare that you are deliberately doing
+.IR something .
+This can be used to override safety catches, including safety catches
+which relate to distro-specific policies.
+The use of \-\-deliberately is declared and published in the signed tags
+generated for you by dgit,
+so that the archive software can give effect to your intent,
+and
+for the benefit of humans looking at the history.
+The meanings of
+.IR something s
+understood in the context of Debian are discussed below:
+.TP
+.BR --deliberately-not-fast-forward
+Declare that you are deliberately rewriting history.
+This could be because your branch is not fast forward from the
+dgit server history,
+or not fast forward from a locally-synthesised dsc import.
+
+When pushing to Debian,
+use this only when you are making a renewed upload of an entirely
+new source package whose previous version was not accepted for release
+from NEW because of problems with copyright or redistributibility;
+or, exceptionally, for the very first upload with dgit.
+
+When split view is in operation,
+this also prevents the construction by dgit of a pseudomerge
+to make the dgit view fast forwarding.
+Normally only one of
+\-\-trust-changelog (which creates a suitable pseudomerge)
+and
+--deliberately-not-fast-forward
+(which suppresses the pseudomerge and the fast forward checks)
+should be needed;
+\-\-trust-changelog is usually better.
+.TP
+.BR --deliberately-include-questionable-history
+Declare that you are deliberately including, in the git history of
+your current push, history which contains a previously-submitted
+version of this package which was not approved (or has not yet been
+approved) by the ftpmasters.  When pushing to Debian, only use this
+option after verifying that: none of the rejected-from-NEW (or
+never-accepted) versions in the git history of your current push, were
+rejected by ftpmaster for copyright or redistributability reasons.
+.TP
+.BR --deliberately-fresh-repo
+Declare that you are deliberately rewriting history and want to
+throw away the existing repo.  Not relevant when pushing to Debian,
+as the Debian server will do this automatically when necessary.
+.TP
+.BR --quilt=linear
+With format `3.0 (quilt)', insist on
+a linear patch stack: one new patch for each relevant
+commit.
+If such a stack cannot be generated, fail.
+This is the default for Debian.
+
+HEAD should be a series of plain commits
+(not touching debian/patches/),
+and pseudomerges,
+with as ancestor a patches-applied branch.
+.TP
+.BR --quilt=try-linear
+With format `3.0 (quilt)',
+prefer
+a linear patch stack
+(as with --quilt=linear)
+but if that doesn't seem possible,
+try to generate a single squashed patch for all the changes made in git
+(as with --quilt=smash).
+This is not a good idea for an NMU in Debian.
+.TP
+.BR --quilt=smash
+With format `3.0 (quilt)',
+assume patches-applied (as obtained from dgit clone) and
+generate a single additional patch for all the changes made in git.
+This is not a good idea for an NMU in Debian.
+
+(If HEAD has any in-tree patches already, they must apply cleanly.
+This will be the case for any trees produced by dgit fetch or clone;
+if you do not change the upstream version
+nor make changes in debian/patches,
+it will remain true.)
+.TP
+.BR --quilt=single
+With format `3.0 (quilt)',
+assume patches-applied (as obtained from dgit clone),
+delete all the existing patches, and then
+generate a single patch for all the changes made in git.
+This is not a good idea for an NMU in Debian.
+
+Use this instead of the
+.B single-debian-patch
+dpkg-source format option.
+That dpkg-source option cannot handle certain changes to the tree
+that dpkg-source otherwise permits,
+and in some cases it can generate strange source packages
+that dpkg-source appears to accept
+but which become corrupted when people later try to modify them.
+.TP
+.BR --quilt=nofix
+With format `3.0 (quilt)',
+assume patches-applied (as obtained from dgit clone), and
+check that the patch metadata is up to date.
+If it isn't, fail; you must then fix the metadata yourself
+somehow before pushing.  (NB that dpkg-source --commit will not work
+because the dgit git tree does not have a
+.B .pc
+directory.)
+.TP
+.BR --quilt=nocheck " | " --no-quilt-fixup
+With format `3.0 (quilt)',
+assume that the tree is patches-applied (as obtained from dgit clone),
+and \fIassume\fR that the patch metadata is up to date.
+If you use this option and the patch metadata is out of date,
+dgit push will fail.
+.TP
+.BR -- [ quilt= ] gbp " | " -- [ quilt= ] dpm " | " --quilt=unapplied " | " -- [ quilt= ] baredebian [ +git | +tarball ]
+Tell dgit that you are using a nearly-dgit-compatible git branch,
+aka a
+.BR "maintainer view" ,
+and
+do not want your branch changed by dgit.
+
+These quilt modes are known as
+.BR "splitting quilt modes" .
+See --split-view, below.
+
+.B --gbp
+(short for
+.BR --quilt=gbp )
+is for use with git-buildpackage.
+Your HEAD is expected to be
+a patches-unapplied git branch, except that it might contain changes
+to upstream .gitignore files.  This is the default for dgit gbp-build.
+
+.B --dpm
+(short for
+.BR --quilt=dpm )
+is for use with git-dpm.
+Your HEAD is expected to be
+a patches-applied git branch,
+except that it might contain changes to upstream .gitignore files.
+
+.B --quilt=unapplied
+specifies that your HEAD is a patches-unapplied git branch (and
+that any changes to upstream .gitignore files are represented as
+patches in debian/patches).
+
+.B --quilt=baredebian
+(or its alias
+.BR --quilt=baredebian+git )
+specifies that your HEAD contains only a debian/ directory,
+with any changes to upstream files represented as
+patches in debian/patches.
+The upstream source must be available in git,
+by default, in a suitably named git tag;
+see --upstream-commitish.
+In this mode, dgit cannot check that
+all edited upstream files are properly represented as patches:
+dgit relies on
+debian/patches being correct.
+
+.B --quilt=baredebian+tarball
+is like --quilt=baredebian,
+but is used when there is no appropriate upstream git history.
+To construct the dgit view,
+dgit will import your orig tarballs' contents into git.
+In this mode, dgit cannot check that
+the upstream parts of your upload correspond to what you intend:
+dgit relies on
+the right orig tarball(s) existing, and
+debian/patches being correct.
+
+With --quilt=gbp|dpm|unapplied|baredebian*,
+dgit push (or precursors like quilt-fixup and build) will automatically
+generate a conversion of your git branch into the right form.
+dgit push will push the
+dgit-compatible form (the
+.BR "dgit view" )
+to the dgit git server.
+The dgit view will be visible to you
+in the dgit remote tracking branches, but your own branch will
+not be modified.
+dgit push will create a tag
+.BI debian/ version
+for the maintainer view, and the dgit tag
+.BI archive/debian/ version
+for the dgit view.
+dgit quilt-fixup will merely do some checks,
+and cache the maintainer view.
+
+.B If you have a branch like this it is essential to specify the appropriate \-\-quilt= option!
+This is because it is not always possible to tell: a patches-unapplied
+git branch of a package with one patch, for example, looks very like
+a patches-applied branch where the user has used git revert to
+undo the patch, expecting to actually revert it.
+However, if you fail to specify the right \-\-quilt option,
+and you aren't too lucky, dgit will notice the problem and stop,
+with a useful hint.
+.TP
+.BR \-d "\fIdistro\fR | " \-\-distro= \fIdistro\fR
+Specifies that the suite to be operated on is part of distro
+.IR distro .
+This overrides the default value found from the git config option
+.BR dgit-suite. \fIsuite\fR .distro .
+The only effect is that other configuration variables (used
+for accessing the archive and dgit-repos) used are
+.BR dgit-distro. \fIdistro\fR .* .
+
+If your suite is part of a distro that dgit already knows about, you
+can use this option to make dgit work even if your dgit doesn't know
+about the suite.  For example, specifying
+.B \-ddebian
+will work when the suite is an unknown suite in the Debian archive.
+
+To define a new distro it is necessary to define methods and URLs
+for fetching (and, for dgit push, altering) a variety of information both
+in the archive and in dgit-repos.
+How to set this up is not yet documented.
+.TP
+.BR \-\-split-view=auto | always | never
+Controls whether dgit operates a split view,
+separating your own branch (as Debian maintainer)
+from that shown to users of dgit clone and dgit fetch.
+
+When split view is in operation
+dgit will not make or merge any commits onto your own branch.
+Specifically, only the dgit view will contain
+dgit's pseudomerges,
+which bring into the git history previous uploads made with dgit push,
+and any commits in debian/patches required
+to make a correct `3.0 (quilt)' source package.
+
+.B auto
+is the default, and splits the view only when needed:
+i.e., when you are working with a `3.0 (quilt)' source package
+and a splitting quilt mode:
+\-\-[quilt=]gbp, dpm, unpatched or baredebian*.
+
+.B always
+splits the view regardless of the source format and the quilt mode.
+
+.B never
+will cause dgit to fail if split view is needed.
+
+When split view is in operation, the dgit view is visible
+in your local git clone,
+but only in refs specific to dgit:
+notably
+.BI remotes/dgit/dgit/ suite
+and
+.BR archive/ \fIdistro\fR / \fIversion\fR.
+
+Note that split view does not affect dgit fetch,
+and is not compatible with dgit pull.
+.TP
+.BI \-C changesfile
+Specifies the .changes file which is to be uploaded.  By default
+dgit push looks for a single .changes file in the parent directory whose
+filename suggests it is for the right package and version.
+
+If the specified
+.I changesfile
+pathname contains slashes, the directory part is also used as
+the value for
+.BR \-\-build-products-dir ;
+otherwise, the changes file is expected in that directory (by
+default, in
+.BR .. ).
+.TP
+.BI \-\-upstream-commitish= upstream
+For use with --quilt=baredebian only.
+Specifies the commit containing the upstream source.
+This commit must be identical to your .orig tarball.
+The default is to look for one of the git tags
+.IB U " v" U " upstream/" U
+(in that order), where U is the upstream version.
+.TP
+.B \-\-rm-old-changes
+When doing a build, delete any changes files matching
+.IB package _ version _*.changes
+before starting.  This ensures that
+dgit push (and dgit sbuild) will be able to unambiguously
+identify the relevant changes files from the most recent build, even
+if there have been previous builds with different tools or options.
+The default is not to remove, but
+.B \-\-no-rm-old-changes
+can be used to override a previous \-\-rm-old-changes
+or the .rm-old-changes configuration setting.
+
+Note that \fBdgit push-source\fR will always find the right .changes,
+regardless of this option.
+.TP
+.BI \-\-build-products-dir= directory
+Specifies where to find and create tarballs, binary packages,
+source packages, .changes files, and so on.
+
+By default, dgit uses the parent directory
+.RB ( .. ).
+
+Changing this setting may necessitate
+moving .orig tarballs to the new directory,
+so it is probably best to
+use the
+.BI dgit.default.build-products-dir
+configuration setting
+(see CONFIGURATION, below)
+which this command line option overrides).
+.TP
+.BI --no-rm-on-error
+Do not delete the destination directory if clone fails.
+.TP
+.BR --dep14tag " | " --no-dep14tag
+Whether to push a DEP-14 tag (eg
+.BR debian/ \fIversion\fR)
+as well as a dgit tag (eg
+.BR archive/debian/ \fIversion\fR).
+
+Pushing a DEP-14 tag is the default.
+In split view mode, a DEP-14 tag is always pushed, regardless of this option.
+
+.B --always-dep14tag
+is an obsolete alias for --dep14tag, retained for compatibility.
+.TP
+.BR --dep14tag-reuse=must | if-exists | replace-unsuitable | replace
+Whether to use an existing DEP-14 tag, or make a fresh one.
+Ignored if no DEP-14 tag is to be pushed.
+.RS
+.TP
+.B --dep14tag-reuse=must
+Push an existing tag DEP-14 tag.
+If there is no existing tag, or the existing tag is unsuitable, fail.
+.TP
+.B --dep14tag-reuse=if-exists
+Push an existing tag DEP-14 tag, if it exists.
+If there is no existing tag, make one.
+If there is an existing tag but it is unsuitable, fail.
+
+This is the default.
+.TP
+.B --dep14tag-reuse=replace-unsuitable
+Push an existing tag DEP-14 tag, if it exists and is suitable.
+If there is no existing tag, or it's unsuitable, make a fresh tag,
+overwriting the corresponding git ref, and thus deleting any old tag.
+.TP
+.B --dep14tag-reuse=replace
+Always make a fresh DEP-14 tag,
+overwriting the corresponding git ref, and thus deleting any old tag.
+
+This was the default in dgit 11 and earlier.
+.RE
+.TP
+.BR --dep14tag-verify " | " --no-dep14tag-verify
+Whether to verify an existing DEP-14 tag,
+as part of the suitability check.
+
+The default is to consider an unsigned tag suitable
+(and not verify a signed one).
+
+Note that any DEP-14 tag being pushed will be, effectively, countersigned:
+the hash of the DEP-14 tag object (if there is one)
+is part of the metadata in the dgit view
+.B archive/
+tag message.
+.TP
+.BI -D
+Prints debugging information to stderr.  Repeating the option produces
+more output (currently, up to -DDDD is meaningfully different).
+.TP
+.BR \-\-keep\-playground | \-\-no\-\-keep\-playground
+Controls whether to retain the "playground" working directory
+.B .git/dgit/unpack
+even on success,
+for examination and debugging.
+The default is
+.B \-\-no\-keep\-playground
+which deletes the directory after a successful execution.
+.TP
+.BI -c name = value
+Specifies a git configuration option, to be used for this run.
+dgit itself is also controlled by git configuration options.
+.TP
+.RI \fB-v\fR version "|\fB_\fR | " \fB--since-version=\fR version |\fB_\fR
+Specifies the
+.BI -v version
+option to pass to dpkg-genchanges, during builds.  Changes (from
+debian/changelog) since this version will be included in the built
+changes file, and hence in the upload.  If this option is not
+specified, dgit will query the archive and use the latest version
+uploaded to the intended suite.
+
+Specifying
+.B _
+inhibits this, so that no -v option will be passed to dpkg-genchanges
+(and as a result, only the last stanza from debian/changelog will
+be used for the build and upload).
+.TP
+.RI \fB-m\fR maintaineraddress
+Passed to dpkg-genchanges (eventually).
+.TP
+.RI \fB--ch:\fR option
+Specifies a single additional option to pass, eventually, to
+dpkg-genchanges.
+
+Options which are safe to pass include
+.BR -C
+(and also
+.BR "-si -sa -sd"
+although these should never be necessary with Debian since dgit
+automatically calculates whether .origs need to be uploaded.)
+
+For other options the caveat below applies.
+.TP
+.RI \fB--curl:\fR option " | \fB--dput:\fR" option " |..."
+Specifies a single additional option to pass to
+.BR curl ,
+.BR dput ,
+.BR debsign ,
+.BR dpkg-source ,
+.BR dpkg-buildpackage ,
+.BR dpkg-genchanges ,
+.BR sbuild ,
+.BR pbuilder ,
+.BR cowbuilder ,
+.BR ssh ,
+.BR dgit ,
+.BR git-debrebase ,
+.BR apt-get ,
+.BR apt-cache ,
+.BR gbp-pq ,
+.BR gbp-build ,
+or
+.BR mergechanges .
+Can be repeated as necessary.
+
+Use of this ability should not normally be necessary.
+It is provided for working around bugs,
+or other unusual situations.
+If you use these options,
+you may violate dgit's assumptions
+about the behaviour of its subprograms
+and cause lossage.
+
+For dpkg-buildpackage, dpkg-genchanges, mergechanges and sbuild,
+the option applies only when the program is invoked directly by dgit.
+Usually, for passing options to dpkg-genchanges, you should use
+.BR \-\-ch: \fIoption\fR.
+
+Specifying \-\-git is not effective for some lower-level read-only git
+operations performed by dgit, and also not when git is invoked by
+another program run by dgit.
+
+See notes below regarding ssh and dgit.
+
+NB that \-\-gpg:option is not supported (because debsign does not
+have that facility).
+But see
+.B \-k
+and the
+.B keyid
+distro config setting.
+.TP
+.RI \fB\-\-curl!:\fR option " | \fB\-\-dput!:\fR" option " |..."
+Specifies an option to remove from the command line for
+a program called by dgit, as for
+\fB\-\-\fR\fIprogram\fI\fB:\fR\fIoption\fR
+(and the same caveats apply).
+
+Any options or arguments exactly identical to
+.I option
+are removed.
+(It is not an error if there were none.)
+
+This can only be used to delete options
+which are always passed by default by dgit,
+or to undo a previous
+\fB\-\-\fR\fIprogram\fI\fB:\fR\fIoption\fR.
+It cannot be used to override option(s) dynamically
+decided on by dgit.
+.TP
+.RI \fB\-\-curl=\fR program " | \fB\-\-dput=\fR" program  " |..."
+Specifies alternative programs to use instead of
+.BR curl ,
+.BR dput ,
+.BR debsign ,
+.BR dpkg-source ,
+.BR dpkg-buildpackage ,
+.BR dpkg-genbuildinfo ,
+.BR dpkg-genchanges ,
+.BR dpkg-query ,
+.BR sbuild ,
+.BR pbuilder ,
+.BR cowbuilder ,
+.BR gpg ,
+.BR ssh ,
+.BR dgit ,
+.BR git-debrebase ,
+.BR apt-get ,
+.BR apt-cache ,
+.BR git ,
+.BR gbp-pq ,
+.BR gbp-build ,
+or
+.BR mergechanges .
+
+For
+.BR dpkg-buildpackage ,
+.BR dpkg-genbuildinfo ,
+.BR dpkg-genchanges ,
+.BR dpkg-query ,
+.B mergechanges
+and
+.BR sbuild ,
+this applies only when the program is invoked directly by dgit.
+
+For
+.BR dgit ,
+specifies the command to run on the remote host when dgit
+rpush needs to invoke a remote copy of itself.  (dgit also reinvokes
+itself as the EDITOR for dpkg-source \-\-commit; this is done using
+argv[0], and is not affected by \-\-dgit=).
+
+.BR gbp-build 's
+value
+is used instead of gbp build or git-buildpackage.  (The default is
+the latter unless the former exists on PATH.)
+.BR gbp-pq 's
+value
+is used instead of gbp pq.
+In both cases,
+unusually, the specified value is split on whitespace
+to produce a command and possibly some options and/or arguments.
+
+For pbuilder and cowbuilder, the defaults are
+.BR "sudo -E pbuilder"
+and
+.BR "sudo -E cowbuilder"
+respectively.
+Like with gbp-build and gbp pq,
+the specified value is split on whitespace.
+
+For
+.BR ssh ,
+the default value is taken from the
+.B DGIT_SSH
+or
+.B GIT_SSH
+environment variables, if set (see below).  And, for ssh, when accessing the
+archive and dgit-repos, this command line setting is overridden by the
+git config variables
+.BI dgit-distro. distro .ssh
+and
+.B .dgit.default.ssh
+(which can in turn be overridden with \-c).  Also, when dgit is using
+git to access dgit-repos, only git's idea of what ssh to use (eg,
+.BR GIT_SSH )
+is relevant.
+.TP
+.BI \-\-existing-package= package
+dgit push needs to canonicalise the suite name.  Sometimes, dgit
+lacks a way to ask the archive to do this without knowing the
+name of an existing package.  Without \-\-new we can just use the
+package we are trying to push.  But with \-\-new that will not work, so
+we guess
+.B dpkg
+or use the value of this option.  This option is not needed with the
+default mechanisms for accessing the archive.
+.TP
+.BR \-h | \-\-help
+Print a usage summary.
+.TP
+.BI \-\-initiator-tempdir= directory
+dgit rpush uses a temporary directory on the invoking (signing) host.
+This option causes dgit to use
+.I directory
+instead.  Furthermore, the specified directory will be emptied,
+removed and recreated before dgit starts, rather than removed
+after dgit finishes.  The directory specified must be an absolute
+pathname.
+.TP
+.BR \-\-dry-run " | " \-n
+Go through the motions, fetching all information needed, but do not
+actually update the output(s).  For push, dgit does
+the required checks
+and leaves the new .dsc and .changes in temporary files,
+but does not sign, tag, push or upload.
+
+This is not a very good simulation.
+It can easily go wrong in ways that a for-real push wouldn't.
+.TP
+.BR \-\-damp-run " | " \-L
+Go through many more of the motions: do everything that doesn't
+involve either signing things, or making changes on the public
+servers.
+
+Using this will make unsigned tags,
+and possibly other local changes,
+that will get in the way of a for-real push.
+So be prepared to burn the version number you're using.
+.TP
+.BI \-\-force- something
+Instructs dgit to try to proceed despite detecting
+what it thinks is going to be a fatal problem.
+.B This is probably not going to work.
+These options are provided as an escape hatch,
+in case dgit is confused.
+(They might also be useful for testing error cases.)
+.TP
+.B \-\-force-import-dsc-with-dgit-field
+Tell dgit import-dsc to treat a .dsc with a Dgit field
+like one without it.
+The result is a fresh import,
+discarding the git history
+that the person who pushed that .dsc was working with.
+.TP
+.B \-\-force-reusing-version
+Carry on even though this involves reusing a version number
+of a previous push or upload.
+It is normally best to give different versions different numbers.
+Some servers (including, usually, the Debian server)
+will reject attempts to reuse or replace already-pushed versions.
+.TP
+.B \-\-force-uploading-binaries
+Carry on and
+upload binaries
+even though dgit thinks your distro does not permit that.
+.TP
+.B \-\-force-uploading-source-only
+Carry on and do a source-only upload,
+without any binaries,
+even though dgit thinks your distro does not permit that,
+or does not permit that in this situation.
+.TP
+.B \-\-force-unrepresentable
+Carry on even if
+dgit thinks that your git tree contains changes
+(relative to your .orig tarballs)
+which dpkg-source is not able to represent.
+Your build or push will probably fail later.
+.TP
+.B \-\-force-changes-origs-exactly
+Use the set of .origs specified in your .changes, exactly,
+without regard to what is in the archive already.
+The archive may well reject your upload.
+.TP
+.B \-\-force-unsupported-source-format
+Carry on despite dgit not understanding your source package format.
+dgit will probably mishandle it.
+.TP
+.B \-\-force-dsc-changes-mismatch
+Do not check whether .dsc and .changes match.
+The archive will probably reject your upload.
+.TP
+.BR \-\-force-import-gitapply-absurd " | " \-\-force-import-gitapply-no-absurd
+Force on or off the use of the absurd git-apply emulation
+when running gbp pq import
+when importing a package from a .dsc.
+See Debian bug #841867.
+.TP
+.BR \-\-force-push-tainted
+Go ahead and try to push even tainted git objects
+hat the server says it is going to reject,
+but without declaring any --deliberately.
+This option is provided for testing or strange situations,
+and is not the way to override the taint check:
+using it will probably just fail later,
+burning the version number you are using.
+Use the appropriate --deliberately option instead.
+.TP
+.BR \-\-for\-push
+Override the dgit-distro.distro.readonly configuration setting,
+to specify that we have read/write access
+and should use the corresponding git and achieve access approach
+even if the operation is a read-only one.
+.TP
+.BR --expect-suite =\fIsuite\fR
+Specifies that the dgit rpush invoking host should
+be willing to sign only a .dsc or .changes file
+with target suite \fIsuite\fR.
+.TP
+.BR --expect-version =\fIversion\fR
+Specifies that the dgit rpush invoking host should
+be willing to sign only a .dsc or .changes file
+with version \fIversion\fR.
+.TP
+\fB--tag2upload-builder-mode\fR, \fB--tag2upload-upstream=\fITAG\fR, \fB--tag2upload-upstream-commit=\fICOMMIT\fR
+These options
+activate configuration and behavioural changes
+needed when the tag2upload robot invokes dgit.
+They are not intended for users.
+.TP
+.BR \-\-allow-unrelated-histories
+Pass --allow-unrelated-histories to git merge command
+when running dgit pull.
+This makes dgit pull easier to use
+when the main repository has never been used with dgit
+and hence has unrelated histories.
+.TP
+\fB--dsc-control-add=\fIFIELD\fB=\fIVALUE\fR
+Add an additional control file field to the .dsc.
+
+This is similar to using
+\fB--dpkg-source:-D\fIFIELD\fB=\fIVALUE\fR
+except that
+(i) you can only add an additional field, not override a value; and
+(ii) for an rpush, the field is added on the invoking (signing) host,
+not the build host.
+.TP
+\fB--ch-control-add=\fIFIELD\fB=\fIVALUE\fR
+Like \fB--dsc-control-add\fR but for adding fields to the .changes file.
+.SH CONFIGURATION
+dgit can be configured via the git config system.
+You may set keys with git-config (either in system-global or per-tree
+configuration), or provide
+.BI -c key = value
+on the dgit command line.
+.LP
+Settings likely to be useful for an end user include:
+.TP
+.BI dgit.default.build-products-dir
+Specifies where to find the built files to be uploaded,
+when --build-products-dir is not specified.  The default is
+the parent directory
+.RB ( .. ).
+.TP
+.BR dgit-suite. \fIsuite\fR .distro " \fIdistro\fR"
+Specifies the distro for a suite.  dgit keys off the suite name (which
+appears in changelogs etc.), and uses that to determine the distro
+which is involved.  The config used is thereafter that for the distro.
+
+.I suite
+may be a glob pattern.
+.TP
+.BI dgit.default.distro " distro"
+The default distro for an unknown suite.
+
+This is only used if no
+.BI /usr/share/distro-info/ somedistro .csv
+mentions the specified suite.
+.TP
+.BI dgit.default.default-suite " suite"
+The default suite (eg for clone).
+.TP
+.BR dgit.default. *
+for each
+.BR dgit-distro. \fIdistro\fR . *,
+the default value used if there is no distro-specific setting.
+.TP
+.BR dgit-distro. \fIdistro\fR .clean-mode
+One of the values for the command line \-\-clean= option; used if
+\-\-clean is not specified.
+.TP
+.BR dgit-distro. \fIdistro\fR .clean-mode-newer
+Like .clean-mode,
+but ignored if the value is unknown to this version of dgit.
+Setting both .clean-mode and .clean-mode-newer is useful
+to provide a single git config compatible with different dgit versions.
+.TP
+.BR dgit-distro. \fIdistro\fR .quilt-mode
+One of the values for the command line \-\-quilt= option; used if
+\-\-quilt is not specified.
+.TP
+.BR dgit-distro. \fIdistro\fR .split-view
+.TP
+.BR dgit-distro. \fIdistro\fR .rm-old-changes
+Boolean, used if neither \-\-rm-old-changes nor \-\-no-rm-old-changes
+is specified.  The default is not to remove.
+.TP
+.BR dgit-distro. \fIdistro\fR .readonly " " auto | a " | " true | t | y | 1 " | " false | f | n | 0
+Whether you have push access to the distro.
+For Debian, it is OK to use auto, which uses readonly mode if you are
+not pushing right now;
+but, setting this to false will avoid relying on the mirror of the dgit
+git repository server.
+.TP
+.BI dgit-distro. distro .keyid
+See also
+.BR \-k .
+.TP
+.BI dgit-distro. distro .mirror " url"
+.TP
+.BI dgit-distro. distro .username
+Not relevant for Debian.
+.TP
+.BI dgit-distro. distro .upload-host
+Might be useful if you have an intermediate queue server.
+.TP
+.BI dgit-distro. distro .user-name " " dgit-distro. distro .user-email
+Values to configure for user.name and user.email in new git trees.  If
+not specified, the DEBFULLNAME and DEBEMAIL environment variables are
+used, respectively.  Only used if .setup-usermail is not disabled.
+.TP
+.BI dgit-distro. distro .setup-useremail
+Whether to set user.name and user.email in new git trees.
+True by default.  Ignored for dgit setup-useremail, which does it anyway.
+.TP
+.BI dgit-distro. distro .setup-mergechangelogs
+Whether to set up a merge driver which uses dpkg-mergechangelogs for
+debian/changelog.  True by default.  Ignored for dgit
+setup-mergechangelogs, which does it anyway.
+.TP
+.BI dgit-distro. distro .setup-gitattributes
+Whether to configure .git/info/attributes
+to suppress checkin/checkout file content transformations
+in new git trees.
+True by default.  Ignored for dgit setup-gitattributes, which does it anyway.
+.TP
+.BI dgit-distro. distro .cmd- cmd
+Program to use instead of
+.IR cmd .
+Works like
+.BR \-\- \fIcmd\fR = "... ."
+.TP
+.BI dgit-distro. distro .opts- cmd
+Extra options to pass to
+.IR cmd .
+Works like
+.BR \-\- \fIcmd\fR : "... ."
+To pass several options, configure multiple values in git config
+(with git config \-\-add).  The options for
+.BI dgit.default.opts- cmd
+and
+.BI dgit-distro. distro /push.opts- cmd
+are all used, followed by options from dgit's command line.
+.SH ACCESS CONFIGURATION
+There are many other settings which specify how a particular distro's
+services (archive and git) are provided.  These should not normally be
+adjusted, but are documented for the benefit of distros who wish to
+adopt dgit.
+.TP
+.BI dgit-distro. distro .nominal-distro
+Shown in git tags, Dgit fields, and so on.
+.TP
+.BI dgit-distro. distro .alias-canon
+Used for all access configuration lookup.
+.TP
+.BR dgit-distro. \fIdistro\fR /push. *
+If set, overrides corresponding non \fB/push\fR config when
+.BR readonly=false ,
+or when pushing and
+.BR readonly=auto .
+.TP
+.BI dgit-distro. distro .git-url
+.TP
+.BR dgit-distro. \fIdistro\fR .git-url [ -suffix ]
+.TP
+.BI dgit-distro. distro .git-proto
+.TP
+.BI dgit-distro. distro .git-path
+.TP
+.BR dgit-distro. \fIdistro\fR .git-check " " true | false | url | ssh-cmd
+.TP
+.BI dgit-distro. distro .git-check-suffix
+.TP
+.BI dgit-distro. distro .policy-query-supported-ssh " " false | unknown | true
+.TP
+.BR dgit-distro. \fIdistro\fR .diverts.divert " " new-distro | / \fIdistro-suffix\fR
+.TP
+.BI dgit-distro. distro .git-create " " ssh-cmd | true
+.TP
+.BR dgit-distro. \fIdistro\fR .archive-query " " ftpmasterapi: " | " madison: "\fIdistro\fR | " dummycat: "\fI/path\fR  | " sshpsql: \fIuser\fR @ \fIhost\fR : \fIdbname\fR " " | " aptget:"
+.TP
+.BR dgit-distro. \fIdistro\fR .archive-query- ( url | tls-key | curl-ca-args )
+.TP
+.BI dgit-distro. distro .madison-distro
+.TP
+.BI dgit-distro. distro .archive-query-default-component
+.TP
+.BR dgit-distro. \fIdistro\fR .dep14tag " " want | no [| always ]
+.TP
+.BR dgit-distro. \fIdistro\fR .dep14tag-reuse " " must | if-exists | replace-unsuitable | replace
+.BR dgit-distro. \fIdistro\fR .dep14tag-verify " " true | false
+.TP
+.BI dgit-distro. distro .ssh
+.TP
+.BI dgit-distro. distro .sshpsql-dbname
+.TP
+.BR dgit-distro. \fIdistro\fR . ( git | sshpsql ) - ( user | host | user-force )
+.TP
+.BI dgit-distro. distro .backports-quirk
+.TP
+.BI dgit-distro. distro .rewrite-map-enable
+.TP
+.BR dgit-distro. \fIdistro\fR .source-only-uploads " " ok | always | never | not-wholly-new
+.TP
+.BI dgit.default.old-dsc-distro
+.TP
+.BI dgit.dsc-url-proto-ok. protocol
+.TP
+.BI dgit.dsc-url-proto-ok.bad-syntax
+.TP
+.BI dgit.default.dsc-url-proto-ok
+.TP
+.BI dgit.default.push-subcmd " " source | built | warn,built
+Controls the behaviour of
+.BR "dgit push" .
+.TP
+.BR dgit.vcs-git.suites " \fIsuite\fR[" ; ...]
+.SH ENVIRONMENT VARIABLES
+.TP
+.BR DGIT_SSH ", " GIT_SSH
+specify an alternative default program (and perhaps arguments) to use
+instead of ssh.  DGIT_SSH is consulted first and may contain arguments;
+if it contains any whitespace will be passed to the shell.  GIT_SSH
+specifies just the program; no arguments can be specified, so dgit
+interprets it the same way as git does.
+See
+also the \-\-ssh= and \-\-ssh: options.
+.TP
+.BR DEBEMAIL ", " DEBFULLNAME
+Default git user.email and user.name for new trees.  See
+.BR "dgit setup-new-tree" .
+.TP
+.BR gpg ", " dpkg- "..., " debsign ", " git ", [" lib ] curl ", " dput
+and other subprograms and modules used by dgit are affected by various
+environment variables.  Consult the documentation for those programs
+for details.
+.SH SUPPORT ON OLD DISTRIBUTIONS
+We aim to make modern dgit installable and useable on old versions of Debian,
+and on derivatives.
+One reason this is helpful is that it can be necessary to upgrade
+to handle strange source packages that trigger bugs
+(in dgit or tools that dgit runs).
+
+This version of
+.B dgit.deb
+is directly installable, and functional
+.RB "(with " "apt install dgit.deb" )
+all the way back to Debian 10 (buster) and later;
+this is tested in our CI.
+It is likely to work on many Debian derivatives, too.
+.SH BUGS
+There should be
+a `dgit rebase-prep' command or some such to turn a
+fast-forwarding branch containing pseudo-merges
+back into a rebasing patch stack.
+It might have to leave a note
+for a future dgit push.
+
+If the dgit push fails halfway through,
+it is not necessarily restartable and
+idempotent.
+It would be good to check that the proposed signing key is
+available before starting work.
+
+dgit's build functions, and dgit push, may make changes to
+your current HEAD.  Sadly this is necessary for packages in the `3.0
+(quilt)' source format.  This is ultimately due to what I consider
+design problems in quilt and dpkg-source.
+
+\-\-dry-run does not always work properly, as not doing some of the git
+fetches may result in subsequent actions being different.  Doing a
+non-dry-run dgit fetch first will help.
+\-\-damp-run is likely to work much better.
+.SH SEE ALSO
+\fBdgit\fP(7),
+\fBdgit-*\fP(7),
+\fBcurl\fP(1),
+\fBdput\fP(1),
+\fBdebsign\fP(1),
+\fBgit-config\fP(1),
+\fBgit-buildpackage\fP(1),
+\fBdpkg-buildpackage\fP(1),
+.br
+https://browse.dgit.debian.org/

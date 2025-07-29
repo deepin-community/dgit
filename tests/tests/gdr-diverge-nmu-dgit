@@ -1,0 +1,55 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies GDR
+
+t-setup-import gdr-convert-gbp
+
+cd $p
+
+t-dgit setup-mergechangelogs
+
+: 'maintainer'
+
+git checkout master
+
+v=2.0-3
+t-maintainer-commit-some-changes
+
+t-git-next-date
+
+: 'nmu'
+
+git checkout -b nmu origin/master~0
+
+t-git-next-date
+
+v=2.0-2+nmu1
+t-nmu-commit-an-upstream-change
+t-dch-commit -v$v -m finalise
+t-dch-commit-r
+
+t-dgit -wgf push-source
+
+t-archive-process-incoming sid
+
+: 'rebase nmu onto our branch'
+
+t-git-next-date
+git checkout master
+t-nmu-causes-ff-fail
+
+git checkout dgit/dgit/sid # detach
+
+t-expect-fail 'E:CONFLICT.*Commit patch queue' \
+git rebase master
+git rebase --skip
+
+git push . HEAD:master
+git checkout master
+
+
+t-nmu-reconciled-good nmu
+
+t-ok

@@ -1,0 +1,12 @@
+#!/usr/bin/crontab -utag2upload-oracle
+
+# After changing this file, to make those changes effective on
+# tag2upload-oracle-01.debian.org, upgrade dgit-infrastructure.deb
+# there, and then execute
+#   /usr/share/dgit-infrastructure/debian/tag2upload-oracle-crontab
+# as the tag2upload-oracle UID.
+
+MAILTO=dgit-owner@debian.org
+
+28 * * * * chronic /usr/share/dgit-infrastructure/debian/get-dm-txt /srv/oracle.tag2upload.debian.org/data
+0 2 * * * find /srv/oracle.tag2upload.debian.org/distro=debian/outgoing-mail -type f -mtime +35 -delete

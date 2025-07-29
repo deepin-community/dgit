@@ -1,0 +1,73 @@
+#!/usr/bin/perl -w
+#
+# Usage: .../t2u-fake-manager SOCKET RSCRIPT [RSCIRPT...] --- ORACLED...
+#
+# Listens on SOCKET, and then runs ORACLED...
+# Each successive worker from the oracle will be handled
+# by the next RSCRIPT (invoked as `bash -xec RSCRIPT`).
+# After that, the oracled is killed.
+
+use strict;
+use IO::Socket::UNIX;
+use POSIX;
+
+my $self = $0;
+$self =~ s{.*/}{};
+
+our ($socket_path, @response_scripts);
+
+$socket_path = shift @ARGV;
+for (;;) {
+    $_ = shift @ARGV // die 'missing ---';
+    last if $_ eq '---';
+    push @response_scripts, $_;
+}
+
+print STDERR "$self [$$] setting up on $socket_path\n";
+
+my $listener = IO::Socket::UNIX->new(
+    Type => SOCK_STREAM(),
+    Local => $socket_path,
+    Listen => 1,
+) or die $!;
+
+print STDERR "$self [$$] forking oracled\n";
+
+my $oracled = fork // die $!;
+if (!$oracled) {
+    exec @ARGV or die "exec $ARGV[0] $!";
+}
+$SIG{CHLD} = sub {
+    my $pid = waitpid $oracled, WNOHANG;
+    if ($pid == $oracled) { die "oracled died $?"; }
+};
+
+print STDERR sprintf "%s [%s] listening, %d script(s)\n",
+    $self, $$, scalar @response_scripts;
+
+my $i = 0;
+
+foreach my $response_script (@response_scripts) {
+    $i++;
+    print STDERR "$self [$$] #$i accepting\n";
+    my $conn = $listener->accept() or die $!;
+    print STDERR "$self [$$] #$i connected, running bash -xec\n";
+    open STDIN, "<&", $conn or die $!;
+    open STDOUT, ">&", $conn or die $!;
+    $!=0; $?=0; my $r = system 'bash', '-xec', $response_script;
+    die "$self: response script died: $r $? $!\n" if $r;
+    print STDERR "$self [$$] #$i response script complete\n";
+}
+
+print STDERR "$self [$$] script(s) complete, terminating oracled\n";
+
+$SIG{CHLD} = 'DEFAULT';
+
+kill 15, $oracled or die "kill oracled: $!";
+my $pid = waitpid $oracled, 0;
+die "$pid != $oracled, $!" unless $pid == $oracled;
+die "oracled failed: $?" if $?;
+
+print STDERR "$self [$$] all complete, oracled terminated ok\n";
+
+exit 0;

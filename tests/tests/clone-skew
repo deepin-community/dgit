@@ -1,0 +1,35 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies libhttp-server-simple-static-perl
+
+$troot/http-static-server >$tmp/must-clean/mirror.port $tmp/mirror
+read <$tmp/must-clean/mirror.port mirror_port
+
+t-git-config --global dgit-distro.test-dummy.mirror \
+	http://127.0.0.1:$mirror_port/
+
+t_archive_ln_s=cp
+
+t-archive example 1.0-1
+t-git-none
+
+perl -i -ne '
+	print or die $!;
+	s/1.0-1/1.0-1+0.1/g;
+	s/ \w/ sprintf " %x", $& ^ 1 /e;
+	print or die $!;
+' $tmp/aq/package.sid.$p
+t-aq-archive-updated sid $p
+
+LC_MESSAGES=C \
+t-dgit clone $p 2>&1 |tee got.message
+
+grep 'Warning: archive skew detected.'       got.message
+egrep 'We were able to obtain only  *1.0-1$' got.message
+
+cd $p
+t-cloned-fetched-good
+
+t-ok

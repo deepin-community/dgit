@@ -1,0 +1,179 @@
+#!/bin/bash
+#
+# Mirror script for use as a dgit-repos-server mirror hook
+#
+# In addition to updated-hook (invoked by dgit-repos-server),
+# this script also supports the following ACTIONs:
+#   MIRROR-HOOK-SCRIPT ... setup [...]            create queue dir etc.
+#   MIRROR-HOOK-SCRIPT ... backlog [...]          do all packages which need it
+#   MIRROR-HOOK-SCRIPT ... all [...]              do all packages
+#   MIRROR-HOOK-SCRIPT ... mirror PACKAGE [...]   do just that, longer timeout
+#
+# DISTRO-DIR must contain a file `mirror-settings' which is a bash
+# script fragment assigning the following variables:
+#   remoterepos		for rsync, in form user@host:/dir
+# and optionally
+#   hooktimeout		default 30 [sec]
+#   rsynctimeout	default 900 [sec]
+#   rsyncssh		default 'ssh -o batchmode=yes'
+#   rsync		array, default (rsync -rltH --safe-links --delete)
+#   repos		default DISTRO-DIR/repos
+# (optional settings are all set before mirror-settings is included,
+# so you can modify them with += or some such)
+
+set -e
+set -o pipefail
+shopt -s nullglob
+shopt -s inherit_errexit # #514862, wtf
+
+case "$DGIT_DRS_DEBUG" in
+''|0|1)		;;
+*)		set -x	;;
+esac
+
+fail () {
+	echo >&2 "dgit-mirror-rsync: $*"; exit 127
+}
+
+if [ $# -lt 2 ]; then fail "too few arguments"; fi
+
+self=$0
+
+case "$self" in
+/*)				;;
+*/*)	self="$PWD/$self"	;;
+*)				;;
+esac
+
+distrodir=$1;	shift
+action=$1;	shift
+package=$1
+
+repos=$distrodir/repos
+
+rsync=(rsync -rltH --safe-links --delete)
+hooktimeout=30
+rsynctimeout=900
+rsyncssh='ssh -o batchmode=yes'
+mirror_gc_cmd='git gc --auto'
+
+. $distrodir/mirror-settings
+
+# contents of $queue
+# $queue/$package.n	- mirror needed
+# $queue/$package.a	- being attempted, or attempt failed
+# $queue/$package.lock	- lock (with-lock-ex)
+# $queue/$package.err	- stderr from failed (or current) run
+# $queue/$package.log	- stderr from last successful run
+
+cd $repos
+queue=_mirror-queue
+
+case "$remoterepos" in
+*:/*|/*)	;;
+'')		fail "remoterepos config not set" ;;
+*)		fail "remoterepos config does not match *:/* or /*" ;;
+esac
+
+actually () {
+	if [ "x$mirror_gc_cmd" != x ]; then
+		(
+			cd "$repos/$package.git"
+			$mirror_gc_cmd
+		)
+	fi
+	"${rsync[@]}" \
+		--timeout=$rsynctimeout				\
+		-e "$rsyncssh"					\
+		"$repos/$package.git"/.				\
+		"$remoterepos/$package.git"
+}
+
+reinvoke () {
+	newaction="$1"; shift
+
+	exec							\
+	"$@"							\
+	"$self"	"$distrodir" "reinvoke$newaction" "$package"
+}
+
+check-package-mirrorable () {
+	local repo=$repos/$package.git
+	local mode; mode=$(stat -c%a "$repo")
+	case $mode in
+	*5)	return	0	;;
+	*0)	return	1	;;
+	*)	echo >&2 "unexpected mode $mode for $repo"; return 1	;;
+	esac
+}
+
+lock-and-process () {
+	check-package-mirrorable || return 0
+	reinvoke -locked with-lock-ex -w "$queue/$package.lock"
+}
+
+attempt () {
+	exec 3>&2 >"$queue/$package.err" 2>&1
+	if actually; then
+		rm -f "$queue/$package.a"
+		exec 2>&3 2>&1
+		mv -f "$queue/$package.err" "$queue/$package.log"
+		if ! [ -s "$queue/$package.log" ]; then
+			rm "$queue/$package.log"
+		fi
+		rm "$queue/$package.lock"
+	else
+		cat >&3 "$queue/$package.err"
+		exit 127
+	fi
+}
+
+lock-and-process-baseof-f () {
+	package=${f##*/}
+	package=${package%.*}
+	lock-and-process
+}
+
+case "$action" in
+
+updated-hook)
+	check-package-mirrorable || exit 0
+	touch "$queue/$package.n"
+	reinvoke -timed timeout --foreground $hooktimeout
+	;;
+
+reinvoke-timed)
+	(lock-and-process) >/dev/null 2>&1
+	;;
+
+mirror)
+	lock-and-process
+	;;
+
+reinvoke-locked)
+	touch "$queue/$package.a"
+	rm -f "$queue/$package.n"
+	attempt
+	;;
+
+backlog)
+	for f in $queue/*.[na]; do
+		(lock-and-process-baseof-f ||:)
+	done
+	;;
+
+all)
+	for f in [a-z0-9]*.git; do
+		(lock-and-process-baseof-f)
+	done
+	;;
+
+setup)
+	test -d "$queue" || mkdir "$queue"
+	;;
+
+*)
+	fail "bad action $action"
+	;;
+
+esac

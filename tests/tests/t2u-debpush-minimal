@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+autoimport=''
+. tests/lib
+
+# Test git-debpush minimal dependencies.
+
+t-dependencies NO-DEFAULT DEBPUSH
+
+t-debpush-settings
+
+p=example
+v=1.0
+t-worktree $v
+
+cd $p
+
+mkdir debian/source
+printf '%s\n' -sn >debian/source/options
+git add debian/source/options
+git commit -m 'set source format'
+
+t-git-debpush --dry-run --print-tag-text
+
+t-ok
+

@@ -1,0 +1,2257 @@
+#!/usr/bin/perl -w
+# dgit-repos-server
+#
+# git protocol proxy to check dgit pushes etc.
+#
+# Copyright (C) 2014-2017,2019,2024-2025  Ian Jackson
+# Copyright (C) 2024-2025                 Sean Whitton
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# usages:
+#   dgit-repos-server DISTRO DISTRO-DIR AUTH-SPEC [<settings>] --ssh
+#   dgit-repos-server DISTRO DISTRO-DIR AUTH-SPEC [<settings>] --cron
+#   dgit-repos-server DISTRO DISTRO-DIR AUTH-SPEC [<settings>] \
+#      --tag2upload9 SSH-CMD RPUSH-HOST RPUSH-DIR VIRT-EXEC-CMD \
+#                    NOREPLY REPLY-TO COPIES TIMEOUT SIGNING-KEYID \
+#                    -- URL TAGNAME PUTATIVE-PACKAGE <TAG-OBJECT
+# settings
+#   --repos=GIT-REPOS-DIR             default DISTRO-DIR/repos/
+#   --suites=SUITES-FILE              default DISTRO-DIR/suites
+#   --suites-master=SUITES-FILE       default DISTRO-DIR/suites-master
+#   --policy-hook=POLICY-HOOK         default DISTRO-DIR/policy-hook
+#   --mirror-hook=MIRROR-HOOK         default DISTRO-DIR/mirror-hook
+#   --dgit-live=DGIT-LIVE-DIR         default DISTRO-DIR/dgit-live/
+#   --preferred-mail-domains=DOMAINS-FILE default DISTRO-DIR/preferred-mail-domains
+#   --outgoing-mail=OUTGOING-MAIL-DIR default DISTRO-DIR/outgoing-mail/
+# (DISTRO-DIR is not used other than as default and to pass to policy
+# and mirror hooks)
+#
+# VIRT-EXEC-CMD is url-encoded and ,-separated,
+# as in the autopkgtest virt protocol
+#
+# internal usage:
+#  .../dgit-repos-server --pre-receive-hook PACKAGE
+#
+# Invoked as the ssh restricted command
+#
+# Works like git-receive-pack
+#
+# SUITES-FILE is the name of a file which lists the permissible suites
+# one per line (#-comments and blank lines ignored).  For --suites-master
+# it is a list of the suite(s) which should, when pushed to, update
+# `master' on the server (if fast forward).
+#
+# AUTH-SPEC is a :-separated list of
+#   KEYRING.GPG,AUTH-SPEC
+# where AUTH-SPEC is one of
+#   a
+#   mDM.TXT
+# (With --cron AUTH-SPEC is not used and may be the empty string.)
+# Keyrings should not contain overlapping keys, since we stop after
+# the first keyring containing the actual signing key.
+# Specially, AUTH-SPEC of `always-accept' means to not verify the tag at all.
+#
+# Calling convention for --tag2upload mode
+# ----------------------------------------
+#
+# If it succeeds, it has written the t2um protocol response to stdout:
+#    message MESSAGE
+#    uploaded | irrecoverable
+# (see TAG2UPLOAD-MANAGER-PROTOCOL.md).
+#
+# TIMEOUT is the overall processing timeout in seconds, or 0 for no timeout.
+#
+# If it fails, this should be treated as an irrecoverable error,
+# and the worker should crash, dropping the manager connection.
+# (Because programs on unix can randomly be killed, It is not guaranteed
+# that no response text was sent.)
+#
+# PUTATIVE-PACKAGE is the source package name as determined by the Manager.
+# It must not be trusted by d-r-s.
+#
+# CALLER MUST PREVENT MULTIPLE CONCURRENT RUNS IN SAME CWD
+
+use strict;
+use Carp;
+use File::Compare ();
+use File::Copy ();
+use IO::Handle;
+use MIME::QuotedPrint;
+use URI::Escape;
+
+use Debian::Dgit::Infra; # must precede Debian::Dgit; - can change @INC!
+use Debian::Dgit qw(:DEFAULT :policyflags);
+setup_sigwarn();
+
+# DGIT-REPOS-DIR contains:
+# git tree (or other object)      lock (in acquisition order, outer first)
+#
+#  _tmp/PACKAGE_prospective       ! } SAME.lock, held during receive-pack
+#
+#  _tmp/PACKAGE_incoming$$        ! } SAME.lock, held during receive-pack
+#  _tmp/PACKAGE_incoming$$_fresh  ! }
+#
+#  _tmp/_rmtree-workaround.log    O_APPEND, see sub cleanup
+#
+#  PACKAGE.git                      } PACKAGE.git.lock
+#  PACKAGE_garbage                  }   (also covers executions of
+#  PACKAGE_garbage-old              }    policy hook script for PACKAGE)
+#  PACKAGE_garbage-tmp              }
+#  policy*                          } (for policy hook script, covered by
+#                                   }  lock only when invoked for a package)
+#
+# leaf locks, held during brief operation only:
+#
+#  _empty                           } SAME.lock
+#  _empty.new                       }
+#
+#  _template                        } SAME.lock
+#
+# locks marked ! may be held during client data transfer
+
+# What we do on push is this:
+#  - extract the destination repo name
+#  - make a hardlink clone of the destination repo
+#  - provide the destination with a stunt pre-receive hook
+#  - run actual git-receive-pack with that new destination
+#   as a result of this the stunt pre-receive hook runs; it does this:
+#    + understand what refs we are allegedly updating and
+#      check some correspondences:
+#        * we are updating only refs/tags/[archive/]DISTRO/* and refs/dgit/*
+#        * and only one of each
+#        * and the tag does not already exist
+#        * but, we do not check the signature on the DEP-14 (no-archive/) tag
+#      and
+#        * recover the suite name from the destination refs/dgit/ ref
+#    + disassemble the signed tag into its various fields and signature
+#      including:
+#        * parsing the summary line of the tag message to recover
+#          the package name, version and suite
+#        * checking that the package name corresponds to the dest repo name
+#        * checking that the suite name is as recovered above
+#    + verify the signature on the signed tag
+#      and if necessary check that the keyid and package are listed in dm.txt
+#    + check various correspondences:
+#        * the signed tag must refer to a commit
+#        * the signed tag commit must be the refs/dgit value
+#        * the name in the signed tag must correspond to its ref name
+#        * the tag name must be [archive/]debian/<version> (massaged as needed)
+#        * the suite is one of those permitted
+#        * the signed tag has a suitable name
+#        * run the "push" policy hook
+#        * replay prevention for --deliberately-not-fast-forward
+#        * check the commit is a fast forward
+#        * handle a request from the policy hook for a fresh repo
+#    + push the signed tag and new dgit branch to the actual repo
+#
+# If the destination repo does not already exist, we need to make
+# sure that we create it reasonably atomically, and also that
+# we don't every have a destination repo containing no refs at all
+# (because such a thing causes git-fetch-pack to barf).  So then we
+# do as above, except:
+#  - before starting, we take out our own lock for the destination repo
+#  - we create a prospective new destination repo by making a copy
+#    of _template
+#  - we use the prospective new destination repo instead of the
+#    actual new destination repo (since the latter doesn't exist)
+#  - after git-receive-pack exits, we
+#    + check that the prospective repo contains a tag and head
+#    + rename the prospective destination repo into place
+#
+# Cleanup strategy:
+#  - We are crash-only
+#  - Temporary working trees and their locks are cleaned up
+#    opportunistically by a program which tries to take each lock and
+#    if successful deletes both the tree and the lockfile
+#  - Prospective working trees and their locks are cleaned up by
+#    a program which tries to take each lock and if successful
+#    deletes any prospective working tree and the lock (but not
+#    of course any actual tree)
+#  - It is forbidden to _remove_ the lockfile without removing
+#    the corresponding temporary tree, as the lockfile is also
+#    a stampfile whose presence indicates that there may be
+#    cleanup to do
+#
+# Policy hook scripts are invoked like this:
+#   POLICY-HOOK-SCRIPT DISTRO DGIT-REPOS-DIR DGIT-LIVE-DIR DISTRO-DIR ACTION...
+# ie.
+#   POLICY-HOOK-SCRIPT ... check-list [...]
+#   POLICY-HOOK-SCRIPT ... check-package PACKAGE [...]
+#   POLICY-HOOK-SCRIPT ... push PACKAGE \
+#         VERSION SUITE TAGNAME DELIBERATELIES [...]
+#   POLICY-HOOK-SCRIPT ... push-confirm PACKAGE \
+#         VERSION SUITE TAGNAME DELIBERATELIES FRESH-REPO|'' [...]
+#   POLICY-HOOK-SCRIPT ... policy-client-query PACKAGE POL-CL-QUERY [...]
+#
+# DELIBERATELIES is like this: --deliberately-foo,--deliberately-bar,...
+# POL-CL-QUERY is in the syntax of a package name
+#
+# Exit status of policy hook is a bitmask.
+# Bit weight constants are defined in Dgit.pm.
+#    NOFFCHECK   (2)
+#         suppress dgit-repos-server's fast-forward check ("push" only)
+#    FRESHREPO   (4)
+#         blow away repo right away (ie, as if before push or fetch)
+#         ("check-package" and "push" only)
+#    NOCOMMITCHECK   (8)
+#         suppress dgit-repos-server's check that commits do
+#         not lack "committer" info (eg as produced by #849041)
+#         ("push" only)
+# any unexpected bits mean failure, and then known set bits are ignored
+# if no unexpected bits set, operation continues (subject to meaning
+# of any expected bits set).  So, eg, exit 0 means "continue normally"
+# and would be appropriate for an unknown action.
+#
+# cwd for push and push-confirm is a temporary repo where the incoming
+# objects have been received; TAGNAME is the version-based tag.
+#
+# FRESH-REPO is '' iff the repo for this package already existed, or
+# the pathname of the newly-created repo which will be renamed into
+# place if everything goes well.  (NB that this is generally not the
+# same repo as the cwd, because the objects are first received into a
+# temporary repo so they can be examined.)  In this case FRESH-REPO
+# contains exactly the objects and refs that will appear in the
+# destination if push-confirm approves.
+# 
+# if push requested FRESHREPO, push-confirm happens in the old working
+# repo and FRESH-REPO is guaranteed not to be ''.
+#
+# policy hook for a particular package will be invoked only once at
+# a time - (see comments about DGIT-REPOS-DIR, above)
+#
+# check-list and check-package are invoked via the --cron option.
+# First, without any locking, check-list is called.  It should produce
+# a list of package names (one per line).  Then check-package will be
+# invoked for each named package, in each case after taking an
+# appropriate lock.
+#
+# If policy hook wants to run dgit (or something else in the dgit
+# package), it should use DGIT-LIVE-DIR/dgit (etc.), or if that is
+# ENOENT, use the installed version.
+#
+# POL-CL-QUERY is one of the following:
+#
+#    tainted-objects SUITE
+#        => [ { "gitobjid": "sha",
+#               "comment": $string, # in server"s native language, UTF-8
+#               "overrides": [ "--deliberately-include-q-h", ... ],
+#               # optional (may be absent, not null):
+#               "gitobjtype": "commit", # as from git-cat-file -t
+#               "time": $time_t,
+#               "hint": $string, # client should translate if it can
+#           } }
+#
+# Arguments after POL-CL-QUERY cannot contain `;` or whitespace;
+# they are obtained by dgit-ssh-dispatch by naive whitespace-splitting
+# a string from SSH_ORIGINAL_COMMAND.
+# 
+# (Response value is JSON unless otherwise specified.)
+# If POL-CL-QUERY is not supported, the server will exit successfully
+# producing no output.
+#
+# Mirror hook scripts are invoked like this:
+#   MIRROR-HOOK-SCRIPT DISTRO-DIR ACTION...
+# and currently there is only one action invoked by dgit-repos-server:
+#   MIRROR-HOOK-SCRIPT DISTRO-DIR updated-hook PACKAGE [...]
+#
+# Exit status of the mirror hook is advisory only.  The mirror hook
+# runs too late to do anything useful about a problem, so the only
+# effect of a mirror hook exiting nonzero is a warning message to
+# stderr (which the pushing user should end up seeing).
+#
+# If the mirror hook does not exist, it is silently skipped.
+
+use POSIX;
+use Fcntl qw(:flock);
+use File::Temp qw(tempfile);
+
+initdebug('');
+
+our $func;
+our $dgitrepos;
+our $package;
+our $distro;
+our $suitesfile;
+our $suitesformasterfile;
+our $policyhook;
+our $mirrorhook;
+our $dgitlive;
+our $maildomainsfile;
+our $outgoingmail;
+our $distrodir;
+our $destrepo;
+our $workrepo;
+our $keyrings;
+our @lockfhs;
+
+our @deliberatelies;
+our %previously;
+our $policy;
+our @policy_args;
+
+our $reject_hook = sub { }; # called at the top of reject, with message
+
+#----- utilities -----
+
+sub realdestrepo () { "$dgitrepos/$package.git"; }
+
+sub acquirelock ($$) {
+    my ($lock, $must) = @_;
+    my $fh;
+    printdebug sprintf "locking %s %d\n", $lock, $must;
+    for (;;) {
+	close $fh if $fh;
+	$fh = new IO::File $lock, ">" or die "open $lock: $!";
+	my $ok = flock $fh, $must ? LOCK_EX : (LOCK_EX|LOCK_NB);
+	if (!$ok) {
+	    die "flock $lock: $!" if $must;
+	    printdebug " locking $lock failed\n";
+	    return undef;
+	}
+	next unless stat_exists $lock;
+	my $want = (stat _)[1];
+	stat $fh or die $!;
+	my $got = (stat _)[1];
+	last if $got == $want;
+    }
+    return $fh;
+}
+
+sub acquirermtree ($$) {
+    my ($tree, $must) = @_;
+    my $fh = acquirelock("$tree.lock", $must);
+    if ($fh) {
+	push @lockfhs, $fh;
+	rmdir_r $tree;
+    }
+    return $fh;
+}
+
+sub locksometree ($) {
+    my ($tree) = @_;
+    acquirelock("$tree.lock", 1);
+}
+
+sub lockrealtree () {
+    locksometree(realdestrepo);
+}
+
+sub mkrepotmp () { ensuredir "$dgitrepos/_tmp" };
+
+sub removedtagsfile () { "$dgitrepos/_removed-tags/$package"; }
+
+sub dgit_program () { $ENV{DGIT_DRS_DGIT} // 'dgit'; }
+
+sub recorderror ($) {
+    my ($why) = @_;
+    my $w = $ENV{'DGIT_DRS_WORK'}; # we are in stunthook
+    if (defined $w) {
+	chomp $why;
+	open ERR, ">", "$w/drs-error" or die $!;
+	print ERR $why, "\n" or die $!;
+	close ERR or die $!;
+	return 1;
+    }
+    return 0;
+}
+
+sub reject ($) {
+    my ($why) = @_;
+    $reject_hook->($why);
+    recorderror "reject: $why";
+    die "\ndgit-repos-server: reject: $why\n\n";
+}
+
+sub policyhook {
+    my ($policyallowbits, @polargs) = @_;
+    # => ($exitstatuspolicybitmap);
+    die if $policyallowbits & ~0x3e;
+    my @cmd = ($policyhook,$distro,$dgitrepos,$dgitlive,$distrodir,@polargs);
+    debugcmd '+M',@cmd;
+    my $r = system @cmd;
+    die "system: $!" if $r < 0;
+    die "dgit-repos-server: policy hook failed (or rejected) ($?)\n"
+	if $r & ~($policyallowbits << 8);
+    printdebug sprintf "hook => %#x\n", $r;
+    return $r >> 8;
+}
+
+sub mkemptyrepo ($$) {
+    my ($dir,$sharedperm) = @_;
+    runcmd qw(git init --bare --quiet), "--shared=$sharedperm", $dir;
+}
+
+sub mkrepo_fromtemplate ($) {
+    my ($dir) = @_;
+    my $template = "$dgitrepos/_template";
+    my $templatelock = locksometree($template);
+    printdebug "copy template $template -> $dir\n";
+    my $r = system qw(cp -a --), $template, $dir;
+    !$r or die "create new repo $dir failed: $r $!";
+    close $templatelock;
+}
+
+sub movetogarbage () {
+    # realdestrepo must have been locked
+
+    my $real = realdestrepo;
+    return unless stat_exists $real;
+
+    my $garbagerepo = "$dgitrepos/${package}_garbage";
+    # We arrange to always keep at least one old tree, for recovery
+    # from mistakes.  This is either $garbage or $garbage-old.
+    if (stat_exists "$garbagerepo") {
+	printdebug "movetogarbage: rmdir_r $garbagerepo-tmp\n";
+	rmdir_r "$garbagerepo-tmp";
+	if (rename "$garbagerepo-old", "$garbagerepo-tmp") {
+	    printdebug "movetogarbage: $garbagerepo-old -> -tmp, rmdir_r\n";
+	    rmdir_r "$garbagerepo-tmp";
+	} else {
+	    die "$garbagerepo $!" unless $!==ENOENT;
+	    printdebug "movetogarbage: $garbagerepo-old -> -tmp\n";
+	}
+	printdebug "movetogarbage: $garbagerepo -> -old\n";
+	rename "$garbagerepo", "$garbagerepo-old" or die "$garbagerepo $!";
+    }
+
+    ensuredir "$dgitrepos/_removed-tags";
+    open PREVIOUS, ">>", removedtagsfile or die removedtagsfile." $!";
+    git_for_each_ref([ map { 'refs/tags/'.$_ } debiantags('*',$distro) ],
+		     sub {
+	my ($objid,$objtype,$fullrefname,$reftail) = @_;
+	print PREVIOUS "\n$objid $reftail .\n" or die $!;
+    }, $real);
+    close PREVIOUS or die $!;
+
+    printdebug "movetogarbage: $real -> $garbagerepo\n";
+    rename $real, $garbagerepo
+	or $! == ENOENT
+	or die "$garbagerepo $!";
+}
+
+sub policy_checkpackage () {
+    my $lfh = lockrealtree();
+
+    $policy = policyhook(FRESHREPO,'check-package',$package);
+    if ($policy & FRESHREPO) {
+	movetogarbage();
+    }
+
+    close $lfh;
+}
+
+#----- git-receive-pack -----
+
+sub fixmissing__git_receive_pack () {
+    mkrepotmp();
+    $destrepo = "$dgitrepos/_tmp/${package}_prospective";
+    acquirermtree($destrepo, 1);
+    mkrepo_fromtemplate($destrepo);
+}
+
+sub makeworkingclone () {
+    mkrepotmp();
+    $workrepo = "$dgitrepos/_tmp/${package}_incoming$$";
+    acquirermtree($workrepo, 1);
+    my $lfh = lockrealtree();
+    runcmd qw(git clone -l -q --mirror), $destrepo, $workrepo;
+    close $lfh;
+    rmdir_r "${workrepo}_fresh";
+}
+
+sub mkscript ($$) {
+    my ($path,$contents) = @_;
+    my $fh = new IO::File $path, O_WRONLY|O_CREAT|O_TRUNC, 0777
+	or die "$path: $!";
+    print $fh $contents or die "$path: $!";
+    close $fh or die "$path: $!";
+}
+
+sub setupstunthook () {
+    my $prerecv = "$workrepo/hooks/pre-receive";
+    mkscript $prerecv, <<END;
+#!/bin/sh
+set -e
+exec $0 --pre-receive-hook $package
+END
+    $ENV{'DGIT_DRS_WORK'}= $workrepo;
+    $ENV{'DGIT_DRS_DEST'}= $destrepo;
+    printdebug " stunt hook set up $prerecv\n";
+}
+
+sub dealwithfreshrepo () {
+    my $freshrepo = "${workrepo}_fresh";
+    return unless stat_exists $freshrepo;
+    $destrepo = $freshrepo;
+}
+
+sub mirrorhook {
+    my @cmd = ($mirrorhook,$distrodir,@_);
+    debugcmd '+',@cmd;
+    return unless stat_exists $mirrorhook;
+    my $r = system @cmd;
+    if ($r) {
+	printf STDERR <<END,
+dgit-repos-server: warning: mirror hook failed: %s
+dgit-repos-server: push complete but may not fully visible.
+END
+            ($r < 0 ? "exec: $!" :
+	     $r == (124 << 8) ? "exited status 124 (timeout?)" :
+	     !($r & ~0xff00) ? "exited ".($? >> 8) :
+	     "wait status $?");
+    }
+}
+
+sub maybeinstallprospective () {
+    return if $destrepo eq realdestrepo;
+
+    if (open REJ, "<", "$workrepo/drs-error") {
+	local $/ = undef;
+	my $msg = <REJ>;
+	REJ->error and die $!;
+	print STDERR $msg;
+	exit 1;
+    } else {
+	$!==&ENOENT or die $!;
+    }
+
+    printdebug " show-ref ($destrepo) ...\n";
+
+    my $child = open SR, "-|";
+    defined $child or die $!;
+    if (!$child) {
+	chdir $destrepo or die $!;
+	exec qw(git show-ref);
+	die $!;
+    }
+    my %got = qw(newtag 0 omtag 0 head 0);
+    while (<SR>) {
+	chomp or die;
+	printdebug " show-refs| $_\n";
+	s/^\S*[1-9a-f]\S* (\S+)$/$1/ or die;
+	next if m{^refs/heads/master$};
+	my $wh =
+	    m{^refs/tags/archive/} ? 'newtag' :
+	    m{^refs/tags/} ? 'omtag' :
+	    m{^refs/dgit/} ? 'head' :
+	    die;
+	use Data::Dumper;
+	die if $got{$wh}++;
+    }
+    $!=0; $?=0; close SR or $?==256 or die "$? $!";
+
+    printdebug "installprospective ?\n";
+    die Dumper(\%got)." -- missing refs in new repo"
+	unless $got{head} && grep { m/tag$/ && $got{$_} } keys %got;
+
+    lockrealtree();
+
+    if ($destrepo eq "${workrepo}_fresh") {
+	movetogarbage;
+    }
+
+    printdebug "install $destrepo => ".realdestrepo."\n";
+    rename $destrepo, realdestrepo or die $!;
+    remove realdestrepo.".lock" or die $!;
+}
+
+sub main__git_receive_pack () {
+    makeworkingclone();
+    setupstunthook();
+    runcmd qw(git receive-pack), $workrepo;
+    dealwithfreshrepo();
+    maybeinstallprospective();
+    mirrorhook('updated-hook', $package);
+}
+
+#----- stunt post-receive hook -----
+
+our ($tagname, $tagval, $tagfp, $suite, $oldcommit, $commit);
+our ($version, %tagh);
+our ($maint_tagname, $maint_tagval);
+
+our ($tagexists_error);
+
+sub readupdates () {
+    printdebug " updates ...\n";
+    my %tags;
+    while (<STDIN>) {
+	chomp or die;
+	printdebug " upd.| $_\n";
+	m/^(\S+) (\S+) (\S+)$/ or die "$_ ?";
+	my ($old, $sha1, $refname) = ($1, $2, $3);
+	if ($refname =~ m{^refs/tags/(?=(?:archive/)?$distro/)}) {
+	    my $tn = $'; #';
+	    $tags{$tn} = $sha1;
+	    $tagexists_error= "tag $tn already exists -".
+		" not replacing previously-pushed version"
+		if $old =~ m/[^0]/;
+	} elsif ($refname =~ m{^refs/dgit/}) {
+	    reject "pushing multiple heads!" if defined $suite;
+	    $suite = $'; #';
+	    $oldcommit = $old;
+	    $commit = $sha1;
+	} else {
+	    reject "pushing unexpected ref!";
+	}
+    }
+    STDIN->error and die $!;
+
+    reject "push is missing tag ref update" unless %tags;
+    my @dtags = grep { m#^archive/# } keys %tags;
+    reject "need exactly one archive/* tag" if @dtags!=1;
+    my @mtags = grep { !m#^archive/# } keys %tags;
+    reject "pushing too many non-dgit tags" if @mtags>1;
+    ($tagname) = @dtags;
+    ($maint_tagname) = @mtags;
+    $tagval = $tags{$tagname};
+    $maint_tagval = $tags{$maint_tagname // ''};
+
+    reject "push is missing head ref update" unless defined $suite;
+    printdebug " updates ok.\n";
+}
+
+sub readtag ($$;$) {
+    # Runs git cat-file and writes the output to dgit-tmp/$outleaf
+    my ($objref, $outleaf, $cmd_map) = @_;
+    printdebug " readtag ($outleaf)...\n";
+
+    $cmd_map //= sub { @_; };
+    local $/ = undef; # don't chomp!
+    my $tag_data = cmdoutput $cmd_map->(qw(git cat-file tag), $objref);
+    open TW, ">dgit-tmp/$outleaf" or die $!;
+    print TW $tag_data or die $!;
+    close TW or die $!;
+}
+
+sub parsetag_split () {
+    # First part of tag processing.
+    #
+    # Reads dgit-tmp/wholetag
+    # Writes
+    #      dgit-tmp/plaintext      whole tag plaintext
+    #      dgit-tmp/plaintext.asc  signature
+    #      dgit-tmp/tagmessage     the "message" part
+    #
+    printdebug " parsetag_split...\n";
+
+    open T, "dgit-tmp/wholetag" or die $!;
+    open PT, ">dgit-tmp/plaintext" or die $!;
+    open DS, ">dgit-tmp/plaintext.asc" or die $!;
+    my $in_ds;
+    for (;;) {
+	$!=0; $_=<T>;
+	defined or last;
+
+	$in_ds = 1 if m/^-----BEGIN PGP/;
+
+	if ($in_ds) {
+	    print DS or die $!;
+	} else {
+	    print PT or die $!;
+	}
+    }
+    T->error() and die $!;
+    close T;
+    close PT or die $!;
+    close DS or die $!;
+    reject "tag missing signature" unless $in_ds;
+}
+
+sub parsetag_general ($$) {
+    # Processes the tag message, after parsetag_split.
+    #
+    # tag header values (git headers) are left in @{ $tagh['HEADER'] }
+    #
+    # the tag summary line is fed in $_ to $summary_line_fn->();
+    #
+    # [dgit..] metadata lines found in the message are identified.
+    # the metadata line content, plus a space, is fed in $_ to
+    #    $dgititemfn->()
+    #
+    # $dgititemfn->() should consider whether the item is recognised.
+    # If the item is recognised, it should strip the item, and the space,
+    # from the front of $_, and return true.
+    # Otherwise it should leave $_ unchanged, and return false.
+    my ($summary_line_fn, $dgititemfn) = @_;
+    printdebug " parsetag...\n";
+
+    my $phase = 'header';
+    my $distro_ok;
+
+    open T, "dgit-tmp/plaintext" or die $!;
+    for (;;) {
+	$!=0; $_=<T>; defined or last;
+	if ($phase eq 'header') {
+	    if (m/^(\S+) (.*)/) {
+		push @{ $tagh{$1} }, $2;
+	    } elsif (!m/\S/) {
+		$phase = 'summary line';
+	    } else {
+		reject "corrupted git headers in tag";
+	    }
+	} elsif ($phase eq 'summary line') {
+	    m/\S/ or reject 'tag summary line has only whitespace';
+	    $summary_line_fn->();
+	    $phase = 'summary line sep';
+	} elsif ($phase eq 'summary line sep') {
+	  m/\S/ and reject
+	    '2nd line of tag message (after summary line) is not blank';
+	    $phase = 'body';
+	} elsif ($phase eq 'body' && m/^\[dgit ([^"].*)\]$/) {
+	    # [dgit "something"] is for future
+	    $_ = $1." ";
+	    while (length) {
+		if ($dgititemfn->()) {
+		} elsif (s/^distro\=(\S+) //) {
+		    $distro_ok ||= $1 eq $distro;
+		} elsif (s/^([-+.=0-9a-z]\S*) //) {
+		    printdebug " parsetag ignoring unrecognised \`$1'\n";
+		} else {
+		    reject "unknown critical dgit info in tag ($_)";
+		}
+	    }
+	} elsif ($phase eq 'body') {
+	    # ignore
+	} else {
+	    confess "$phase ?";
+	}
+    }
+    T->error and die $!;
+    reject "tag missing message (at $phase)"
+      unless grep { $_ eq $phase } 'summary line sep', 'body';
+
+    if (!$distro_ok) {
+	$distro_ok // reject "missing distro= in tag (very old dgit?)";
+	reject "not for this distro (distro=$distro missing)";
+    }
+
+    printdebug " parsetag ok.\n";
+}
+
+sub parsetag () {
+    readtag($tagval, 'wholetag');
+    parsetag_split();
+    parsetag_general sub {
+	# TODO we should replace this eventually, either after all non-ancient
+	# dgit versions put the relevant information in the tag body, or with
+	# fallback to looking here.  NB this code isn't used for the t2u tag.
+	# This will probably also mean moving the `source=` handling from
+	# tag2upload_parsetag to parsetag_general.
+	m/^($package_re) release (\S+) for \S+ \((\S+)\) \[dgit\]$/ or
+	    reject "tag summary line not in expected format: $_ ";
+	reject "package mismatch in tag summary line" unless $1 eq $package;
+	$version = $2;
+	reject "suite mismatch in tag summary line ($3 != $suite)"
+	  unless $3 eq $suite;
+    }, sub {
+	if (s/^(--deliberately-$deliberately_re) //) {
+	    push @deliberatelies, $1;
+	} elsif (s/^previously:(\S+)=(\w+) //) {
+	    die "previously $1 twice" if defined $previously{$1};
+	    $previously{$1} = $2;
+	} else {
+	    return 0;
+	}
+	return 1;
+    };
+}
+
+sub checksig_keyring ($$) {
+    my ($keyringfile, $log_fh) = @_;
+    # returns primary-keyid if signed by a key in this keyring
+    # or undef if not
+    # or dies on other errors
+    #
+    # Either way, some log info, including the keyring leafname,
+    # and the gpgv stderr, is written to $log_fh.
+
+    my $ok = undef;
+
+    printdebug " checksig keyring $keyringfile...\n";
+
+    $keyringfile =~ m{([^/]*)$} or die;
+    print $log_fh "checking signature against keyring $1...\n";
+    flush $log_fh or die $!;
+
+    our @cmd = (qw(gpgv --status-fd=1 --keyring),
+		   $keyringfile,
+		   qw(dgit-tmp/plaintext.asc dgit-tmp/plaintext));
+    debugcmd '|',@cmd;
+
+    my $gpg_child = open P, "-|" // die $!;
+    if (!$gpg_child) {
+	open STDERR, ">&", $log_fh or die $!;
+	exec @cmd or die $!;
+    }
+
+    while (<P>) {
+	next unless s/^\[GNUPG:\] //;
+	chomp or die;
+	printdebug " checksig| $_\n";
+	my @l = split / /, $_;
+	if ($l[0] eq 'NO_PUBKEY') {
+	    last;
+	} elsif ($l[0] eq 'VALIDSIG') {
+	    my $sigtype = $l[9];
+	    $sigtype eq '00' or reject "signature is not of type 00!";
+	    $ok = $l[10];
+	    $tagfp = $l[1];
+	    die unless defined $ok and defined $tagfp;
+	    last;
+	} elsif ($l[0] eq 'BADSIG') {
+	    # This is not necessary for correctness, but it produces
+	    # a much better error message.
+	    reject "bad signature!";
+	}
+    }
+
+    # Print a message if gnupg dies due to a signal other than SIGPIPE.
+    # Ignore nonzero exit status: that's normal, eg for key not found.
+    # If gnupg crashes with a nonzero exit status it ought to
+    # print some messages of its own.
+    $!=0; $?=0; close P or $?==13 or $? < 256
+      or print $log_fh "gnupg failed ($keyringfile): $? $!\n";
+
+    printdebug sprintf " checksig ok=%d\n", !!$ok;
+
+    return $ok;
+}
+
+sub dm_txt_check ($$) {
+    my ($keyid, $dmtxtfn) = @_;
+    printdebug " dm_txt_check $keyid $dmtxtfn\n";
+    open DT, '<', $dmtxtfn or die "$dmtxtfn $!";
+    while (<DT>) {
+	m/^fingerprint:\s+\Q$keyid\E$/oi
+	    ..0 or next;
+	if (s/^allow:/ /i..0) {
+	} else {
+	    m/^./
+		or reject "key $keyid missing Allow section in permissions!";
+	    next;
+	}
+	# in right stanza...
+	s/^[ \t]+//
+	    or reject "package $package not allowed for key $keyid";
+	# in allow field...
+	s/\([^()]+\)//;
+	s/\,//;
+	chomp or die;
+	printdebug " dm_txt_check allow| $_\n";
+	foreach my $p (split /\s+/) {
+	    if ($p eq $package) {
+		# yay!
+		printdebug " dm_txt_check ok\n";
+		return;
+	    }
+	}
+    }
+    DT->error and die $!;
+    close DT or die $!;
+    reject "key $keyid not in permissions list although in keyring!";
+}
+
+sub verifytag_start ($) {
+    my ($fail_log_copy_fh) = @_;
+    # Tries to verify the signature, based on $keyrings,
+    # and returns information about the first auth entry containing the key
+    # that signed the tag.
+    #
+    # If it rejects, also writes log info including keyring leafnames,
+    # and gpgv stderr, to $fail_log_copy_fh.
+    # Nothing is written there on success.
+    #
+    # Return values are
+    #   { AnyPackage => 1, KeyId => $keyid, Keyring => $keyring }
+    #       where the KeyId and Keyring fields may not be present.
+    #       Any package should be allowed - access should be granted.
+    #       A "printdebug" has already been logged.
+    #       The return value from $permit will be
+    #       returned by verifytag_general unconditionally.
+    #   { DmTextFn => $dm_txt_filename, KeyId => $keyid, Keyring => $keyring }
+    #       An "m" entry in $keyrings specified the signing key.
+    #       The keyid and dm.txt filename are passed to $permit
+    #       and the dm.txt has NOT yet been read, so $keyid MUST be checked.
+    #       (Typiecally, by calling dm_txt_check)
+    # Otherwise, calls `reject`.
+
+    my $log_fh = IO::File::new_tmpfile() or die $!;
+
+    my $orig_reject_hook = $reject_hook;
+    local $reject_hook = sub {
+	seek $log_fh,0,POSIX::SEEK_SET or die $!;
+	File::Copy::copy($log_fh, $fail_log_copy_fh) or die $!;
+	$orig_reject_hook->(@_);
+    };
+
+    return { AnyPackage => 1 } if $keyrings eq 'always-accept';
+    foreach my $kas (split /:/, $keyrings) {
+	printdebug "verifytag $kas...\n";
+	$kas =~ s/^([^,]+),// or die;
+	my $keyring = $1;
+	my $keyid = checksig_keyring $keyring, $log_fh;
+	if (defined $keyid) {
+	    my %ret = (KeyId => $keyid, Keyring => $keyring);
+	    if ($kas =~ m/^a$/) {
+		printdebug "verifytag a ok\n";
+		$ret{AnyPackage} = 1;
+		return \%ret;
+	    } elsif ($kas =~ m/^m([^,]+)$/) {
+		$ret{DmTxtFn} = $1;
+		return \%ret;
+	    } else {
+		die;
+	    }
+	}   
+    }
+    reject "key not found in keyrings, or verification failed";
+}
+
+sub verifytag_finish ($) {
+    # Takes a value returned by ``verifytag_start`,
+    # and completes all the checks.  Either returns true, or `reject`s.
+    my ($info) = @_;
+    if ($info->{AnyPackage}) {
+    } elsif ($info->{DmTxtFn}) {
+	dm_txt_check(
+            $info->{KeyId},
+	    $info->{DmTxtFn},
+        );
+        printdebug "verifytag m ok\n";
+    } else {
+	confess;
+    }
+    1;
+}
+
+sub verifytag () {
+    # Verifies that
+    #   some entry in $keyrings justifies the upload
+    # specifically
+    #   if the entry references a keyring
+    #     a public key in that keyring can verify
+    #     dgit-tmp/plaintext.asc
+    #     dgit-tmp/plaintext
+    #   if the entry references a dm.txt
+    #     that dm.txt mentions the signing key fingerprint wrt src:$package
+    # Otherwise, dies.
+    verifytag_finish verifytag_start(\*STDERR);
+}
+
+sub suite_is_in ($) {
+    my ($sf) = @_;
+    printdebug "suite_is_in ($sf)\n";
+    if (!open SUITES, "<", $sf) {
+	$!==ENOENT or die $!;
+	return 0;
+    }
+    while (<SUITES>) {
+	chomp;
+	next unless m/\S/;
+	next if m/^\#/;
+	s/\s+$//;
+	return 1 if $_ eq $suite;
+    }
+    die $! if SUITES->error;
+    return 0;
+}
+
+sub checksuite () {
+    printdebug "checksuite ($suitesfile)\n";
+    return if suite_is_in $suitesfile;
+    reject "unknown suite";
+}
+
+sub checktagnoreplay () {
+    # We need to prevent a replay attack using an earlier signed tag.
+    # We also want to archive in the history the object ids of
+    # anything we remove, even if we get rid of the actual objects.
+    #
+    # So, we check that the signed tag mentions the name and tag
+    # object id of:
+    #
+    # (a) In the case of FRESHREPO: all tags and refs/heads/* in
+    #     the repo.  That is, effectively, all the things we are
+    #     deleting.
+    #
+    #     This prevents any tag implying a FRESHREPO push
+    #     being replayed into a different state of the repo.
+    #
+    #     There is still the following risk: If a non-ff push is of a
+    #     head which is an ancestor of a previous ff-only push, the
+    #     previous push can be replayed.
+    #
+    #     So we keep a separate list, as a file in the repo, of all
+    #     the tag object ids we have ever seen and removed.  Any such
+    #     tag object id will be rejected even for ff-only pushes.
+    #
+    # (b) In the case of just NOFFCHECK: all tags referring to the
+    #     current head for the suite (there must be at least one).
+    #
+    #     This prevents any tag implying a NOFFCHECK push being
+    #     replayed to overwrite a different head.
+    #
+    #     The possibility of an earlier ff-only push being replayed is
+    #     eliminated as follows: the tag from such a push would still
+    #     be in our repo, and therefore the replayed push would be
+    #     rejected because the set of refs being updated would be
+    #     wrong.
+
+    if (!open PREVIOUS, "<", removedtagsfile) {
+	die removedtagsfile." $!" unless $!==ENOENT;
+    } else {
+	# Protocol for updating this file is to append to it, not
+	# write-new-and-rename.  So all updates are prefixed with \n
+	# and suffixed with " .\n" so that partial writes can be
+	# ignored.
+	while (<PREVIOUS>) {
+	    next unless m/^(\w+) (.*) \.\n/;
+	    next unless $1 eq $tagval;
+	    reject "Replay of previously-rewound upload ($tagval $2)";
+	}
+	die removedtagsfile." $!" if PREVIOUS->error;
+	close PREVIOUS;
+    }
+
+    return unless $policy & (FRESHREPO|NOFFCHECK);
+
+    my $garbagerepo = "$dgitrepos/${package}_garbage";
+    lockrealtree();
+
+    my $nchecked = 0;
+    my @problems;
+
+    my $check_ref_previously= sub {
+	my ($objid,$objtype,$fullrefname,$reftail) = @_;
+	my $supkey = $fullrefname;
+	$supkey =~ s{^refs/}{} or die "$supkey $objid ?";
+	my $supobjid = $previously{$supkey};
+	if (!defined $supobjid) {
+	    printdebug "checktagnoreply - missing\n";
+	    push @problems, "does not declare previously $supkey";
+	} elsif ($supobjid ne $objid) {
+	    push @problems, "declared previously $supkey=$supobjid".
+		" but actually previously $supkey=$objid";
+	} else {
+	    $nchecked++;
+	}
+    };
+
+    if ($policy & FRESHREPO) {
+	foreach my $kind (qw(tags heads)) {
+	    git_for_each_ref("refs/$kind", $check_ref_previously);
+	}
+    } else {
+	my $branch= server_branch($suite);
+	my $branchhead= git_get_ref(server_ref($suite));
+	if (!length $branchhead) {
+	    # No such branch - NOFFCHECK was unnecessary.  Oh well.
+	    printdebug "checktagnoreplay - not FRESHREPO, new branch, ok\n";
+	} else {
+	    printdebug "checktagnoreplay - not FRESHREPO,".
+		" checking for overwriting refs/$branch=$branchhead\n";
+	    git_for_each_tag_referring($branchhead, sub {
+		my ($tagobjid,$refobjid,$fullrefname,$tagname) = @_;
+		$check_ref_previously->($tagobjid,undef,$fullrefname,undef);
+            });
+	    printdebug "checktagnoreplay - not FRESHREPO, nchecked=$nchecked";
+	    push @problems, "does not declare previously any tag".
+		" referring to branch head $branch=$branchhead"
+		unless $nchecked;
+	}
+    }
+
+    if (@problems) {
+	reject "replay attack prevention check failed:".
+	    " signed tag for $version: ".
+	    join("; ", @problems).
+	    "\n";
+    }
+    printdebug "checktagnoreplay - all ok ($tagval)\n"
+}
+
+sub tagh1 ($) {
+    my ($tag) = @_;
+    my $vals = $tagh{$tag};
+    reject "missing header $tag in signed tag object" unless $vals;
+    reject "multiple headers $tag in signed tag object" unless @$vals == 1;
+    return $vals->[0];
+}
+
+sub basic_tag_checks() {
+    printdebug "checks\n";
+
+    tagh1('type') eq 'commit' or reject "tag refers to wrong kind of object";
+    tagh1('object') eq $commit or reject "tag refers to wrong commit";
+    tagh1('tag') eq $tagname or reject "tag name in tag is wrong";
+}
+
+sub checks () {
+    basic_tag_checks();
+
+    my @expecttagnames = debiantags($version, $distro);
+    printdebug "expected tag @expecttagnames\n";
+    grep { $tagname eq $_ } @expecttagnames or die;
+
+    foreach my $othertag (grep { $_ ne $tagname } @expecttagnames) {
+	reject "tag $othertag already exists -".
+	    " not replacing previously-pushed version"
+	    if git_get_ref "refs/tags/".$othertag;
+    }
+
+    lockrealtree();
+
+    @policy_args = ($package,$version,$suite,$tagname,
+		    join(",",@deliberatelies));
+    $policy = policyhook(NOFFCHECK|FRESHREPO|NOCOMMITCHECK, 'push', @policy_args);
+
+    if (defined $tagexists_error) {
+	if ($policy & FRESHREPO) {
+	    printdebug "ignoring tagexists_error: $tagexists_error\n";
+	} else {
+	    reject $tagexists_error;
+	}
+    }
+
+    checktagnoreplay();
+    checksuite();
+
+    # check that our ref is being fast-forwarded
+    printdebug "oldcommit $oldcommit\n";
+    if (!($policy & NOFFCHECK) && $oldcommit =~ m/[^0]/) {
+	$?=0; $!=0; my $mb = `git merge-base $commit $oldcommit`;
+	chomp $mb;
+	$mb eq $oldcommit or reject "not fast forward on dgit branch";
+    }
+
+    # defend against commits generated by #849041
+    if (!($policy & NOCOMMITCHECK)) {
+	my @checks = qw(%at
+			%ct);
+	my @chk = qw(git log -z);
+	push @chk, '--pretty=tformat:%H%n'.
+	    (join "", map { $_, '%n' } @checks);
+	push @chk, "^$oldcommit" if $oldcommit =~ m/[^0]/;
+	push @chk, $commit;;
+	printdebug " ~NOCOMMITCHECK @chk\n";
+	open CHK, "-|", @chk or die $!;
+	local $/ = "\0";
+	while (<CHK>) {
+	    next unless m/^$/m;
+	    m/^\w+(?=\n)/ or die;
+	    reject "corrupted object $& (missing metadata)";
+	}
+	$!=0; $?=0; close CHK or $?==256 or die "$? $!";
+    }
+
+    if ($policy & FRESHREPO) {
+	# It's a bit late to be discovering this here, isn't it ?
+	#
+	# What we do is: Generate a fresh destination repo right now,
+	# and arrange to treat it from now on as if it were a
+	# prospective repo.
+	#
+	# The presence of this fresh destination repo is detected by
+	# the parent, which responds by making a fresh master repo
+	# from the template.  (If the repo didn't already exist then
+	# $destrepo was _prospective, and we change it here.  This is
+	# OK because the parent's check for _fresh persuades it not to
+	# use _prospective.)
+	#
+	$destrepo = "${workrepo}_fresh"; # workrepo lock covers
+	mkrepo_fromtemplate $destrepo;
+    }
+}
+
+sub onwardpush () {
+    my @cmdbase = (qw(git send-pack), $destrepo);
+    push @cmdbase, qw(--force) if $policy & NOFFCHECK;
+
+    if ($ENV{GIT_QUARANTINE_PATH}) {
+	my $recv_wrapper = "$ENV{GIT_QUARANTINE_PATH}/dgit-recv-wrapper";
+	mkscript $recv_wrapper, <<'END';
+#!/bin/sh
+set -e
+unset GIT_QUARANTINE_PATH
+exec git receive-pack "$@"
+END
+	push @cmdbase, "--receive-pack=$recv_wrapper";
+    }
+
+    my @cmd = @cmdbase;
+    push @cmd, "$commit:refs/dgit/$suite",
+	       "$tagval:refs/tags/$tagname";
+    push @cmd, "$maint_tagval:refs/tags/$maint_tagname"
+	if defined $maint_tagname;
+    debugcmd '+',@cmd;
+    $!=0;
+    my $r = system @cmd;
+    !$r or die "onward push to $destrepo failed: $r $!";
+
+    if (suite_is_in $suitesformasterfile) {
+	@cmd = @cmdbase;
+	push @cmd, "$commit:refs/heads/master";
+	debugcmd '+', @cmd;
+	$!=0; my $r = system @cmd;
+	# tolerate errors (might be not ff)
+	!($r & ~0xff00) or die
+	    "onward push to $destrepo#master failed: $r $!";
+    }
+}
+
+sub finalisepush () {
+    if ($destrepo eq realdestrepo) {
+	policyhook(0, 'push-confirm', @policy_args, '');
+	onwardpush();
+    } else {
+	# We are to receive the push into a new repo (perhaps
+	# because the policy push hook asked us to with FRESHREPO, or
+	# perhaps because the repo didn't exist before).
+	#
+	# We want to provide the policy push-confirm hook with a repo
+	# which looks like the one which is going to be installed.
+	# The working repo is no good because it might contain
+	# previous history.
+	#
+	# So we push the objects into the prospective new repo right
+	# away.  If the hook declines, we decline, and the prospective
+	# repo is never installed.
+	onwardpush();
+	policyhook(0, 'push-confirm', @policy_args, $destrepo);
+    }
+}
+
+sub stunthook () {
+    printdebug "stunthook in $workrepo\n";
+    chdir $workrepo or die "chdir $workrepo: $!";
+    mkdir "dgit-tmp" or $!==EEXIST or die $!;
+    readupdates();
+    parsetag();
+    verifytag();
+    checks();
+    finalisepush();
+    printdebug "stunthook done.\n";
+}
+
+#----- git-upload-pack -----
+
+sub fixmissing__git_upload_pack () {
+    $destrepo = "$dgitrepos/_empty";
+    my $lfh = locksometree($destrepo);
+    return if stat_exists $destrepo;
+    rmdir_r "$destrepo.new";
+    mkemptyrepo "$destrepo.new", "0644";
+    rename "$destrepo.new", $destrepo or die $!;
+    unlink "$destrepo.lock" or die $!;
+    close $lfh;
+}
+
+sub main__git_upload_pack () {
+    my $lfh = locksometree($destrepo);
+    printdebug "git-upload-pack in $destrepo\n";
+    chdir $destrepo or die "$destrepo: $!";
+    close $lfh;
+    runcmd qw(git upload-pack), ".";
+}
+
+#----- arg parsing and main program -----
+
+sub argval () {
+    die unless @ARGV;
+    my $v = shift @ARGV;
+    die if $v =~ m/^-/;
+    return $v;
+}
+
+our %indistrodir = (
+    # keys are used for DGIT_DRS_XXX too
+    'repos' => \$dgitrepos,
+    'suites' => \$suitesfile,
+    'suites-master' => \$suitesformasterfile,
+    'policy-hook' => \$policyhook,
+    'mirror-hook' => \$mirrorhook,
+    'dgit-live' => \$dgitlive,
+    'preferred-mail-domains' => \$maildomainsfile,
+    'outgoing-mail' => \$outgoingmail,
+    );
+
+our @hookenvs = qw(distro suitesfile suitesformasterfile policyhook
+                   mirrorhook dgitlive keyrings dgitrepos distrodir);
+
+# workrepo and destrepo handled ad-hoc
+
+#----- tag2upload -----
+
+our ($t2uv_ssh, $t2uv_host, $t2uv_tdir, @t2u_virt_exec_cmd);
+our ($t2u_line_length_limit);
+
+our ($t2u_email_noreply, $t2u_email_noreply_addr, $t2u_email_reply_to,
+     @t2u_email_copies, $t2u_jid, $t2u_url, $t2u_putative_package);
+our ($t2u_tagger, $t2u_tagger_addr, $t2u_timeout);
+our ($t2u_signing_keyid);
+our ($t2u_upstreamc, $t2u_upstreamt, $t2u_quilt);
+
+sub t2u_dgit_cmd () {
+    (
+     dgit_program(),
+     qw(-wn),
+     "-p$package",
+     qw(--build-products-dir=../bpd),
+    )
+}
+
+#-- line length limits --#
+
+sub t2u_length_limit ($$$) {
+    my ($desc, $value, $limit) = @_;
+    return if (length $value) <= $limit;
+    reject "$desc unreasonably long (>$limit characters)";
+}
+
+# Used for Subject (only)
+sub t2u_split_long_lines ($;$) {
+    my ($val_ref, $indent) = @_;
+    $indent //= '';
+    my $o = '';
+    my $i = $$val_ref;
+    my $lim = $t2u_line_length_limit;
+    while ((length $i) > $lim) {
+	my $chunk = substr($i, 0, $lim);
+	$i = substr($i, $lim);
+	$o .= $chunk; $o .= "\\\n"; $o .= $indent;
+    }
+    # This transformation ensures that the output is reversible:
+    # Every \<newline> was inserted above.  If we wanted to mean
+    # \<newline>, we write \\<newline><newline>.
+    $i =~ s{\\n$}{\\\\\n\n};
+    $o .= $i;
+    $$val_ref = $o;
+}
+
+#-- accessing builder VM --
+
+sub t2u_b_cmd_map_nochdir (@) {
+    # Returns the shell command argv (a list) to run locally,
+    # in order to run @cmd in the builder VM, in no particular directory.
+    my (@cmd) = @_;
+
+    # $t2uv_ssh is ssh-like.
+    #
+    # When ssh executes a remote command instead of starting a remote
+    # interactive shell, it simply joins the arguments together with
+    # spaces and passes this single shell command to the remote shell.
+    # So we have to add a layer of quotation (if we were executing the
+    # ssh client using a local shell, it would be as though ssh strips
+    # one layer of shell quotation).
+    my $remote_cmd = shellquote @t2u_virt_exec_cmd, @cmd;
+
+    ($t2uv_ssh, $t2uv_host, $remote_cmd);
+}
+sub t2u_b_cmd_map ($@) {
+    # Returns the shell command argv (a list) to run locally,
+    # in order to run @cmd in the builder VM, in directory $subdir.
+    my ($subdir, @cmd) = @_;
+    t2u_b_cmd_map_nochdir qw(env -C), "$t2uv_tdir/$subdir", @cmd;
+}
+sub t2u_b_cmd_map_work (@) {
+    # Returns the shell command argv (a list) to run locally,
+    # in order to run @_ in the builder VM, in directory 'work'.
+    t2u_b_cmd_map 'work', @_;
+}
+sub t2u_b_runcmd_inner ($@) {
+    # Run command @cmd in the builder VM (and die if it fails)
+    my ($subdir, @cmd) = @_;
+    runcmd t2u_b_cmd_map $subdir, @cmd;
+}
+
+# We divide commands into logged ones that always show up in the log,
+# and unlogged ones which are only logged if they fail.
+#
+# We arrange to print `...` in the transcript when we run unlogged
+# commands, but only once, and not at the start of the transcript.
+# As it happens, at the time of writing, *all* the unlogged
+# commands are at the start so this machinery is a bit superfluous.
+#
+# (This logging is in addition to failure output from runcmd, etc.,
+# so if a logged command fails, the command ends up in the log twice:
+# once before its own output, and once after.)
+our $t2u_runcmd_suppress_ellipsis = 1;
+sub t2u_b_cmd_log ($@) {
+    my ($subdir, @cmd) = @_;
+    printcmd \*STDERR, "\nbuilder:$subdir\$", @cmd;
+}
+sub t2u_b_cmd_log_after ($) {
+    my ($outcome) = @_;
+    print STDERR "# [$outcome]\n";
+}
+sub t2u_b_runcmd ($@) {
+    my ($subdir, @cmd) = @_;
+    print STDERR "# ...\n" unless $t2u_runcmd_suppress_ellipsis++;
+    t2u_b_runcmd_inner $subdir, @cmd;
+}
+sub t2u_b_runcmd_logged ($@) {
+    my ($subdir, @cmd) = @_;
+    t2u_b_cmd_log $subdir, @cmd;
+    t2u_b_runcmd_inner $subdir, @cmd;
+    t2u_b_cmd_log_after('ok');
+    $t2u_runcmd_suppress_ellipsis = 0;
+}
+
+#-- t2u responses and reporting --
+
+sub t2u_respond_general ($$) {
+    # Send a response (to stdout), reporting outcome, and exit
+    my ($status, $msg) = @_;
+    $msg =~ s{\n}{ // }g;
+    print PROTOCOL_RESPONSE <<END or die $!;
+message $msg
+$status
+END
+    flush PROTOCOL_RESPONSE or die $!;
+    exit 0;
+}
+
+sub t2u_respond_irrecoverable ($) {
+    # Send a response (to stdout), reporting irrecoverable failure, and exit
+    my ($msg) = @_;
+    t2u_respond_general 'irrecoverable', $msg;
+}
+
+#-- email processing --
+
+sub t2u_add_to_report ($) {
+    # Add text to the principal body of the emailed reports
+    print EMAIL_REPORT @_ or die $!;
+    my $msg = join '', @_;
+    $msg =~ s/^/# /gm;
+    flush STDERR or die $!;
+    print EMAIL_LOG $msg or die $!;
+    flush EMAIL_LOG or die $!;
+}
+
+sub t2u_send_email ($$) {
+    # Send an email report about this job.
+    # $status is as for the protocol: irrecoverable or uploaded,
+    # or "starting" for the initial report.
+    my ($status, $subject) = @_;
+
+    open RAND, "/dev/urandom" or die $!;
+    my $mime_boundary;
+    # 2^-256 chance of collision
+    (read RAND, $mime_boundary, 32) == 32 or die $!;
+    $mime_boundary = unpack 'H*', $mime_boundary;
+
+    # Buffer the email in a file, so we don't send a half-email if we crash
+    my $email_whole = "dgit-tmp/email-$status";
+    open EW, ">>$email_whole" or die $!;
+
+    # The $subject is the only thing that might contains more than
+    # just one piece of (length-limited) uncontrolled data.
+    # If it's too long, break it, inserting \<newline><space>
+    t2u_split_long_lines \$subject, " ";
+
+    my $report_package = $package // $t2u_putative_package;
+
+    print EW <<END or die $!;
+From: $t2u_email_noreply
+Subject: [tag2upload $t2u_jid] $subject
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary=$mime_boundary
+Content-Transfer-Encoding: 8bit
+X-Debian-Tag2upload-Distro: $distro
+X-Debian-Tag2upload-JobId: $t2u_jid
+X-Debian-Tag2upload-Url: $t2u_url
+X-Debian-Tag2upload-Status: $status
+X-Debian-Tag2upload-Package: $report_package
+END
+    my $t2u_email_copies = join ", ", @t2u_email_copies;
+    print EW (defined $t2u_tagger ? <<END_T : <<END_NT) or die $!;
+To: $t2u_tagger
+CC: $t2u_email_copies
+Reply-To: $t2u_email_reply_to, $t2u_tagger
+END_T
+To: $t2u_email_copies
+Reply-To: $t2u_email_reply_to
+END_NT
+
+    my $mime_part = sub {
+	my ($disposition, $attach_fn_tail, $description, $copy_from) = @_;
+
+        print EW <<END or die $!;
+
+--$mime_boundary
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+END
+	print EW (defined $attach_fn_tail ? <<END_A : <<END_I) or die $!;
+Content-Disposition: $disposition; filename="t2u_${t2u_jid}_${attach_fn_tail}"
+END_A
+Content-Disposition: $disposition
+END_I
+	print EW <<END_D or die $! if defined $description;
+Content-Description: $description
+END_D
+	print EW <<END or die $!;
+
+END
+
+	flush EW or die $!;
+
+	# We split long lines by inserting \<newline>.
+	# This can only actually happen to the body and the transcript,
+	# not to the tag, because the tag's lines are assured to be short.
+	open EP, "<", $copy_from or die "$copy_from $!";
+	while (<EP>) {
+	    $_ = encode_qp($_);
+	    print EW or die $!;
+	}
+	EP->error and die $!;
+	close EP;
+    };
+
+    flush EMAIL_REPORT or die $!;
+    $mime_part->('inline', undef, undef,
+		 'dgit-tmp/email-report');
+
+    if (stat "dgit-tmp/t2u.log") {
+	# In theory this log might not be UTF-8 but we ought to
+	# specify *some* encoding, so just use $mime_part.
+	$mime_part->('inline', "log.txt", 'processing log',
+		     'dgit-tmp/t2u.log');
+    } else {
+	$! == ENOENT or die $!;
+    }
+
+    $mime_part->('attachment', "tag.txt", 'input git tag',
+		 'dgit-tmp/wholetag');
+
+    print EW <<END or die $!;
+
+--$mime_boundary--
+END
+
+    close EW or die $!;
+
+    my $email_store_base = "$outgoingmail/$t2u_jid-$status";
+
+    my $email_sending = "$email_store_base.$$-sending";
+    rename $email_whole, $email_sending
+      or die "$email_whole $email_sending $!";
+
+    my @cmd;
+    push @cmd, $ENV{DGIT_DRS_SENDMAIL} // '/usr/lib/sendmail';
+    push @cmd, qw(-oee -odb -oi -t);
+    push @cmd, "-f$t2u_email_noreply_addr";
+    my $child = fork // die $!;
+    if (!$child) {
+	open STDIN, $email_sending or die $!;
+	exec @cmd or die $!;
+    }
+    waitpid $child, 0 == $child or die $!;
+    die "sendmail: $?" if $?;
+
+    rename $email_sending, "$email_store_base.sent"
+      or die "$email_sending $email_store_base.sent $!";
+}
+
+#-- component subroutines, in order --
+
+sub tag2upload_receive_args () {
+    @ARGV==14 or die "@ARGV ?";
+
+    $0 = 't2u processor [dgit-repos-server]';
+
+    my ($t2u_virt_exec_cmd, $dashes, $t2u_email_copies);
+    ($t2uv_ssh, $t2uv_host, $t2uv_tdir, $t2u_virt_exec_cmd,
+     $t2u_email_noreply, $t2u_email_reply_to, $t2u_email_copies,
+     $t2u_timeout, $t2u_signing_keyid,
+     $dashes, $t2u_jid, $t2u_url, $tagname, $t2u_putative_package) = @ARGV;
+    ($t2u_email_noreply_addr) =
+      $t2u_email_noreply =~ /(?|^($addr_spec_re)|\s$angle_addr_re)$/a
+      or die "invalid NOREPLY";
+
+    # Enable simulation of a a more complex print-execute-command.
+    # The value is simply passed through by oracled, so doing it here
+    # is a good test, even though it's quite late kn the flow.
+    #
+    # We could have done it by wrapping up autopkgtest-virt-null but
+    # that's very tiresome since we'd have to intercept the protocol
+    # or something.
+    $t2u_virt_exec_cmd .=
+      $ENV{DGIT_DRS_T2U_VIRT_EXEC_CMD_SUFFIX} // '';
+
+    $dashes eq '--' or die;
+    @t2u_virt_exec_cmd = map uri_unescape($_), split /,/, $t2u_virt_exec_cmd;
+
+    @t2u_email_copies = $t2u_email_copies;
+
+    # So we don't send things over the protocol channel by mistake
+    open PROTOCOL_RESPONSE, ">&STDOUT" or die $!;
+    open STDOUT, ">&STDERR" or die $!;
+    open EMAIL_LOG, ">/dev/null" or die $!;
+
+    # dgit-tmp is in trusted, and not in a .git, unlike elsewhere.
+    # This is a bit confusing but it means readtag etc. can just do
+    # "the same thing", ie use `dgit-tmp' from their cwd.
+    rmdir_r 'dgit-tmp';
+    mkdir 'dgit-tmp' or die $!;
+
+    # Get the tag from stdin and write it to a file
+    File::Copy::copy(\*STDIN, "dgit-tmp/wholetag") or die $!;
+}
+
+sub tag2upload_check_args () {
+    # Argument checking - but, after we have set up so that
+    # `reject` sends a protocol response instead of crashing.
+
+    reject 'bad jobid' if $t2u_jid =~ m/[^[:graph:]]/;
+    reject 'bad tag name' if $tagname =~ m/[^[:graph:]]/;
+    reject 'bad url' if $t2u_url =~ m/[^[:graph:]]/;
+
+    $tagname =~ m{^$distro/($versiontag_re)$}s
+	or reject "tag name not for this distro or bad version";
+    $version = $1;
+    $version =~ y/_\%\#/~:/d;
+
+    # 900 is enough for SMTP (998 excluding \r\n) plus some fixed
+    # furniture of our own (eg mail header lines).
+    $t2u_line_length_limit = $ENV{TAG2UPLOAD_LINE_LENGTH_LIMIT} // 900;
+
+    t2u_length_limit 'jobid',    $t2u_jid, 50;
+    t2u_length_limit 'tag name', $tagname, $t2u_line_length_limit / 4;
+    t2u_length_limit 'url',      $t2u_url, $t2u_line_length_limit;
+
+    open T, "dgit-tmp/wholetag" or die $!;
+    while (<T>) {
+	t2u_length_limit 'tag line', $_, $t2u_line_length_limit;
+    }
+    T->error and die $!;
+}
+
+sub tag2upload_verifytag () {
+    my $verifytag_info = verifytag_start(\*EMAIL_REPORT);
+    t2u_add_to_report <<END;
+tag signature verified
+END
+
+    return $verifytag_info;
+}
+
+sub tag2upload_maybe_cc_signer ($) {
+    my ($verifytag_info) = @_;
+    return unless
+      $verifytag_info->{Keyring} && $verifytag_info->{KeyId};
+
+    my @maildomains;
+    unless (open MAILDOMAINS, "<", $maildomainsfile) {
+	$!==ENOENT or die $!;
+	return;
+    }
+    /^(?!#)\s*(\S+)/ && push @maildomains, qr/\@\Q$1\E$/
+      while <MAILDOMAINS>;
+    die $! if MAILDOMAINS->error;
+
+    my @cmd = (qw(gpg --keyring), $verifytag_info->{Keyring},
+	       qw(--with-colons --list-keys --),
+	       $verifytag_info->{KeyId});
+    debugcmd '|',@cmd;
+
+    open P, "-|", @cmd or die $!;
+
+    my (%addresses, @addresses);
+    while (<P>) {
+	chomp or die;
+	printdebug " maybe_cc_signer| $_\n";
+	my @F = split /:/;
+
+	# Extract e-mail addresses similarly to how dak does it, in
+	# its _gpg_get_addresses_from_listing subroutine.
+	# We want to do it like dak to avoid mail from dak and from us
+	# ending up distributed across different mailboxes.
+
+	# Look in both pub and uid lines for addresses, like dak.
+	$F[0] eq "uid" or $F[0] eq "pub" or next;
+	# Skip invalid, disabled and revoked UIDs.
+	# This ensures that e.g. we don't send mail to an e-mail
+	# address from a UID that was revoked because the e-mail
+	# address no longer belongs to the key owner.
+	$F[1] eq "i" || $F[1] eq "d" || $F[1] eq "r" and next;
+	# Look for an RFC 5322 angle-addr without obsolete syntax.
+	# This means we skip any UID containing C-style escaping or
+	# quoting.  If this proves to be a problem for any actual UIDs
+	# in Debian keyrings, we can add some additional handling.
+	$F[9] =~ /\s$angle_addr_re$/a or next;
+
+	$addresses{$1}++;
+	push @addresses, $1;
+    }
+    die $! if P->error;
+    $!=0; $?=0; close P or die "$? $!";
+    @addresses or return;
+
+    # Stop if we're already mailing any of the addresses on the key.
+    $addresses{$_} && return for $t2u_tagger_addr, @t2u_email_copies;
+
+    my $pref = $addresses[0];	# this is the primary UID
+    my $pref_prio = @maildomains;
+  ADDRESSES: foreach my $addr (@addresses) {
+	last unless $pref_prio;
+	for (my $i = 0; $i < $pref_prio; $i++) {
+	    if ($addr =~ $maildomains[$i]) {
+		$pref = $addr;
+		$pref_prio = $i;
+		next ADDRESSES;
+	    }
+	}
+    }
+    push @t2u_email_copies, $pref;
+}
+
+sub tag2upload_parsetag ($) {
+    my ($verifytag_info) = @_;
+
+    my %need = map { $_ => 1 } qw(please-upload split);
+    my $tagversion;
+
+    parsetag_general sub {
+	# message summary line
+    }, sub {
+	if (m/^(\S+) / && exists $need{$1}) {
+	    $_ = $';
+	    delete $need{$1};
+	} elsif (s/^upstream=(\w+) //) {
+	    $t2u_upstreamc = $1;
+	} elsif (s/^upstream-tag=(\S+) //) {
+	    $t2u_upstreamt = $1;
+	} elsif (s/^--quilt=([-+0-9a-z]+) //) {
+	    $t2u_quilt = $1;
+	} elsif (s/^source=($package_re) //) {
+	    $package = $1;
+	} elsif (s/^version=(\S+) //) {
+	    $tagversion = $1;
+	} else {
+	    return 0;
+	}
+	return 1;
+    };
+    # Reject a tagger that doesn't end in an RFC 5322 angle-addr
+    # without obsolete syntax.  Require a display name, but don't
+    # restrict it to an RFC 5322 display-name.  It doesn't seem to be
+    # specified anywhere what restrictions Git places on
+    # author/committer/tagger names, but they can certainly contain
+    # non-ASCII, and this doesn't require escaping or quoting.
+    #
+    # Save the whole thing to $t2u_tagger for use as the
+    # Git-Tag-Tagger .changes/.dsc field.  Save just the angle-addr
+    # for tag2upload_maybe_cc_signer's deduplication purposes.
+    ($t2u_tagger, $t2u_tagger_addr) =
+      tagh1('tagger') =~ m/^([^\n\r]+ $angle_addr_re) \d+ [-+]\d+$/m
+      or reject "failed to fish tagger out of tag";
+
+    reject "tag missing \"$_\"" foreach keys %need;
+    reject "tag missing source=" unless $package;
+    reject
+ # package names have been checked against $package_re so no quoting needed
+ "parsed source package $package but manager said $t2u_putative_package"
+        unless $package eq $t2u_putative_package;
+
+    reject "tag missing version=" unless $tagversion;
+    reject "tag has version mismatch $tagversion != $version "
+      unless $tagversion eq $version;
+    reject "tag has upstream= and not upstream-tag=, or v-v"
+	unless defined $t2u_upstreamt == defined $t2u_upstreamc;
+
+    t2u_add_to_report <<END;
+tag parsed ok
+source: $package
+version: $version
+END
+
+    # Check that the package is right for a DM upload, now that we know it
+    verifytag_finish $verifytag_info;
+    t2u_add_to_report <<END;
+tag signer authorised for package
+END
+}
+
+sub tag2upload_errors_to_email () {
+    # Arrange to capture all subsequent errors, even `die`, to the email
+
+    open L, ">>dgit-tmp/t2u.log" or die $!;
+
+    flush EMAIL_REPORT or die $!;
+
+    if (my $child = fork // die $!) {
+	# We are the parent.  We handle all reporting, but:
+	# If the child exits 0 it has written the whole protocol
+	# response to `dgit-tmp/ok-response`.
+	$!=0; waitpid $child, 0 == $child or die $!;
+	printdebug "child $child ?=$?\n";
+
+	if (!$?) {
+	    t2u_send_email 'uploaded', "uploaded $package $version";
+	    File::Copy::copy("dgit-tmp/ok-response", \*PROTOCOL_RESPONSE)
+	      or die $!;
+	    exit 0;
+	} else {
+	    my $ws_msg = waitstatusmsg();
+	    t2u_add_to_report <<END;
+processing $ws_msg
+END
+	    my $status = 'irrecoverable';
+	    t2u_send_email $status, "failed, $package $version";
+	    t2u_respond_general $status, "failed, reported by email";
+	    confess;
+	}
+    }
+    open PROTOCOL_RESPONSE, ">dgit-tmp/ok-response" or die $!;
+    $reject_hook = sub { };
+
+    open STDERR, ">&", *L or die $!;
+    open STDOUT, ">&STDERR" or die $!;
+    open DEBUG, ">&STDERR" if $debuglevel;
+    open EMAIL_LOG, ">&2" or die $!;
+
+    $SIG{ALRM} = sub {
+	t2u_add_to_report <<END;
+
+*** tag2upload processing interrupted by timeout ***
+Package has not been uploaded.
+END
+	t2u_respond_general 'irrecoverable', 'failed, processing timed out';
+	confess;
+    };
+    alarm($t2u_timeout);
+}
+
+sub tag2upload_prep_dir () {
+    t2u_b_runcmd '.', qw(rm -rf work bpd *.orig*);
+    t2u_b_runcmd '.', qw(mkdir work bpd);
+
+    printcmd \*STDERR, "# builder: oracle\$", t2u_b_cmd_map_nochdir('...');
+}
+
+sub tag2upload_fetch () {
+    my $tagref = "refs/tags/$tagname";
+
+    t2u_b_runcmd 'work', qw(git init -q);
+    t2u_b_runcmd 'work', t2u_dgit_cmd(), qw(setup-gitattributes);
+    t2u_b_runcmd 'work', qw(git remote add origin), $t2u_url;
+
+    my @fetch = qw(git fetch origin --no-tags);
+    push @fetch, "$tagref:$tagref";
+    if (defined $t2u_upstreamt) {
+	runcmd qw(git check-ref-format), "refs/tags/$t2u_upstreamt";
+	my $utagref = "refs/tags/$t2u_upstreamt";
+	push @fetch, "$utagref:$utagref";
+    }
+    t2u_b_runcmd_logged 'work', @fetch;
+
+    readtag $tagref, "wholetag-2", \&t2u_b_cmd_map_work;
+    $tagval = cmdoutput t2u_b_cmd_map_work
+      qw(git for-each-ref --format=%(objectname)), $tagref;
+
+    my $r = File::Compare::cmp("dgit-tmp/wholetag", "dgit-tmp/wholetag-2");
+    $r >= 0 or die $!;
+    $r == 0 or reject "tag changed between fetches"; # XXXX needs test case!
+
+    t2u_b_runcmd_logged 'work', qw(git checkout -q), "refs/tags/$tagname";
+
+    t2u_add_to_report <<END;
+source code fetched
+END
+}
+
+sub tag2upload_inspect_changelog () {
+    my $clogp = parsechangelog \&t2u_b_cmd_map_work;
+    my $clogf = sub {
+	my ($f, $exp) = @_;
+	my $got = getfield $clogp, $f;
+	return if $got eq $exp;
+	reject "mismatch: changelog $f $got != $exp";
+    };
+    $clogf->('Version', $version);
+    $clogf->('Source',  $package);
+    $suite = getfield $clogp, 'Distribution';
+    $suite =~ m{^$suite_re$} or reject "bad suite \`$suite' (in d/changelog)";
+
+    t2u_add_to_report <<END;
+changelog parsed ok
+target: $distro $suite
+END
+}
+
+sub tag2upload_obtain_origs () {
+    my @fetch = (t2u_dgit_cmd(), qw(--for-push fetch), $suite);
+    t2u_b_cmd_log 'work', @fetch;
+    @fetch = t2u_b_cmd_map_work @fetch;
+    debugcmd "+",@fetch;
+    $!=0; $?=-1;
+    my $r = system @fetch;
+    if ($r) {
+	failedcmd @fetch unless $? == 4*256;
+	t2u_b_cmd_log_after('new');
+	t2u_add_to_report <<END;
+package is new in this suite
+END
+    } else {
+	t2u_b_cmd_log_after('ok');
+	t2u_add_to_report <<END;
+fetched existing package from archive and/or dgit-repos
+END
+    }
+
+    (my $uversion = $version) =~ s/-[^-]+$//;
+    # this is just to get the orig, so we don't really care about the ref
+    if (!defined $t2u_upstreamc) {
+	t2u_add_to_report <<END;
+no upstream tag/commit specified, not considering orig(s)
+END
+    } elsif (
+        # See whether 'dgit fetch' already got us one.
+        cmdoutput t2u_b_cmd_map 'bpd',
+            qw(find . -name), "${package}_${uversion}.orig.*"
+    ) {
+	t2u_add_to_report <<END;
+using existing orig(s)
+END
+    } else {
+	my $need_upstreamc = git_rev_parse "refs/tags/$t2u_upstreamt",
+	    \&t2u_b_cmd_map_work;
+	$t2u_upstreamc eq $need_upstreamc or reject
+ "upstream-commitish=$t2u_upstreamc but tag refers to $need_upstreamc";
+	t2u_b_runcmd_logged 'work', qw(git deborig), "$t2u_upstreamc";
+	t2u_add_to_report <<END;
+created orig
+END
+    }
+}
+
+sub tag2upload_push () {
+    my @cmd;
+    push @cmd, t2u_dgit_cmd();
+    push @cmd, qw(--force-uploading-source-only);
+    if (defined $t2u_quilt) {
+	push @cmd, "--quilt=$t2u_quilt";
+	if ($t2u_quilt =~ m/baredebian/) {
+	    die "needed upstream commmitish with --quilt=baredebian"
+		unless defined $t2u_upstreamc;
+	    push @cmd, "--upstream-commitish=refs/tags/$t2u_upstreamt";
+	}
+    }
+
+    push @cmd, "--ssh=$t2uv_ssh";
+    push @cmd, qw(--ssh:-oBatchMode=yes);
+
+    my @dgit_dgit = (@t2u_virt_exec_cmd, dgit_program());
+    push @cmd, "--dgit=".shift @dgit_dgit;
+    push @cmd, "--dgit:".shift @dgit_dgit while @dgit_dgit;
+
+    push @cmd, "-k$t2u_signing_keyid";
+    push @cmd, "--dput:-u";
+    push @cmd, "--package=$package";
+    push @cmd, "--expect-suite=$suite";
+    push @cmd, "--expect-version=$version";
+    push @cmd, "--tag2upload-upstream=$t2u_upstreamt"
+      if $t2u_upstreamt;
+    push @cmd, "--tag2upload-upstream-commit=$t2u_upstreamc"
+      if $t2u_upstreamc;
+    # TODO --tag2upload-builder-mode should imply all of
+    #          --split-view=always, --new, --trust-changelog
+    push @cmd, qw(--tag2upload-builder-mode --split-view=always
+		  --new --trust-changelog);
+
+    # Downcase it for display consistency with other fields.
+    my $tagfp = lc $tagfp;
+    push @cmd,
+      "--$_-control-add=Git-Tag-Tagger=$t2u_tagger",
+      "--$_-control-add=Git-Tag-Info=tag=$tagval fp=$tagfp"
+      for qw(dsc ch);
+
+    push @cmd, qw(rpush-source);
+    push @cmd, "$t2uv_host:$t2uv_tdir/work";
+
+    printcmd \*STDERR, "\noracle\$", @cmd;
+    # The dgit rune is quite long, and we don't lie too badly by
+    # inserting a blank line to make the whole thing more readable.
+    print STDERR "\n" or die $!;
+
+    $SIG{ALRM} = sub {
+	# An analogy of the CAP theorem is that there will always be a
+	# possibility that we can't know if the upload succeeded.
+	# Since the builder is on a separate host, we can't guarantee
+	# to have the whole log, even.
+	#
+	# If this happens a lot, we could consider better use of the two
+	# phases: anything that happens before the signatures are made
+	# could properly be moved to before this assignment to %SIG,
+	# so that its timeouts are reported as unambiguous failures.
+	# For example, we could run `dgit quilt-fixup` earlier.
+	# More invasive options might include support in dgit rpush
+	# for some kind of synchronise/release, or interposing key use.
+	t2u_add_to_report <<END;
+
+*** tag2upload upload interrupted by timeout ***
+Log below may be incomplete; package may or may not have been uploaded.
+For confirmation, check git depository and ftp archive.
+END
+	#                   ^^^^^^^^^^ not a typo for 'repository'.
+	#                              Refers to dgit-repos server.
+	t2u_respond_general 'irrecoverable',
+	  'failed (probably), upload timed out';
+	confess;
+    };
+
+    runcmd @cmd;
+
+    alarm(0); # we're done, don't call it timeout if we are succeeding!
+
+    t2u_b_cmd_log_after('ok');
+}
+
+#-- t2u main program --
+
+sub mode_tag2upload9 () {
+    # Privsep: We are the "trusted" part.  We will invoke things
+    # in the untrusted part via t2uv_* etc.
+
+    tag2upload_receive_args();
+
+    $reject_hook = sub {
+	my ($msg) = @_;
+	t2u_respond_irrecoverable "rejected early: $msg";
+    };
+
+    tag2upload_check_args();
+
+    open EMAIL_REPORT, ">>dgit-tmp/email-report" or die $!;
+    t2u_add_to_report <<END;
+job id: $t2u_jid
+url: $t2u_url
+tag: $tagname
+preparing
+END
+
+    my $subject_job_info = "$t2u_putative_package $tagname $t2u_url";
+
+    t2u_send_email 'starting', "starting $subject_job_info";
+
+    $reject_hook = sub {
+	my ($msg) = @_;
+	t2u_add_to_report <<END;
+rejected: $msg
+END
+	t2u_send_email 'irrecoverable', "rejected $subject_job_info";
+	t2u_respond_irrecoverable "rejected: $msg";
+    };
+
+    $ENV{DGIT_DRS_ANY_URL} or $t2u_url =~ m{^https://}s
+	or reject "url scheme not as expected";
+
+    parsetag_split();
+    my $verifytag_info = tag2upload_verifytag();
+    tag2upload_parsetag $verifytag_info;
+    tag2upload_maybe_cc_signer $verifytag_info;
+    tag2upload_errors_to_email();
+
+    tag2upload_prep_dir();
+    tag2upload_fetch();
+    tag2upload_inspect_changelog();
+    tag2upload_obtain_origs();
+    tag2upload_push();
+
+    my $msg = "Uploaded to $suite";
+    t2u_add_to_report <<END;
+processing successful
+$msg
+END
+    t2u_respond_general 'uploaded', $msg;
+    confess; # t2u_respond_general isn't supposed to return
+}
+
+#----- other modes -----
+
+sub mode_ssh () {
+    die if @ARGV;
+
+    my $cmd = $ENV{'SSH_ORIGINAL_COMMAND'};
+    $cmd =~ m{
+	^
+	(?: \S* / )?
+	( [-0-9a-z]+ )
+	\s+
+	'? (?: \S* / )?
+	($package_re) \.git
+	'?$
+    }ox 
+    or reject "command string not understood";
+    my $method = $1;
+    $package = $2;
+
+    my $funcn = $method;
+    $funcn =~ y/-/_/;
+    my $mainfunc = $main::{"main__$funcn"};
+
+    reject "unknown method" unless $mainfunc;
+
+    policy_checkpackage();
+
+    if (stat_exists realdestrepo) {
+	$destrepo = realdestrepo;
+    } else {
+	printdebug " fixmissing $funcn\n";
+	my $fixfunc = $main::{"fixmissing__$funcn"};
+	&$fixfunc;
+    }
+
+    printdebug " running main $funcn\n";
+    &$mainfunc;
+}
+
+sub mode_cron () {
+    die if @ARGV;
+
+    my $listfh = tempfile();
+    open STDOUT, ">&", $listfh or die $!;
+    policyhook(0,'check-list');
+    open STDOUT, ">&STDERR" or die $!;
+
+    seek $listfh, 0, 0 or die $!;
+    while (<$listfh>) {
+	chomp or die;
+	next if m/^\s*\#/;
+	next unless m/\S/;
+	die unless m/^($package_re)$/;
+	
+	$package = $1;
+	policy_checkpackage();
+    }
+    die $! if $listfh->error;
+}    
+
+sub parseargsdispatch () {
+    die unless @ARGV;
+
+    delete $ENV{'GIT_DIR'}; # if not run via ssh, our parent git process
+    delete $ENV{'GIT_PREFIX'}; # sets these and they mess things up
+
+    if ($ENV{'DGIT_DRS_DEBUG'}) {
+	enabledebug();
+    }
+
+    if ($ARGV[0] eq '--pre-receive-hook') {
+	if ($debuglevel) {
+	    $debugprefix.="=";
+	    printdebug "in stunthook ".(shellquote @ARGV)."\n";
+	    foreach my $k (sort keys %ENV) {
+		printdebug "$k=$ENV{$k}\n" if $k =~  m/^DGIT/;
+	    }
+	}
+	shift @ARGV;
+	@ARGV == 1 or die;
+	$package = shift @ARGV;
+	${ $main::{$_} } = $ENV{"DGIT_DRS_\U$_"} foreach @hookenvs;
+	defined($workrepo = $ENV{'DGIT_DRS_WORK'}) or die;
+	defined($destrepo = $ENV{'DGIT_DRS_DEST'}) or die;
+	open STDOUT, ">&STDERR" or die $!;
+	eval {
+	    stunthook();
+	};
+	if ($@) {
+	    recorderror "$@" or die;
+	    die $@;
+	}
+	exit 0;
+    }
+
+    $distro    = argval();
+    $distrodir = argval();
+    $keyrings  = argval();
+
+    foreach my $dk (keys %indistrodir) {
+	${ $indistrodir{$dk} } = "$distrodir/$dk";
+    }
+
+    while (@ARGV && $ARGV[0] =~ m/^--([-0-9a-z]+)=/ && $indistrodir{$1}) {
+	${ $indistrodir{$1} } = $'; #';
+	shift @ARGV;
+    }
+
+    $ENV{"DGIT_DRS_\U$_"} = ${ $main::{$_} } foreach @hookenvs;
+
+    die unless @ARGV>=1;
+
+    my $mode = shift @ARGV;
+    die unless $mode =~ m/^--(\w+)$/;
+    my $fn = ${*::}{"mode_$1"};
+    die unless $fn;
+    $fn->();
+}
+
+sub unlockall () {
+    while (my $fh = pop @lockfhs) { close $fh; }
+}
+
+sub cleanup () {
+    unlockall();
+    if (!chdir "$dgitrepos/_tmp") {
+	$!==ENOENT or die $!;
+	return;
+    }
+    open WORKAROUND_LOG, ">> _rmtree-workaround.log" or confess $!;
+    foreach my $lf (<*.lock>) {
+	my $tree = $lf;
+	$tree =~ s/\.lock$// or confess "$tree ?";
+
+	# Attempt to detect #1101580 (failure to remove) and
+	#  1. log it somewhere
+	#  2. work around it by simply tolerating it,
+	#     so that (hopefully) the next run will clean it up
+	#
+	# After deploying this we should periodically check the logfile.
+
+	$@ = '';
+	my $y = eval { acquirermtree($tree, 0); };
+
+	if (length $@) {
+	    my $now = time;
+	    print WORKAROUND_LOG <<END;
+
+RMTREE FAILURE DETECTED!, $now
+Tree $tree
+Error $@
+Will now run find ./$tree -ls
+END
+	    flush WORKAROUND_LOG;
+	    my $child = fork // confess $!;
+	    if (!$child) {
+		open STDOUT, ">&WORKAROUND_LOG" or confess $!;
+		open STDERR, ">&STDOUT" or confess $!;
+		exec 'find', "./$tree", "-ls" or confess $!;
+	    }
+	    $child eq waitpid $child, 0 or confess $!;
+	    print WORKAROUND_LOG "find ended, wait status $?\n";
+	    flush WORKAROUND_LOG;
+	}
+
+	next unless $y;
+	remove $lf or warn $!;
+	unlockall();
+    }
+}
+
+parseargsdispatch();
+cleanup();

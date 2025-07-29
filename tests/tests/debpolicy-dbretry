@@ -1,0 +1,70 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-debpolicy
+t-prep-newpackage example 1.0
+
+cd $p
+revision=1
+git tag start
+
+echo DUMMY >some-file
+git add some-file
+git commit -m some-file
+taint=`git rev-parse HEAD`
+t-policy-admin taint --global $taint dummy
+git reset --hard HEAD~
+
+t-commit 'Make something to autotaint'
+t-dgit build
+t-dgit push-built --new
+
+autotaint=`t-git-get-ref "refs/tags/$tagpfx/$v"`
+
+git reset --hard start
+t-commit 'Thing which will autotaint'
+t-dgit build
+
+fifo=$tmp/sqlite-cmds
+t-mkfifo $fifo
+exec 3<>$fifo
+sqlite3 -interactive $tmp/git/policy.sqlite3 0<$fifo 3>&- &
+sqlite3_pid=$!
+
+taintsout=$tmp/sqlite3.taints-out
+echo >&3 'begin;';
+echo >&3 ".output $taintsout"
+echo >&3 'select * from taints;';
+echo >&3 'create table dummy (x text);'
+
+t-dgit build
+
+poll1-taint-tainted () {
+	if grep $taint $taintsout; then t-poll-done; fi
+}
+t-poll-loop 10 poll1-taint-tainted
+
+DGIT_RPD_TEST_DBLOOP_HOOK='
+	print STDERR "DBLOOP HOOK $sleepy\n";
+	$poldbh->sqlite_busy_timeout(2500);
+	if ($sleepy > 2) {
+		system '\''
+			set -ex
+			echo >'"$fifo"' "rollback;"
+			touch '"$tmp/sqlite3.rolled-back"'
+		'\'' and die "$? $!";
+	}
+' \
+t-dgit push-built --deliberately-not-fast-forward
+
+exec 3>&-
+wait $sqlite3_pid
+
+ls $tmp/sqlite3.rolled-back
+
+t-policy-admin list-taints | tee $tmp/taints-list | grep $autotaint
+
+t-ok

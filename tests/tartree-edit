@@ -1,0 +1,219 @@
+#!/bin/sh
+set -e
+fail () { echo >&2 "$0: $*"; exit 1; }
+
+play=.git/tartree-edit-work
+
+git_manip_play () {
+	local wd; wd=$(pwd)
+	case "$wd" in
+	*.edit) fail "bad idea to run gitfetchinfo into a .edit tree!" ;;
+	esac
+	rm -rf $play
+	mkdir $play
+}
+
+gitfetchdiff_list () {
+	git for-each-ref --format '%(refname) %(objectname)' \
+		refs/remotes/"$1" \
+	| sed 's/^refs\/remotes\/[^\/]*\///' \
+	| t-sort >"$play/$2"
+}
+
+gitfetchdiff () {
+	local how="$1"
+	local a="$2"
+	local b="$3"
+	git_manip_play
+
+	rrab=refs/remotes/"$a+$b"
+
+	ulf=\
+"delete refs/remotes/$a/%l
+delete refs/remotes/$b/%l
+"
+	case "$how" in
+	diff)
+		git for-each-ref --format 'delete %(refname)' $rrab \
+			| git update-ref --stdin
+		;;
+	merge)
+		ulf=\
+"create $rrab/%l
+$ulf"
+		;;
+	*)
+		fail "internal error bad how ($how)"
+		;;
+	esac
+
+	gitfetchdiff_list "$a" a
+	gitfetchdiff_list "$b" b
+
+	diff --old-line-format='' --new-line-format='' \
+		--unchanged-line-format="$ulf" \
+		$play/a $play/b >$play/updates \
+	|| test $? = 1
+
+	git update-ref --stdin <$play/updates
+	exit 0
+}
+
+case "$#.$1" in
+2.edit|2.done)	mode="$1"; arg="$2" ;;
+3.gitfetchinfo)	mode="$1"; arg="$2"; remote="$3" ;;
+3.gitfetchinfo-diff)	gitfetchdiff diff "$2" "$3"	;;
+3.gitfetchinfo-merge)	gitfetchdiff merge "$2" "$3"	;;
+?.-*)	fail "no options understood"			;;
+*)	fail "usage:
+    tartree-edit edit|done DIRECTORY|TARBALL
+    tartree-edit gitfetchinfo DIRECTORY|TARBALL REMOTE
+    tartree-edit gitfetchinfo-merge REMOTE-A REMOTE-B"	;;
+    # we don't document gitfetchinfo-diff because it's rather poor
+esac
+
+case "$arg" in
+*.tar)		base=${arg%.tar}			;;
+*.edit)		base=${arg%.edit}			;;
+*)		base=${arg}				;;
+esac
+
+tryat_pre () {
+	local b="$1"
+	rm -rf "$b.tmp"
+	if test -f "$b.tar" && test -f "$b.edit"; then
+		echo "$b.edit exists, deleting possibly-obsolete $b.tar"
+		rm "$b.tar"
+	fi
+}
+
+tryat_edit () {
+	local b="$1"
+	if test -d "$b.edit"; then
+		echo "$b.edit already exists"
+		exit 0
+	fi
+	if test -f "$b.tar"; then
+		mkdir "$b.tmp"
+		(set -e; cd "$b.tmp"; tar xf "$b.tar")
+		mv "$b.tmp" "$b.edit"
+		rm "$b.tar"
+		echo "$b.edit ready"
+		exit 0
+	fi
+}
+
+gitfetchinfo_perhaps_commit () {
+	local m="$1"
+	set +e
+	git diff --cached --quiet --exit-code HEAD
+	local rc=$?
+	set -e
+	case "$rc" in
+	0)   return ;;
+	1)   git commit --allow-empty --author='tartree-edit <>' -m "$m" ;;
+	*)   fail "git diff failed ($rc)" ;;
+	esac
+}
+
+tryat_gitfetchinfo () {
+	git_manip_play
+
+	if test -d "$b.edit"; then
+		cp -a "$b.edit"/. "$play"/.
+	else
+		exec 3<"$b.tar"
+		tar -C $play -f - <&3 -x
+		exec 3<&-
+	fi
+
+	local innerwd; innerwd="$(echo $play/*)"
+
+	git for-each-ref --format='%(refname)' refs/remotes >$play/l
+	perl -w -ne '
+	    our %remerge;
+	    use strict;
+	    chomp;
+	    next unless m#^refs/remotes/([^/]+)/#;
+	    my $old = $_;
+	    my $ab = $1;
+	    my $rhs = $'\'';
+	    my @ab = split /\+/, $ab;
+	    next unless @ab == 2;
+	    next unless (grep { $_ eq "'"$remote"'" } @ab) == 1;
+	    $remerge{"@ab"} = 1;
+	    print "update refs/remotes/$_/$rhs $old\n" or die $! foreach @ab;
+	    print "delete $old\n" or die $!;
+	    END {
+	        open REMERGE, ">&3" or die $!;
+		print REMERGE "$_\n" or die $! foreach sort keys %remerge;
+		close REMERGE or die $!;
+	    }
+	' <$play/l >$play/unmerge 3>$play/remerge
+	git update-ref --stdin <$play/unmerge
+
+	git remote remove "$remote" 2>/dev/null ||:
+	git remote add "$remote" $innerwd
+	git fetch --no-tags -p "$remote" \
+		+"HEAD:refs/remotes/$remote/TT-HEAD"
+	cd $innerwd
+	GIT_AUTHOR_DATE=$(git log -n1 --pretty=format:'%ai')
+	GIT_COMMITTER_DATE=$GIT_AUTHOR_DATE
+	export GIT_COMMITTER_DATE GIT_AUTHOR_DATE
+	git checkout -b WORKTREE
+	gitfetchinfo_perhaps_commit 'UNCOMMITTED INDEX'
+	git add -Af .
+	gitfetchinfo_perhaps_commit 'UNCOMMITTED WORKING TREE'
+	cd ../../..
+	git fetch --no-tags "$remote" --refmap \
+		+"refs/*:refs/remotes/$remote/*" \
+		+"refs/*:refs/remotes/$remote/*"
+
+	exec 3<$play/remerge
+	# $play will be destroyed by what follows, but we have
+	# an fd open onto remerge, so this will work
+	while read <&3 a b; do
+	      echo "Updating gitfetchinfo-merge $a $b"
+	      "$0" gitfetchinfo-merge $a $b
+	done
+
+	exit 0
+}
+
+tryat_done () {
+	local b="$1"
+	if test -d "$b.edit"; then
+		(set -e; cd "$b.edit"; tar cf "$b.tmp" *)
+		mv "$b.tmp" "$b.tar"
+		mv "$b.edit" "$b.tmp"
+		rm -rf "$b.tmp"
+		echo "$b.tar regenerated"
+		exit 0
+	fi
+	if test -f "$b.tar"; then
+		echo "$b.tar already exists and $b.edit doesn't"
+		exit 0
+	fi
+}
+
+tryat () {
+	local b="$1"
+	if ! test -f "$b.tar" && ! test -d "$b.edit"; then
+		return
+	fi
+	tryat_pre "$b"
+	tryat_$mode "$b"
+	fail "unexpected situation in $b.*"
+}
+
+case "$arg" in
+/*)		tryat "$base"
+		;;
+*)
+		pwd=`pwd`
+		tryat "$pwd/$base"
+		tryat "$pwd/git-srcs/$base"
+		tryat "$pwd/tests/git-srcs/$base"
+		fail "could not find $base..."
+		;;
+esac

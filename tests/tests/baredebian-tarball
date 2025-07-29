@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-baredebian
+
+t-dependencies quilt
+
+t-setup-import baredebian
+t-tstunt-parsechangelog
+
+cd $p
+baredebian-test-vars
+baredebian-tarball-mode
+
+t-expect-fail 'Could not determine appropriate upstream commitish' \
+t-dgit -wn --dgit-view-save=split.g --baredebian quilt-fixup
+
+baredebian-test-minimum
+baredebian-test-core
+
+t-ok

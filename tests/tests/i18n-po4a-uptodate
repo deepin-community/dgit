@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-git-only
+
+cd $root
+
+make -C po4a po4a.cfg.check
+
+t-ok

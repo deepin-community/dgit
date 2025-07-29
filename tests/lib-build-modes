@@ -1,0 +1,278 @@
+# -*- sh -*-
+
+bm-prep-ownpackage-branches () {
+	cat <<'END' >$tmp/stunt-git
+#!/bin/sh -e
+case "$*" in
+*clean*) echo >&2 "BUILD-MODES PROGRAM git $*" ;;
+esac
+exec git "$@"
+END
+	chmod +x $tmp/stunt-git
+
+	bm_branches="$1"
+}
+
+bm-prep () {
+	t-tstunt-parsechangelog
+	t-tstunt dpkg-deb
+
+	t-prep-newpackage example 1.0
+
+	cd $p
+
+	git checkout -b bad-build-deps indep-arch
+	perl -pe 's/Build-Depends.*/$&, x-dgit-no-such-package/' \
+		-i debian/control
+	git commit -a -m bad-build-deps
+
+	bm-prep-ownpackage-branches 'indep-arch bad-build-deps'
+
+	if zgrep 'dpkg-buildpackage: Make dependency checks fatal for -S' \
+		/usr/share/doc/dpkg-dev/changelog.gz; then
+			dpkgbuildpackage_deps_for_clean=true
+	else
+			dpkgbuildpackage_deps_for_clean=false
+	fi
+
+	cleanmodes_default="git none"
+	cleanmodes_default+=" dpkg-source$cleanmodes_dpkgsource_extra"
+	cleanmodes_default+=" dpkg-source-d$cleanmodes_dpkgsource_extra"
+	cleanmodes_all="$cleanmodes_default git-ff check"
+	cleanmodes_all+=" git,always git,always"
+	cleanmodes="$cleanmodes_default"
+}
+
+bm-gbp-example-acts () {
+	t-gbp-example-prep
+	t-tstunt-parsechangelog
+
+	git checkout -b for-build-modes qc/quilt-tip-2
+	# build-modes cannot cope with branches containing /
+
+	bm-prep-ownpackage-branches for-build-modes
+
+	cleanmodes='git dpkg-source,no-check'
+
+	for act in "$@"; do
+		bm-guess-e-source-e-targets "$act"
+		real_act="--quilt=gbp $act"
+		case "$act" in
+		sbuild*)    bm_quirk_after_act=bm-quirk-sbuild-after-act ;;
+		gbp-*)	    real_act="$real_act --git-ignore-branch" ;;
+		*)	    bm_quirk_after_act='' ;;
+		esac
+		bm-act-iterate
+	done
+}
+
+bm-guess-e-source-e-targets () {
+	local some_act=$1
+	case "$some_act" in
+	sbuild*" --no-arch-all"*)
+		e_source=true;	e_targets='build-arch binary-arch'	;;
+	build-source)
+		e_source=true;	e_targets=''				;;
+	*" -b")	e_source=false;	e_targets='build binary'		;;
+	*" -B")	e_source=false;	e_targets='build-arch binary-arch'	;;
+	*" -A")	e_source=false;	e_targets='build-indep binary-indep'	;;
+	*" -S")	e_source=true;	e_targets=' '				;;
+	*" -F")	e_source=true;	e_targets='build binary'		;;
+	*" -G")	e_source=true;	e_targets='build-arch binary-arch'	;;
+	*" -g")	e_source=true;	e_targets='build-indep binary-indep'	;;
+	*)	e_source=true;	e_targets='build binary'		;;
+	esac
+}
+
+bm-quirk-sbuild-after-act () {
+	# sbuild likes to run the package clean target in the chroot,
+	# which isn't necessary in our case.  We don't disable it in
+	# dgit because we want to do what sbuild does, in case there
+	# are packages which don't build unless their clean target was
+	# run.  We know it must be running it in the chroot because we
+	# provide sbuild with the dsc, not the tree, so we simply
+	# ignore all executions of the clean target by schroot.
+	local arch; arch=$(dpkg-architecture -qDEB_BUILD_ARCH)
+	local sblog=$bpd/example_${v}_$arch.build
+	if [ -e $sblog ]; then
+		sed '
+			s/^EXAMPLE RULES TARGET clean/HOOK SUPPRESSED &/;
+		' <$sblog >>$bmlog
+	else
+		echo "SBUILD LOG FILE ($sblog) MISSING"
+	fi
+}
+
+bm-report-test () {
+	local desc=$1; shift
+	if "$@"; then
+		echo >&4 "$desc EXISTS"
+	else
+		echo >&4 "$desc MISSING"
+	fi
+}
+
+bm-build-deps-ok () {
+	case "$branch" in
+	*bad-build-deps*)	return 1	;;
+	*)			return 0	;;
+	esac
+}
+
+bm-compute-expected () {
+	require_fail=unexpect # or required
+	tolerate_fail=unexpect # or tolerate
+
+	exec 4>$bmexp
+	echo >&4 "$heading"
+
+	local eff_cleanmode=$cleanmode
+
+	case "$e_targets" in
+	*[^\ ]*)
+		;;
+	*)
+		# if no build is going to be run, dgit will only check
+		# cleanliness rather than actually cleaning
+		eff_cleanmode=C$cleanmode
+		;;
+	esac
+
+	case "$act" in
+	sbuild*)
+		# dgit sbuild will only check cleanliness
+		# because it doesn't need to to make a .dsc for sbuild
+		eff_cleanmode=C$cleanmode
+		;;
+	esac
+
+	# we are running the builder in-tree ?
+	# when we have --include-dirty, we will want to check
+	# that too and reset eff_cleanmode to $cleanmode
+
+	case $eff_cleanmode in
+	git|Cgit,always)
+			echo >&4 'BUILD-MODES PROGRAM git clean -xdf' ;;
+	git-ff|Cgit-ff,always)
+			echo >&4 'BUILD-MODES PROGRAM git clean -xdff' ;;
+	check|Ccheck)	echo >&4 'BUILD-MODES PROGRAM git clean -dn -x' ;;
+	dpkg-source-d|dpkg-source-d,no-check)
+			echo >&4 "EXAMPLE RULES TARGET clean"
+			;;
+	dpkg-source|dpkg-source,no-check)
+			bm-build-deps-ok || tolerate_fail=tolerate
+			echo >&4 "EXAMPLE RULES TARGET clean"
+			;;
+	none|Cnone)	;;
+	Cdpkg-source*)	;; # handled below
+	Cgit|Cgit-ff)	echo >&4 'BUILD-MODES PROGRAM git clean -dn' ;;
+	*)		fail "t-compute-expected-run $cleanmode ??" ;;
+	esac
+
+	case $eff_cleanmode in
+	dpkg-source|Cdpkg-source|dpkg-source-d|Cdpkg-source-d)
+			echo >&4 'BUILD-MODES PROGRAM git clean -dn'
+			;;
+	dpkg-source*,no-check|Cdpkg-source*,no-check)
+			;;
+	Cdpkg-source*)	fail "t-compute-expected-run wd $cleanmode ??" ;;
+	esac
+
+	if [ "x$e_targets" != x ]; then
+		# e_targets can be " " to mean `/may/ fail due to b-d'
+		bm-build-deps-ok || tolerate_fail=tolerate
+	fi
+
+	for t in $e_targets; do
+		bm-build-deps-ok || require_fail=required
+		echo >&4 "EXAMPLE RULES TARGET $t"
+	done
+
+	bm-report-test "SOURCE FILE" $e_source
+	bm-report-test "SOURCE IN CHANGES" $e_source
+	bm-report-test "DEBS IN CHANGES" expr "$e_targets" : '.*binary.*'
+
+	exec 4>&-
+}
+
+bm-run-one () {
+	local args="$DGIT_TEST_BM_BASEARGS --clean=$cleanmode $real_act"
+
+	bmid="$act,$cleanmode,$branch"
+	bmid=${bmid// /_}
+
+	rm -f $bpd/${p}_{v}_*.changes
+
+	heading="===== [$bmid] dgit $args ====="
+
+	bmlog=$tmp/run.$bmid.output
+	bmexp=$tmp/run.$bmid.expected
+	bmgot=$tmp/run.$bmid.results
+
+	bm-compute-expected
+
+	git checkout $branch
+	git clean -xdf # since we might not do any actual cleaning
+
+	dsc="$bpd/example_$v.dsc"
+	rm -f $dsc
+
+	set +o pipefail
+	t-dgit --rm-old-changes --git=$tmp/stunt-git $args 2>&1 | tee $bmlog
+	local ps="${PIPESTATUS[*]}"
+	set -o pipefail
+
+	$bm_quirk_after_act
+
+	exec 4>$bmgot
+	echo >&4 "$heading"
+
+	case $ps in
+	"0 0")	actual_status=success ;;
+	*" 0")	actual_status=failure; echo >&4 "OPERATION FAILED"; ;;
+	*)	fail "tee failed" ;;
+	esac
+
+	case "$require_fail-$tolerate_fail-$actual_status" in
+	required-********-failure) echo >>$bmexp "REQUIRED FAILURE" ;;
+	********-tolerate-failure) echo >>$bmexp "TOLERATED FAILURE" ;;
+	unexpect-********-success) ;;
+	*)	fail "RF=$require_fail TF=$tolerate_fail AS=$actual_status" ;;
+	esac
+
+	egrep >&4 '^EXAMPLE RULES TARGET|^BUILD-MODES' $bmlog || [ $? = 1 ]
+
+	bm-report-test "SOURCE FILE" [ -e $dsc ]
+
+	if [ $actual_status = success ]; then
+		local changes; changes=$(echo $bpd/example_${v}_*.changes)
+		case "$changes" in
+		*' '*)	fail "build generated ambiguous .changes: $changes" ;;
+		esac
+
+		perl -ne 'print if m/^files:/i ... m/^\S/' \
+			<$changes >$changes.files
+
+		bm-report-test "SOURCE IN CHANGES" grep '\.dsc$' $changes.files
+		bm-report-test "DEBS IN CHANGES" grep '\.deb$' $changes.files
+	fi
+
+	exec 4>&-
+
+	$bm_quirk_before_diff
+
+	[ $actual_status = failure ] || diff -U10 $bmexp $bmgot
+}
+
+bm-act-iterate () {
+	for cleanmode in $cleanmodes; do
+		for branch in $bm_branches; do
+			bm-run-one
+		done
+	done
+	: bm-act-iterate done.
+}
+
+bm-buildproductsdir-nonworking () {
+	t-git-config dgit.default.build-products-dir ../bpd-dummy
+}

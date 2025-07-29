@@ -1,0 +1,29 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-mirror
+
+t-dependencies rsync
+
+t-debpolicy
+
+t-tstunt-parsechangelog
+t-prep-newpackage example 1.0
+
+t-mirror-setup
+
+cd $p
+revision=1
+
+t-reporefs master
+
+t-dgit push-source --new
+
+t-check-not-mirrored
+t-files-notexist $reposmirror/$p.*
+
+t-archive-process-incoming sid
+t-policy-periodic
+t-check-mirrored
+
+t-ok

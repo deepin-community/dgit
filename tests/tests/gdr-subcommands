@@ -1,0 +1,250 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp
+
+cd $p
+
+t-dgit setup-mergechangelogs
+
+mix-it () {
+	t-git-next-date
+
+	local m=$(git symbolic-ref HEAD)
+	t-some-changes "subcommands $m 1"
+
+	# we want patches mde by dgit, not gdr, for our test cases
+	t-dgit --git-debrebase=true -wgf quilt-fixup
+	t-git-next-date
+
+	t-some-changes "subcommands $m 2"
+	t-git-next-date
+}
+
+git checkout -b raw-converted-from-gbp converted-from-gbp
+test "$(git diff --stat HEAD^2)"
+git diff --exit-code --stat HEAD^1
+git reset --hard HEAD^1
+
+git checkout -b stitched-laundered master
+mix-it
+t-git-debrebase quick
+t-gdr-good stitched HEAD
+
+git checkout -b stitched-mixed master
+mix-it
+
+git checkout -b unstitched-laundered master
+mix-it
+git branch before-unstitch/unstitched-laundered
+t-git-debrebase
+t-gdr-good laundered
+
+git checkout -b unstitched-mixed master
+git branch before-unstitch/unstitched-mixed
+t-git-debrebase
+mix-it
+
+t-git-next-date
+
+git show-ref 
+
+subcmd () {
+	local subcmd=$1
+	shift
+	for startbranch in {stitched,unstitched}-{laundered,mixed} \
+			raw-converted-from-gbp; do
+		work="work-$subcmd-$startbranch"
+
+		: "---------- $subcmd $startbranch ----------"
+
+		git for-each-ref "**/$startbranch"{,/**} \
+			--format='create %(refname) %(objectname)' \
+		| sed "s/$startbranch/$work/" \
+		| git update-ref --stdin
+
+		git checkout $work
+		checkletters=$1; shift
+
+		before=before-$work
+		git branch $before
+
+		local xopts=''
+
+		case "$checkletters" in
+		XX*)
+			fail "$checkletters" # for debugging
+			;;
+		esac
+
+		case "$checkletters" in
+		X*)
+			t-expect-fail E:'snags: [0-9]* blockers' \
+			t-git-debrebase $xopts $subcmd
+			xopts+=' --force'
+			next_checkletter
+			;;
+		esac
+
+		case "$checkletters" in
+		N*)
+			t-expect-fail E:. \
+			t-git-debrebase $xopts $subcmd
+			xopts+=' --noop-ok'
+			next_checkletter
+			;;
+		esac
+
+		case "$checkletters" in
+		[EF]:*)
+			t-expect-fail "$checkletters" \
+			t-git-debrebase $xopts $subcmd
+			continue
+			;;
+		*)
+			t-git-debrebase $xopts $subcmd
+			;;
+		esac
+
+		peel=peel-$subcmd-$startbranch
+		git checkout -b $peel
+		t-clean-on-branch $peel
+
+		: "---------- $subcmd $startbranch $checkletters ----------"
+
+		while [ "x$checkletters" != x ]; do
+			: "---- $subcmd $startbranch ...$checkletters ----"
+			make_check "$checkletters"
+			checkletters="${checkletters#?}"
+		done
+	done
+
+}
+
+next_checkletter () {
+	checkletters="${checkletters#?}"
+}
+
+make_check () {
+	case "$1" in
+	[Nn]*)
+		t-refs-same-start
+		t-refs-same refs/heads/$before refs/heads/$peel
+		;;
+	U*)
+		t-refs-same-start
+		t-refs-same refs/heads/$before refs/ffq-prev/heads/$work
+		make_check u
+		;;
+	u*)
+		t-git-get-ref refs/ffq-prev/heads/$work
+		t-refs-notexist refs/debrebase-last/heads/$work
+		;;
+	V*)
+		t-refs-same-start
+		t-refs-same refs/ffq-prev/heads/$work \
+			refs/ffq-prev/heads/$startbranch
+		t-refs-notexist refs/debrebase-last/heads/$work
+		;;
+	s*)
+		t-refs-notexist refs/ffq-prev/heads/$work
+		t-refs-same-start
+		t-refs-same refs/debrebase-last/heads/$work \
+			refs/debrebase-last/heads/$startbranch
+		t-has-ancestor HEAD refs/debrebase-last/heads/$work
+		;;
+	S*)
+		t-refs-notexist refs/ffq-prev/heads/$work
+		t-refs-same-start refs/debrebase-last/heads/$work
+		t-ref-head
+		git diff --quiet HEAD^1
+		git diff HEAD^2 | grep $startbranch
+		git reset --hard HEAD^1
+		;;
+	P*)
+		t-dgit -wgf --quilt=nofix quilt-fixup
+		git diff HEAD~ debian/patches | egrep .
+		t-gdr-made-patches
+		git diff --quiet HEAD~ -- ':.' ':!debian/patches'
+		git reset --hard HEAD~
+		;;
+	l*)
+		git diff --quiet HEAD refs/heads/$before -- ':.' ':!debian/patches'
+		t-gdr-good laundered
+		;;
+	A*)
+		t-refs-notexist \
+			refs/ffq-prev/heads/$work \
+			refs/debrebase-last/heads/$work
+		;;
+	t*)
+		git diff --quiet HEAD refs/heads/$before
+		;;
+	f*)
+		t-has-ancestor HEAD refs/heads/$before
+		;;
+	Z*)
+		t-refs-same-start
+		t-refs-same refs/heads/$peel
+		t-refs-same refs/heads/before-unstitch/$startbranch
+ 		t-ref-head
+		;;
+	*)
+		fail "$1"
+		;;
+	esac
+}
+
+Ec="F:No ongoing git-debrebase session"
+Ep="F:Patch export produced patch amendments"
+
+# input state:
+#  stitched?		st'd	st'd	unst'd	unst'd	convert
+#  laundered?		laund'd	mixed	laund'd	mixed	-from-gbp
+#
+# "mixed" means an out of order branch
+# containing mixed commits and patch additions,
+# but which needs even more patches
+#
+subcmd	''		Ult	Ull	Vlt	Vl	nU
+subcmd	stitch		Ns	Nu	Sltf	Stf	Ns
+subcmd	prepush		ns	nu	Sltf	Stf	ns
+subcmd	quick		ns	Sl	Sltf	Sl	n
+subcmd	conclude	"$Ec"	"$Ec"	Sltf	Sl	N
+subcmd	scrap		Ns	Ns	Z	Z	N
+subcmd	make-patches	sPft	"$Ep"	uPft	"$Ep"	Pn
+subcmd  forget-was-ever-debrebase nA nA	nA	nA	nA
+#
+# result codes, each one is a check:
+#   E:$pat	} this is an error (must come first)
+#   F:$pat	} arg is passed to expect-fail
+#
+#   X		should fail due to snags, but succeed when forced
+#   XX		crash out of script for manual debugging
+#
+#   N		this is a noop, error unless --noop-ok
+#   n		this is a silent noop
+# both of these imply tf; but, specify also one of   u s
+#
+# should normally specify one of these:
+#   U		just unstiched: ffq-prev is exactly previous HEAD; implies u
+#   u		result is unstitched
+#   V		ffq-prev remains unchanged; implies also u
+#   s		result is stitched, debrebase-last exists and is unchanged
+#   S		result is stitch just made, remaining letters apply to result~
+#   Z		result is rewind to before changes made
+#   A		no ffq-prev or debrebase-last refs ("Amnesia")
+#
+#   P		result is add-patches, remaining letters apply to result~
+#
+# should normally specify one or both of these:
+#   l		result is laundered, tree is same as before minus d/patches
+#   t		tree is exactly same as before
+#
+#   f		result is ff from previous HEAD
+
+t-ok

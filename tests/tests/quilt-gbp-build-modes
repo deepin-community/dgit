@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-build-modes
+
+bm-gbp-example-acts				\
+	'build-source'				\
+	'build -b'				\
+	'build -S'				\
+	'gbp-build -S'				\
+	'gbp-build -b'				\
+
+t-ok

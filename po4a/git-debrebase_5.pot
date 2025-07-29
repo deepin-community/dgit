@@ -1,0 +1,1123 @@
+# SOME DESCRIPTIVE TITLE
+# Copyright (C) YEAR Free Software Foundation, Inc.
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2025-03-28 17:38+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. type: =head1
+#: ../dgit.1:3 ../dgit.7:2 ../dgit-user.7.pod:1 ../dgit-nmu-simple.7.pod:1
+#: ../dgit-maint-native.7.pod:1 ../dgit-maint-merge.7.pod:1
+#: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
+#: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
+#: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#: ../git-debpush.1.pod:1 ../tag2upload.5.pod:1
+#, no-wrap
+msgid "NAME"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:1826 ../dgit.7:23 ../dgit-user.7.pod:463
+#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:125
+#: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
+#: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
+#: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
+#: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
+#: ../git-debpush.1.pod:272 ../tag2upload.5.pod:224
+#, no-wrap
+msgid "SEE ALSO"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-user.7.pod:5 ../dgit-maint-native.7.pod:5
+#: ../dgit-maint-merge.7.pod:5 ../dgit-maint-gbp.7.pod:5
+#: ../dgit-maint-debrebase.7.pod:5 ../dgit-downstream-dsc.7.pod:5
+#: ../dgit-maint-bpo.7.pod:5 ../git-debrebase.5.pod:5 ../tag2upload.5.pod:5
+msgid "INTRODUCTION"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-bpo.7.pod:17 ../git-debrebase.5.pod:37
+msgid "TERMINOLOGY"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:3
+msgid "git-debrebase - git data model for Debian packaging"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:7
+msgid ""
+"git-debrebase is a tool for representing in git, and manpulating, Debian "
+"packages based on upstream source code."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:11
+msgid ""
+"The Debian packaging has a fast forwarding history.  The delta queue "
+"(changes to upstream files) is represented as a series of individual git "
+"commits, which can worked on with rebase, and also shared."
+msgstr ""
+
+#. type: =head2
+#: ../git-debrebase.5.pod:18
+msgid "DISCUSSION"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:20
+msgid ""
+"git-debrebase is designed to work well with dgit.  git-debrebase can also be "
+"used in workflows without source packages, for example to work on Debian-"
+"format packages outside or alongside Debian."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:24
+msgid ""
+"git-debrebase itself is not very suitable for use by Debian derivatives, to "
+"work on packages inherited from Debian, because it assumes that you want to "
+"throw away any packaging provided by your upstream.  However, use of git-"
+"debrebase in Debian does not make anything harder for derivatives, and it "
+"can make some things easier."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:32
+msgid ""
+"When using gitk on branches managed by git-debrebase, B<gitk --date-order>, "
+"B<gitk --first-parent> and B<gitk -- :.> (or B<gitk .>)  produce more useful "
+"output than the default."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:41
+msgid "Pseudomerge"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:43
+msgid ""
+"A merge which does not actually merge the trees; instead, it is constructed "
+"by taking the tree from one of the parents (ignoring the contents of the "
+"other parents).  These are used to make a rewritten history fast forward "
+"from a previous tip, so that it can be pushed and pulled normally.  Manual "
+"construction of pseudomerges can be done with C<git merge -s ours> but is "
+"not normally needed when using git-debrebase."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:54
+msgid "Packaging files"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:56
+msgid ""
+"Files in the source tree within B<debian/>, excluding anything in B<debian/"
+"patches/>."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:59
+msgid "Upstream"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:61
+msgid ""
+"The version of the package without Debian's packaging.  Typically provided "
+"by the actual upstream project, and sometimes tracked by Debian contributors "
+"in a branch C<upstream>."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:65
+msgid ""
+"Upstream contains upstream files, but some upstreams also contain packaging "
+"files in B<debian/>.  Any such non-upstream files found in upstream are "
+"thrown away by git-debrebase each time a new upstream version is "
+"incorporated."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:71
+msgid "Upstream files"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:73
+msgid ""
+"Files in the source tree outside B<debian/>.  These may include unmodified "
+"source from upstream, but also files which have been modified or created for "
+"Debian."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:77
+msgid "Delta queue"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:79
+msgid "Debian's changes to upstream files: a series of git commits."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:82
+msgid "Quilt patches"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:84
+msgid ""
+"Files in B<debian/patches/> generated for the benefit of dpkg-source's 3.0 "
+"(quilt) .dsc source package format.  Not used, often deleted, and "
+"regenerated when needed (such as when uploading to Debian), by git-debrebase."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:90
+msgid "Interchange branch; breakwater; stitched; laundered"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:92
+msgid "See L</BRANCHES AND BRANCH STATES - OVERVIEW>."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:94
+msgid "Anchor; Packaging"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:96
+msgid "See L</BRANCH CONTENTS - DETAILED SPECIFICATION>."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:98
+msgid "ffq-prev; debrebase-last"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:100
+msgid "See L</STITCHING, PSEUDO-MERGES, FFQ RECORD>."
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:104
+msgid "DIAGRAM"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:106
+#, no-wrap
+msgid ""
+"           ------/--A!----/--B3!--%--/--> interchange view\n"
+"                /        /          /      with debian/ directory\n"
+"               %        %          %       entire delta queue applied\n"
+"              /        /          /        3.0 (quilt) has debian/patches\n"
+"             /        /          3*       \"master\" on Debian git servers\n"
+"            /        /          /\n"
+"           2*       2*         2\n"
+"          /        /          /\n"
+"         1        1          1    breakwater branch, merging baseline\n"
+"        /        /          /     unmodified upstream code\n"
+"    ---@-----@--A----@--B--C      plus debian/ (but no debian/patches)\n"
+"      /     /       /                     no ref refers to this: we\n"
+"   --#-----#-------#-----> upstream        reconstruct its identity by\n"
+"                                           inspecting interchange branch\n"
+"    Key:\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:122
+#, no-wrap
+msgid ""
+"      1,2,3   commits touching upstream files only\n"
+"      A,B,C   commits touching debian/ only\n"
+"      B3      mixed commit (eg made by an NMUer)\n"
+"      #       upstream releases\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:127
+#, no-wrap
+msgid ""
+"     -@-      anchor merge, takes contents of debian/ from the\n"
+"     /         previous `breakwater' commit and rest from upstream\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:130
+#, no-wrap
+msgid ""
+"     -/-      pseudomerge; contents are identical to\n"
+"     /         parent lower on diagram.\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:133
+#, no-wrap
+msgid ""
+"      %       dgit- or git-debrebase- generated commit of debian/patches.\n"
+"              `3.0 (quilt)' only; generally dropped by git-debrebase.\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:136
+#, no-wrap
+msgid ""
+"      *       Maintainer's HEAD was here while they were editing,\n"
+"              before they said they were done, at which point their\n"
+"              tools made -/- (and maybe %) to convert to\n"
+"              the fast-forwarding interchange branch.\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:141
+#, no-wrap
+msgid ""
+"      !       NMUer's HEAD was here when they said `dgit push'.\n"
+"              Rebase branch launderer turns each ! into an\n"
+"              equivalent *.\n"
+"\n"
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:145
+msgid "BRANCHES AND BRANCH STATES - OVERVIEW"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:147
+msgid ""
+"git-debrebase has one primary branch, the B<interchange branch>.  This "
+"branch is found on Debian contributors' workstations (typically, a "
+"maintainer would call it B<master>), in the Debian dgit git server as the "
+"suite branch (B<dgit/dgit/sid>)  and on other git servers which support "
+"Debian work (eg B<master> on salsa)."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:155
+msgid ""
+"The interchange branch is fast-forwarding (by virtue of pseudomerges, where "
+"necessary)."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:158
+msgid ""
+"It is possible to have multiple different interchange branches for the same "
+"package, stored as different local and remote git branches.  However, "
+"divergence should be avoided where possible - see L</OTHER MERGES>."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:164
+msgid ""
+"A suitable interchange branch can be used directly with dgit.  In this case "
+"each dgit archive suite branch is a separate interchange branch."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:168
+msgid ""
+"Within the ancestry of the interchange branch, there is another important, "
+"implicit branch, the B<breakwater>.  The breakwater contains unmodified "
+"upstream source, but with Debian's packaging superimposed (replacing any "
+"C<debian/> directory that may be in the upstream commits).  The breakwater "
+"does not contain any representation of the delta queue (not even debian/"
+"patches).  The part of the breakwater processed by git-debrebase is the part "
+"since the most recent B<anchor>, which is usually a special merge generated "
+"by git-debrebase."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:181
+msgid ""
+"When working, locally, the user's branch can be in a rebasing state, known "
+"as B<unstitched>.  While a branch is unstitched, it is not in interchange "
+"format.  The previous interchange branch tip is recorded, so that the "
+"previous history and the user's work can later be stitched into the fast-"
+"forwarding interchange form."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:193
+msgid ""
+"An unstitched branch may be in B<laundered> state, which means it has a more "
+"particular special form convenient for manipulating the delta queue."
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:199
+msgid "BRANCH CONTENTS - DETAILED SPECIFICATION"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:201
+msgid ""
+"It is most convenient to describe the B<breakwater> branch first.  A "
+"breakwater is B<fast-forwarding>, but is not usually named by a ref.  It "
+"contains B<in this order> (ancestors first):"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:210
+msgid "Anchor"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:212
+msgid "An B<anchor> commit, which is usually a special two-parent merge:"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:215
+msgid ""
+"The first parent contains the most recent version, at that point, of the "
+"Debian packaging (in debian/); it also often contains upstream files, but "
+"they are to be ignored.  Often the first parent is a previous breakwater tip."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:222
+msgid ""
+"The second parent is an upstream source commit.  It may sometimes contain a "
+"debian/ subdirectory, but if so that is to be ignored.  The second parent's "
+"upstream files are identical to the anchor's.  Anchor merges always contain "
+"C<[git-debrebase anchor: ...]> as a line in the commit message."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:232
+msgid ""
+"Alternatively, an anchor may be a single-parent commit which introduces the "
+"C<debian/> directory and makes no other changes: ie, the start of Debian "
+"packaging."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:237
+msgid "Packaging"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:239
+msgid ""
+"Zero or more single-parent commits containing only packaging changes.  (And "
+"no quilt patch changes.)"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:245
+msgid ""
+"The B<laundered> branch state is B<rebasing>.  A laundered branch is based "
+"on a breakwater but also contains, additionally, B<after> the breakwater, a "
+"representation of the delta queue:"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:255
+msgid "Delta queue commits"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:257
+msgid ""
+"Zero or more single-parent commits containing only changes to upstream files."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:262
+msgid ""
+"The merely B<unstitched> (ie, unstitched but unlaundered)  branch state is "
+"also B<rebasing>.  It has the same contents as the laundered state, except "
+"that it may contain, additionally, B<in any order but after the breakwater>:"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:273
+msgid "Linear commits to the source"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:275
+msgid ""
+"Further commit(s) containing changes to to upstream files and/or to "
+"packaging, possibly mixed within a single commit.  (But not quilt patch "
+"changes.)"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:282
+msgid "Quilt patch addition for `3.0 (quilt)'"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:284
+msgid ""
+"Commit(s) which add patches to B<debian/patches/>, and add those patches to "
+"the end of B<series>."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:287
+msgid ""
+"These are only necessary when working with packages in C<.dsc 3.0 (quilt)> "
+"format.  For git-debrebase they are purely an output; they are deleted when "
+"branches are laundered.  git-debrebase takes care to make a proper patch "
+"series out of the delta queue, so that any resulting source packages are "
+"nice."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:297
+msgid ""
+"Finally, an B<interchange> branch is B<fast forwarding>.  It has the same "
+"contents as an unlaundered branch state, but may (and usually will) "
+"additionally contain (in some order, possibly intermixed with the extra "
+"commits which may be found on an unstitched unlaundered branch):"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:309
+msgid "Pseudomerge to make fast forward"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:311
+msgid ""
+"A pseudomerge making the branch fast forward from previous history.  The "
+"contributing parent is itself in interchange format.  Normally the "
+"overwritten parent is a previous tip of an interchange branch, but this is "
+"not necessary as the overwritten parent is not examined."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:319
+msgid ""
+"If the two parents have identical trees, the one with the later commit date "
+"(or, if the commit dates are the same, the first parent)  is treated as the "
+"contributing parent."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:326
+msgid "dgit dsc import pseudomerge"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:328
+msgid ""
+"Debian .dsc source package import(s)  made by dgit (during dgit fetch of a "
+"package most recently uploaded to Debian without dgit, or during dgit import-"
+"dsc)."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:334
+msgid ""
+"git-debrebase requires that each such import is in the fast-forwarding "
+"format produced by dgit: a two-parent pseudomerge, whose contributing parent "
+"is in the non-fast-forwarding dgit dsc import format (not described further "
+"here), and whose overwritten parent is the previous interchange tip (eg, the "
+"previous tip of the dgit suite branch)."
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:347
+msgid "STITCHING, PSEUDO-MERGES, FFQ RECORD"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:349
+msgid ""
+"Whenever the branch C<refs/B> is unstitched, the previous head is recorded "
+"in the git ref C<refs/ffq-prev/B>."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:352
+msgid ""
+"Unstiched branches are not fast forward from the published interchange "
+"branches [1].  So before a branch can be pushed, the right pseudomerge must "
+"be reestablished.  This is the stitch operation, which consumes the ffq-prev "
+"ref."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:359
+msgid ""
+"When the user has an unstitched branch, they may rewrite it freely, from the "
+"breakwater tip onwards.  Such a git rebase is the default operation for git-"
+"debrebase.  Rebases should not go back before the breakwater tip, and "
+"certainly not before the most recent anchor."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:366
+msgid ""
+"Unstitched branches must not be pushed to interchange branch refs (by the "
+"use of C<git push -f> or equivalent).  It is OK to share an unstitched "
+"branch in similar circumstances and with similar warnings to sharing any "
+"other rebasing git branch."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:372
+msgid ""
+"[1] Strictly, for a package which has never had a Debian delta queue, the "
+"interchange and breakwater branches may be identical, in which case the "
+"unstitched branch is fast forward from the interchange branch and no "
+"pseudomerge is needed."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:378
+msgid ""
+"When ffq-prev is not present, C<refs/debrebase-last/B> records some ancestor "
+"of refs/B, (usually, the result of last stitch).  This is used for status "
+"printing and some error checks - especially for printing guesses about what "
+"a problem is.  To determine whether a branch is being maintained in git-"
+"debrebase form it is necessary to walk its history."
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:387
+msgid "OTHER MERGES"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:389
+msgid ""
+"Note that the representation described here does not permit general merges "
+"on any of the relevant branches.  For this reason the tools will try to help "
+"the user avoid divergence of the interchange branch."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:394
+msgid ""
+"See dgit-maint-debrebase(7)  for a discussion of what kinds of behaviours "
+"should be avoided because they might generate such merges."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:400
+msgid ""
+"Nonlinear (merging) history in the interchange branch is awkward because it "
+"(obviously) does not preserve the linearity of the delta queue.  Easy "
+"merging of divergent delta queues is a research problem."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:405
+msgid ""
+"If a general merge is detected, git-debrebase will treat each side of the "
+"merge as a git-debrebase interchange branch, and to attempt to resolve them "
+"into a coherent view.  When this attempt succeeds, the output is likely to "
+"be correct."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:411
+msgid ""
+"If automatic resolution fails, an incomprehensible pile of multidimensional "
+"merge wreckage will be left in git refs under C<refs/debrebase/wreckage/>.  "
+"You are not likely to be able to resolve this without expert help.  If this "
+"happens, please file a bug, with a formal Steps to Reproduce, including the "
+"URL for your public repository, the precise git commitid of your current "
+"branch."
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:419
+msgid "LEGAL OPERATIONS"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:421
+msgid ""
+"The following basic operations follow from this model (refer to the diagram "
+"above):"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:426
+msgid "Append linear commits"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:428
+msgid ""
+"No matter the branch state, it is always fine to simply git commit (or "
+"cherry-pick etc.)  commits containing upstream file changes, packaging "
+"changes, or both."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:434
+msgid "(This may make the branch unlaundered.)"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:436
+msgid "Launder branch"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:438
+msgid ""
+"Record the previous head in ffq-prev, if we were stitched before (and delete "
+"debrebase-last)."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:442
+msgid ""
+"Reorganise the current branch so that the packaging changes come first, "
+"followed by the delta queue, turning C<-@-A-1-2-B3> into C<...@-A-B-1-2-3>."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:447
+msgid "Drop pseudomerges and any quilt patch additions."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:449
+msgid "Interactive rebase"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:451
+msgid ""
+"With a laundered branch, one can do an interactive git rebase of the delta "
+"queue."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:454
+msgid "New upstream rebase"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:456
+msgid ""
+"Start rebasing onto a new upstream version, turning C<...#..@-A-B-1-2-3> "
+"into C<(...#..@-A-B-, ...#'-)@'-1-2>."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:459
+msgid ""
+"This has to be a wrapper around git-rebase, which prepares @' and then tries "
+"to rebase 1 2 onto @'.  If the user asks for an interactive rebase, @' "
+"doesn't appear in the commit list, since @' is the newbase of the rebase "
+"(see git-rebase(1))."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:465
+msgid ""
+"Note that the construction of @' cannot fail because @' simply copies "
+"debian/ from B and and everything else from #'.  (Rebasing A and B is "
+"undesirable.  We want the debian/ files to be non-rebasing so that git log "
+"shows the packaging history.)"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:471
+msgid "Stitch"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:473
+msgid ""
+"Make a pseudomerge, whose contributing parent is the unstitched branch and "
+"whose overwritten parent is ffq-prev, consuming ffq-prev in the process (and "
+"writing debrebase-last instead).  Ideally the contributing parent would be a "
+"laundered branch, or perhaps a laundered branch with a quilt patch addition "
+"commit."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:482
+msgid "Commit quilt patches"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:484
+msgid ""
+"To generate a tree which can be represented as a 3.0 (quilt) .dsc source "
+"package, the delta queue must be reified inside the git tree in B<debian/"
+"patches/>.  These patch files can be stripped out and/or regenerated as "
+"needed."
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:492
+msgid "ILLEGAL OPERATIONS"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:494
+msgid ""
+"Some git operations are not permitted in this data model.  Performing them "
+"will break git-debrebase."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:499
+msgid "General merges"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:501
+msgid "See L</OTHER MERGES>, above."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:503
+msgid "git-rebase starting too soon, or without base argument"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:505
+msgid ""
+"git-rebase must not be invoked in such a way that the chosen base is before "
+"the anchor, or before the last pseudomerge.  This is because git-rebase "
+"mangles merges.  git rebase --preserve-merges is also dangerous."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:511
+msgid "git-rebase without a base argument will often start too early."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:513
+msgid ""
+"For these reasons, it is better to use git-debrebase and let it choose the "
+"base for your rebase.  If you do realise you have made this mistake, it is "
+"best to use the reflog to recover to a suitable good previous state."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:521
+msgid "Editing debian/patches"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:523
+msgid ""
+"debian/patches is an output from git-debrebase, not an input.  If you edit "
+"patches git-debrebase will complain and refuse to work.  If you add patches "
+"your work is likely to be discarded."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:529
+msgid ""
+"Instead of editing patches, use git-debrebase to edit the corresponding "
+"commits."
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:532
+msgid "Renaming (etc.) branch while unstitched"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:534
+msgid ""
+"The previous HEAD, which will be pseudomerged over by operations like git-"
+"debrebase stitch, is recorded in a ref name derived from your branch name."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:539
+msgid ""
+"If you rename unstitched branches, this information can get out of step."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:542
+msgid ""
+"Conversely, creating a new branch from an unstitched branch is good for "
+"making a branch to play about in, but the result cannot be stitched."
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:549
+msgid "COMMIT MESSAGE ANNOTATIONS"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:551
+msgid ""
+"git-debrebase makes annotations in the messages of commits it generates."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:554
+msgid "The general form is"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:556
+#, no-wrap
+msgid ""
+"  [git-debrebase COMMIT-TYPE [ ARGS...]: PROSE, MORE PROSE]\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:558
+msgid ""
+"git-debrebase treats anything after the colon as a comment, paying no "
+"attention to PROSE."
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:561
+#, no-wrap
+msgid ""
+"The full set of annotations is:\n"
+"  [git-debrebase split: mixed commit, debian part]\n"
+"  [git-debrebase split: mixed commit, upstream-part]\n"
+"  [git-debrebase convert dgit import: debian changes]\n"
+"  [git-debrebase anchor: convert dgit import, upstream changes]\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:567
+#, no-wrap
+msgid ""
+"  [git-debrebase upstream-combine . PIECE[ PIECE...]: new upstream]\n"
+"  [git-debrebase anchor: new upstream NEW-UPSTREAM-VERSION, merge]\n"
+"  [git-debrebase changelog: new upstream NEW-UPSTREAM-VERSION]\n"
+"  [git-debrebase make-patches: export and commit patches]\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:572
+#, no-wrap
+msgid ""
+"  [git-debrebase convert-from-gbp: drop patches]\n"
+"  [git-debrebase anchor: declare upstream]\n"
+"  [git-debrebase pseudomerge: stitch]\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:576
+#, no-wrap
+msgid ""
+"  [git-debrebase merged-breakwater: constructed from vanilla merge]\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:578
+#, no-wrap
+msgid ""
+"  [git-debrebase convert-to-gbp: commit patches]\n"
+"  [git-debrebase convert-from-dgit-view upstream-import-convert: VERSION]\n"
+"  [git-debrebase convert-from-dgit-view drop-patches]\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:582
+msgid ""
+"Only anchor merges have the C<[git-debrebase anchor: ...]> tag.  Single-"
+"parent anchors are not generated by git-debrebase, and when made manually "
+"should not contain any C<[git-debrebase ...]> annotation."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:587
+msgid ""
+"The C<split mixed commit> and C<convert dgit import> tags are added to the "
+"pre-existing commit message, when git-debrebase rewrites the commit."
+msgstr ""
+
+#. type: =head1
+#: ../git-debrebase.5.pod:591
+msgid "APPENDIX - DGIT IMPORT HANDLING"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:593
+msgid ""
+"The dgit .dsc import format is not documented or specified (so some of the "
+"following terms are not defined anywhere).  The dgit import format it is "
+"defined by the implementation in dgit, of which git-debrebase has special "
+"knowledge."
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:598
+msgid "Consider a non-dgit NMU followed by a dgit NMU:"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:600
+#, no-wrap
+msgid ""
+"            interchange --/--B3!--%--//----D*-->\n"
+"                         /          /\n"
+"                        %          4\n"
+"                       /          3\n"
+"                      /          2\n"
+"                     /          1\n"
+"                    2          &_\n"
+"                   /          /| \\\n"
+"                  1          0 00 =XBC%\n"
+"                 /\n"
+"                /\n"
+"          --@--A     breakwater\n"
+"           /\n"
+"        --#--------> upstream\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:616
+#, no-wrap
+msgid ""
+" Supplementary key:\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:618
+#, no-wrap
+msgid ""
+"    =XBC%     dgit tarball import of .debian.tar.gz containing\n"
+"               Debian packaging including changes B C and quilt patches\n"
+"    0         dgit tarball import of upstream tarball\n"
+"    00        dgit tarball import of supplementary upstream piece\n"
+"    &_        dgit import nearly-breakwater-anchor\n"
+"    //        dgit fetch / import-dsc pseudomerge to make fast forward\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:625
+#, no-wrap
+msgid ""
+"    &'        git-debrebase converted import (upstream files only)\n"
+"    C'        git-debrebase converted packaging change import\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:628
+#, no-wrap
+msgid ""
+"    * **      before and after HEAD\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:630
+msgid "We want to transform this into:"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:634
+msgid "I. No new upstream version"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:636
+#, no-wrap
+msgid ""
+" (0 + 00 eq #)\n"
+"                        --/--B3!--%--//-----D*-------------/-->\n"
+"                         /          /                     /\n"
+"                        %          4                     4**\n"
+"                       /          3                     3\n"
+"                      /          2                     2\n"
+"                     /          1                     1\n"
+"                    2          &_                    /\n"
+"                   /          /| \\                  /\n"
+"                  1          0 00 =XBC%            /\n"
+"                 /                                /\n"
+"                /                                /\n"
+"          --@--A-----B---------------------C'---D\n"
+"           /\n"
+"        --#----------------------------------------->\n"
+"\n"
+msgstr ""
+
+#. type: =item
+#: ../git-debrebase.5.pod:652
+msgid "II. New upstream"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:654
+#, no-wrap
+msgid ""
+" (0 + 00 neq #)\n"
+"\n"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debrebase.5.pod:656
+#, no-wrap
+msgid ""
+"                        --/--B3!--%--//-----D*-------------/-->\n"
+"                         /          /                     /\n"
+"                        %          4                     4**\n"
+"                       /          3                     3\n"
+"                      /          2                     2\n"
+"                     /          1                     1\n"
+"                    2          &_                    /\n"
+"                   /          /| \\                  /\n"
+"                  1          0 00 =XBC%            /\n"
+"                 /                                /\n"
+"                /                                /\n"
+"          --@--A-----B-----------------@---C'---D\n"
+"           /                          /\n"
+"        --#--------------------- - - / - - --------->\n"
+"                                    /\n"
+"                                   &'\n"
+"                                  /|\n"
+"                                 0 00\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../git-debrebase.5.pod:679
+msgid "git-debrebase(1), dgit-maint-rebase(7), dgit(1)"
+msgstr ""

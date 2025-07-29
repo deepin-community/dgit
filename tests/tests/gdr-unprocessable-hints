@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp
+
+cd $p
+
+b=gdr-unprocessable/origin
+
+git checkout $b
+t-expect-fail E:'maybe you needed git-debrebase convert-from' \
+t-git-debrebase quick
+
+git update-ref refs/ffq-prev/heads/$b master
+t-expect-fail E:'Consider git-debrebase scrap' \
+t-git-debrebase quick
+
+git update-ref -d refs/ffq-prev/heads/$b master
+git update-ref refs/debrebase-last/heads/$b HEAD
+t-expect-fail E:'Branch/history seems mangled' \
+t-git-debrebase quick
+test "$(grep 'git-debrebase scrap' ../t.output)" = ""
+
+git update-ref refs/debrebase-last/heads/$b master
+t-expect-fail E:'Branch/history mangled, and diverged' \
+t-git-debrebase quick
+test "$(grep 'git-debrebase scrap' ../t.output)" = ""
+
+t-ok

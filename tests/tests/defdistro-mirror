@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+. tests/lib
+t-dependencies rsync
+t-alt-test

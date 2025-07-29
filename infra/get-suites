@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+set -o pipefail
+shopt -s inherit_errexit # #514862, wtf
+
+srvdir=/srv/dgit.debian.org
+dgitlive=${DGIT_TEST_INTREE-$srvdir/dgit-live}
+output=${DGIT_GETSUITES_OUTPUT-$srvdir/data/suites}
+
+export PERLLIB="$dgitlive${PERLLIB+:}${PERLLIB}"
+
+$dgitlive/dgit archive-api-query /suites | perl -we '
+	use strict;
+	use JSON;
+	undef $/;
+	my $json = <STDIN>;
+	die $! if STDIN->error;
+	my $items = decode_json $json;
+	foreach my $item (@$items) {
+		next unless ($item->{archive}//"") eq "ftp-master";
+		next unless ($item->{codename});
+		print $item->{codename}, "\n" or die $!;
+	}
+	flush STDOUT or die $!;
+' >$output.new
+
+mv -f $output.new $output

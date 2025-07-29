@@ -1,0 +1,6 @@
+.*.make
+.*.potfiles
+.*.pot
+.*.tmp
+.*.new
+mo

@@ -1,0 +1,288 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies bsdgames
+t-dependencies man-db git-man
+t-tstunt-parsechangelog
+
+t-archive-none example
+t-git-none
+bv=1.0
+t-worktree $bv
+
+: ----- prepare badnesses -----
+
+mkdir af
+
+badattr1 () {
+	local filename=$1
+	local attrspec=$2
+	echo >>af/$filename "Test file with $attrspec"
+	printf >>af/$filename 'crlf: \r\n'
+	echo >>af/$filename 'id $Id: $'
+	echo >>af/$filename 'id $Id: SPLARK $'
+	printf >>af/$filename '\xEF\xBB\xBF <- UTF-8 BOM\n'
+	echo >>gitattrs "af/$filename" "$attrspec"
+}
+
+badattr () {
+	attrname=$1; shift
+
+	case "$attrname" in
+	working-tree-encoding) ;;
+	*)
+		badattr1 $attrname-set $attrname
+		;;
+	esac
+
+	badattr1 $attrname-unset -$attrname
+	badattr1 $attrname-unspec \!$attrname
+	local val
+	for val in "$@"; do
+		badattr1 $attrname=$val $attrname=$val
+	done
+}
+
+# todo: want to make each of these files into a quilt patch
+
+t-git-config core.eol crlf
+
+printf >>.dotfile-attr 'dotfiles too?\n'
+echo >>gitattrs '.dotfile-attr filter=dgit-test-crazy-f'
+
+badattr	text auto
+badattr eol lf crlf
+badattr ident
+
+t-git-config filter.dgit-test-crazy-f.smudge '/usr/games/rot13 2'
+t-git-config filter.dgit-test-crazy-f.clean  '/usr/games/rot13 24'
+t-git-config filter.dgit-test-crazy-f.required true
+
+badattr filter dgit-test-crazy-f
+
+badattr diff
+badattr merge text binary union
+badattr whitespace
+badattr export-ignore
+badattr export-subst
+badattr delta
+badattr encoding no-such-encoding
+badattr working-tree-encoding ISO-8859-1 UTF-16
+
+man gitattributes \
+| perl -ne 'print $1,"\n" if m/^ *(\w[-a-z]*)$/' \
+> grepped-attrs
+
+exec <grepped-attrs
+while read attr; do
+	badattr $attr
+done
+
+sha256sum .dotfile-attr af/* >sums
+
+# ----- common to source formats -----
+
+sfmt_setup () {
+	v=$1
+	sfmt=$2
+
+	pdb=$p.$sfmt
+
+	local addpatch=${sfmt}_addpatch
+	local convert=${sfmt}_convert
+
+	cp -a $p $pdb-edit
+	cd $pdb-edit
+
+	$convert
+
+	dch -v $v -m convert
+
+	rm -rf .git
+
+	cp ../gitattrs .gitattributes
+	$addpatch gitattrs
+
+	cp -a ../af ../.dotfile-attr .
+	$addpatch files
+
+	cp ../sums .
+	$addpatch sums
+
+	dpkg-source -b .
+
+	cd ..
+}
+
+sums_check () {
+	# caller should cd into working directory, set
+	#   $sums  $branch
+	# and check out $branch
+
+	sha256sum .dotfile-attr af/* >../$sums.checkout
+	diff -U0 ../sums ../$sums.checkout
+
+	for f in .dotfile-attr af/*; do
+		git cat-file blob "refs/heads/$branch:$f" \
+			| sha256sum \
+			| sed -e 's#-$#'$f'#' \
+		>>../$sums
+	done
+
+	diff -U0 ../sums ../$sums
+}
+
+sums_check_broken () {
+	# caller should cd into working directory, set
+	#   $sums
+	# and check out the broken branch
+
+	sha256sum .dotfile-attr af/* >../$sums.broken
+
+	for s in ../sums ../$sums.broken; do
+		sed 's/[0-9a-f]* //' $s >$s.nosums
+	done
+	diff -U0 ../sums.nosums ../$sums.broken.nosums
+	set +e
+	diff -U0 ../sums ../$sums.broken
+	rc=$?
+	set -e
+	test $rc = 1
+}
+
+t-dgit-warn-check () {
+	local warnok=$1; shift
+	# warnok should be  0 if the warning is expected
+	#                   1 if the warning is NOT expected
+
+	local err=stderr.$wd
+
+	LC_MESSAGES=C t-dgit "$@" 2>&1 |tee ../$err
+
+	set +e
+	egrep 'warning: .* contains \.gitattributes' ../$err
+	rc=$?
+	set -e
+
+	test "$rc" = "$warnok"
+}
+
+sfmt_import () {
+	inst=$1
+	dgitargs=$2
+	branch="import.$sfmt-$inst"
+	dscf=${p}_${v}.dsc
+	sums=sums.$sfmt-$inst
+	wd=$pdb-import-$inst
+
+	mkdir $wd
+	cd $wd
+	git init
+
+	t-dgit-warn-check 0 $dgitargs import-dsc ../$dscf +$branch.broken
+
+	git checkout $branch.broken
+
+	sums_check_broken
+
+	t-dgit setup-new-tree
+
+	t-dgit-warn-check 1 $dgitargs import-dsc ../$dscf +$branch
+	git checkout $branch
+	touch .dotfile-attr af/*
+	git reset --hard
+
+	sums_check
+
+	cd ..
+}
+
+: ----- generate the orig -----
+
+origtar=${p}_${bv}.orig.tar.gz
+
+tar --exclude=debian --exclude=.git -zcf $origtar $p
+
+: ----- test 1.0 native -----
+
+native_addpatch () { :; }
+native_convert () { :; }
+
+sfmt_setup 1.1 native
+sfmt_import norm
+
+: ----- test 1.0 diff -----
+
+diff_addpatch () { :; }
+diff_convert () { :; }
+
+sfmt_setup 1.1 diff
+sfmt_import norm
+
+: ----- test "3.0 (quilt)" -----
+
+quilt_addpatch () {
+	pname=$1
+	cat >../editor.pl <<END
+		next if m/^$/..0;
+		s{^(description:).*}{\$1 dgit test patch $pname}i;
+		\$_='' if m/^ /;
+END
+	EDITOR="perl -pi $tmp/editor.pl" dpkg-source -iX --commit . $pname
+	test -f debian/patches/$pname
+}
+
+quilt_convert () {
+	mkdir -p debian/source
+	echo '3.0 (quilt)' >debian/source/format
+}
+
+sfmt_setup 1.0-1 quilt
+sfmt_import norm
+sfmt_import absurd --force-import-gitapply-absurd
+
+: ----- 'test clone (with "3.0 (quilt)")' -----
+
+mv $origtar ${dscf%.dsc}.* $tmp/mirror/pool/main/
+t-archive-query sid
+
+t-dgit-warn-check 0 -cdgit.default.setup-gitattributes=false \
+	clone $p sid $p.clone.broken
+cd $p.clone.broken
+
+sums=sums.broken
+sums_check_broken
+
+cd ..
+
+t-dgit-warn-check 1 clone $p sid $p.clone
+
+cd $p.clone
+sums=sums.clone
+branch=dgit/sid
+sums_check
+
+cd ..
+
+t-dgit-warn-check 0 -cdgit.default.setup-gitattributes=false \
+	clone $p sid $p.clone.old
+
+cd $p.clone.old
+
+mkdir -p .git/info
+cat >.git/info/attributes <<'END'
+*       dgit-defuse-attrs
+[attr]dgit-defuse-attrs -text -eol -crlf -ident -filter
+# ^ see GITATTRIBUTES in dgit(7) and dgit setup-new-tree in dgit(1)
+END
+
+t-dgit setup-gitattributes
+git reset --hard
+
+sums=sums.old
+sums_check
+
+cd ..
+
+t-ok

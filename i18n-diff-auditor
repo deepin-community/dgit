@@ -1,0 +1,532 @@
+#!/usr/bin/perl -w
+#
+# i18n-diff-auditor
+# Copyright (C)2018 Ian Jackson
+# GPLv3+, NO WARRANTY, see below.
+#
+#
+# Usage:
+#  something like this
+#  git-log -n1 -p | ./i18n-diff-auditor -D 2>&1 |less -j10 +/'^!.*'
+#
+# -D is for debug.  Currently only one level.
+#
+# Output is the relevant diff hunks, with each line prepended with
+# space for ok lines and ! for questionable ones, and with relevant
+# diff lines prepended with lines starting !! (and lines starting #
+# for debug output), so ovrall:
+#
+#   !! <message>   reasoning for subsequent questionable diff line(s)
+#   !+             diff line found to be questionable
+#   !-             diff line found to be questionable
+#    @@@ etc.      diff furniture
+#    +             diff line checked and ok
+#    -             diff line checked and ok
+#   # <stuff>      debug output (normally precedes relevant output)
+#
+# Changes are generally marked as ok if they correspond to a known
+# intended code change pattern.  (That includes changing error calls
+# to different error calls.)  If they don't correspond to any known
+# pattern, they are "questionable" and the first thing that doesn't
+# match the most common pattern is reported.
+#
+# Might be useful for projects other than dgit, provided it uses
+# the same gettext aliases (__ f_ i_) and similar error calls
+# (die, confess, fail).
+#
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+use strict;
+use Carp;
+use Data::Dumper;
+use Getopt::Long;
+
+our $debug = 0;
+GetOptions("debug|D+" => \$debug
+	   );
+
+our @debug;
+sub debug ($$) {
+    my ($i,$s) = @_;
+    push @{ $debug[$i] }, $s if $debug;
+}
+
+my @d = <>;
+unshift @d, "# dummy line to make line 1 index 1 in \@d\n";
+
+our $i_last_l_ok = -1;
+our $count_i_last_l_ok;
+
+sub l_ok ($) {
+    my ($i) = @_;
+
+    if ($i == $i_last_l_ok) {
+	confess $i if $count_i_last_l_ok++ > 50;
+    } else {
+	$count_i_last_l_ok = 0;
+	$i_last_l_ok = $i;
+    }
+
+    return unless $i < @d;
+    $_ = $d[$i];
+    #print STDERR "L $i\n";
+    1;
+}
+
+sub l ($) {
+    my ($i) = @_;
+    confess $i unless l_ok $i;
+};
+
+our $perlop_text = <<'END'; # c&p from man perlop
+           left        terms and list operators (leftward)
+           left        ->
+           nonassoc    ++ --
+           right       **
+           right       ! ~ \ and unary + and -
+           left        =~ !~
+           left        * / % x
+           left        + - .
+           left        << >>
+           nonassoc    named unary operators
+           nonassoc    < > <= >= lt gt le ge
+           nonassoc    == != <=> eq ne cmp ~~
+           left        &
+           left        | ^
+           left        &&
+           left        || //
+           nonassoc    ..  ...
+           right       ?:
+           right       = += -= *= etc. goto last next redo dump
+           left        , =>
+           nonassoc    list operators (rightward)
+           right       not
+           left        and
+           left        or xor
+
+           **=    +=    *=    &=    &.=    <<=    &&=
+                  -=    /=    |=    |.=    >>=    ||=
+                  .=    %=    ^=    ^.=           //=
+                        x=
+END
+
+our $perlop_re;
+
+sub prep_perlop () {
+    my @ops;
+    foreach (split /\n/, $perlop_text) {
+	next unless m{\S};
+	s{\s+$}{};
+	s{^\s+}{};
+	s{^(?: left | right | nonassoc ) \s+}{}x;
+	next if m{^terms and list operators};
+	next if m{^named unary};
+	next if m{^list operators};
+	s{ and unary.*}{};
+	s{ etc\. }{ };
+	s{\?\:}{ ? : };
+	foreach my $op (split /\s+/) {
+	    next unless length $op;
+	    next if $op =~ m{^\w+$};
+	    $op =~ s/\W/\\$&/g;
+	    push @ops, $op;
+	}
+    }
+    $perlop_re = '(?: '.(join ' | ', @ops).' )';
+    $perlop_re = qr{$perlop_re}x;
+    #print STDERR "$perlop_re\n";
+}
+
+prep_perlop();
+
+our ($ifilehead, $ifirsthunkhead);
+our ($ihunkhead, $ihunkend);
+our ($ichunkstart, $ichunkend);
+our ($before, $after);
+
+sub is_string ($) { $_[0]{T} =~ m/heredoc|string/; }
+sub is_trans ($) { grep { $_[0]{E} eq $_ } qw(__ f_ i_); }
+
+sub qp ($) {
+    my ($p) = @_;
+    $p =~ s{\\}{\\\\}g;
+    $p =~ s{\'}{\\'}g;
+    $p =~ s{\n}{\\n}g;
+    $p =~ s{\t}{\\t}g;
+    return "'$p'";
+};
+
+sub semiparse ($) {
+    ($_) = @_;
+    my @o;
+    #my $in = $_;
+    # entries contain
+    #   T     type
+    #   E     exact input text (does not contain here doc contents)
+    #   P     something to print in messages
+    #   V     value, only for: heredoc string
+    #   Q     quote characcter, only for: heredoc string
+    for (;;) {
+	s{^\s+}{};
+	if (s{^[\$\@\%]?[_0-9a-zA-Z]+}{}) {
+	    push @o, { T => 'ident', E => $&, P => $& };
+	} elsif (s{^\<\<(['"]?)([A-Z_]+)\1}{}) {
+	    my ($q,$d) = ($1,$2);
+	    $q ||= '"';
+	    push @o, { T => 'heredoc', Q => $q, Delim => $d,
+		       E => $&, P => "<<$q$d$q" };
+	    if (s{^
+		    (                 .* \n     )
+		    ( (?: (?! $d \n ) .* \n )*? )
+			      $d         \n
+	         }{ $1 }xe) {
+		$o[$#o]{V} = $2;
+            } else {
+		m{^.*\n} or confess;
+		$_ = $&;
+		$o[$#o]{V} = $';
+		$o[$#o]{Invented} = 1;
+	    }
+	} elsif (s{^ (["'])( (?: [^\\'"]
+                               | \\ [^"']
+                               | (?! \1 ) [^"]
+                              )*
+                       ) \1 }{}x) {
+	    my ($q,$v) = ($1,$2);
+	    push @o, { T => 'string', E => $&, P => "$q$q",
+		       Q => $q, V => $v};
+	} elsif (s{^$perlop_re|^\;}{}) {
+	    push @o, { T => 'op', E => $&, P => $& };
+	} elsif (s/^[[{(]//) {
+	    push @o, { T => 'bra', E => $&, P => $& };
+	} elsif (s/^[]})]//) {
+	    push @o, { T => 'ket', E => $&, P => $& };
+	} elsif (s/^( [\$\@\%] )( \{ )//x) {
+	    push @o, { T => 'deref', E => $1, P => $1 },
+		     { T => 'bra',   E => $2, P => $2 };
+	} elsif (s/^ [\$\@\%] [^[^{] //x) {
+	    push @o, { T => 'specvar', E => $&, P => $& };
+	} elsif (!length) {
+	    last;
+	} elsif (s{^\#.*\n}{}) {
+	} else {
+	    m{^.{0,10}};
+	    die "cannot tokenise \`$&'";
+	}
+    }
+    for (my $i=0; $i+2 < @o; $i++) {
+	next unless $o[$i+1]{E} eq '.';
+	my @inputs = @o[$i, $i+2];
+	#print STDERR Dumper(\@inputs);
+	next if grep { !is_string($_) } @inputs;
+	my $q = $inputs[0]{Q};
+	next if grep { $_->{Q} ne $q } @inputs;
+	next if grep { $_->{Invented} } @inputs;
+	my $new = { T => 'joinedstrings',
+		    E => (join '.', map { $_->{E} } @inputs),
+		    P => (join '.', map { $_->{P} } @inputs),
+		    V => (join '',  map { $_->{V} } @inputs),
+		    Q => $q,
+		  };
+	@o = (@o[0..$i-1], $new, @o[$i+3..$#o]);
+	$i--; # counteracts $i++
+    }
+    debug $ichunkstart, "semiparsed: ".join ' ', map { $_->{P} } @o;
+    # debug $ichunkstart, "semiparsed V: ".join ' ', map { defined $_->{V} ? ">$_->{V}<" : '-' } @o;
+    return @o;
+}	    
+
+our @analysed_x;
+our @analysed_y;
+
+sub analyse_chunk_core () {
+    $before //= '';
+    die "plain deletion\n" unless defined $after;
+    my @xs = semiparse $before;
+    my @ys = semiparse $after;
+    @analysed_x = @analysed_y = ();
+    my $next_something = sub {
+	my ($ary,$anal,$var,$what) = @_;
+	die "ran out of $what\n" unless @$ary;
+	my $r = shift @$ary;
+	push @$anal, $r->{P};
+	$$var = $r;
+    };
+    my ($x,$y);
+    my $next_x = sub { $next_something->(\@xs, \@analysed_x, \$x, 'before'); };
+    my $next_y = sub { $next_something->(\@ys, \@analysed_y, \$y, 'after' ); };
+    our @y_expect_suffix = ();
+  ANALYSE:
+    for (;;) {
+	while (my $e = shift @y_expect_suffix) {
+	    $next_y->();
+	    $y->{E} eq $e
+		or die "suffix mismatch, expected $e got $y->{E}\n";
+	}
+	last unless @xs or @ys;
+	$next_x->();
+	$next_y->();
+	next if $x->{E} eq $y->{E};
+	next if $x->{E} eq 'sprintf' and $y->{E} eq 'f_';
+	next if $x->{E} eq 'die'     and $y->{E} eq 'confess';
+	next if $x->{E} eq 'die'     and $y->{E} eq 'fail';
+	foreach my $with_fh (qw(0 1)) {
+	    next unless $x->{E} eq 'printf';
+	    next unless $y->{E} eq 'print';
+	    next unless @xs >= $with_fh;
+	    next unless @ys >  $with_fh;
+	    if ($with_fh) {
+		next unless $xs[0]{E} eq $ys[0]{E};
+		next unless
+		    $xs[0]{E} =~ m{^[A-Z]+$} or
+		    $xs[0]{T} eq 'ident' && $xs[0]{E} =~ m{^\$};
+	    }
+	    next unless $ys[$with_fh]{E} eq 'f_';
+	    # yay!
+	    $next_x->() if $with_fh;
+	    $next_y->() if $with_fh;
+	    $next_y->(); # f_
+	    next ANALYSE;
+	}
+	if ($y->{E} eq '+'
+	    and @ys >= 3
+	    and $ys[0]{E} eq '('
+	    and is_trans($ys[1])) {
+	    $next_y->(); # (
+	    $next_y->(); # __ f_ i_
+	    @y_expect_suffix = ')';
+	} elsif ($y->{E} eq '('
+	    and @ys > 2
+	    and is_trans($ys[0])
+	    and @analysed_y
+	    and (grep { $_ eq $analysed_y[-1] } (qw( => [ { ? : . ),
+						 '(', ',') )) {
+	    $next_y->(); # __ f_ i_
+	    @y_expect_suffix = ')';
+	}
+	my $string_changed;
+	my $ye = $y->{E};
+	if (is_trans($y)) {
+	    $next_y->();
+	    die "__ on non-string $y->{P}\n"     unless is_string($y);
+	    die "__ on was non-string $x->{P}\n" unless is_string($x);
+	    if ($y->{Q} ne "'") {
+		die "var subst in new string\n"
+		    if $y->{V} =~ m{(?<!\\) [\$\@]};
+	    }
+	    eval {
+		die "__ string changed\n"       unless $y->{V} eq $x->{V};
+		die "__ string quote changed\n" unless $y->{Q} eq $x->{Q};
+	    };
+	    $string_changed = $@;
+	}
+	if ($ye eq '__') {
+	    $_ = $y->{V};
+	    die "percent $& in __ ' string\n" if m{\%};
+	    die $string_changed if length $string_changed;
+	    next;
+	}
+	if ($ye eq 'i_') {
+	    die $string_changed if length $string_changed;
+	    next;
+	}
+	if ($ye eq 'f_') {
+	    my $fmt = $y->{V};
+	    die "no percent in f_ string\n" unless $fmt =~ m{\%};
+	    next unless $string_changed;
+	    die "f_ old string '-quoted\n" if $x->{Q} ne '"';
+	    my $xs = $x->{V};
+	    my $exactly = sub {
+		my ($lit, $what) = @_;
+		my $xl = substr($xs, 0, length($lit));
+		if ($xl ne $lit) {
+		    debug $ichunkstart, "not exactly x: ..".qp($xs);
+		    debug $ichunkstart, "not exactly y:   ".qp($lit);
+		    my $next = @ys ? $ys[0]{P} : '(end)';
+		    die "string contents mismatch near $what before $next\n";
+		}
+		$xs = substr($xs, length($lit));
+	    };
+	    for (;;) {
+		#print STDERR Dumper($fmt, $xs, \@xs, @ys);
+		if ($fmt !~ m{\%[^\%]}) {
+		    $exactly->($fmt, '(tail)');
+		    $fmt = '';
+		    die "text deleted from end of string: ".qp($xs)."\n"
+			if length $xs;
+		    last;
+		}
+		$exactly->($`, '(literal)');
+		$fmt = $';
+		if ($& eq '%%') { $exactly->('%', '%%'); next; }
+		elsif ($& ne '%s') { die "unhandled %-subst $&\n"; }
+		$next_y->();
+		die "expected comma, got $y->{P}\n" unless $y->{E} eq ',';
+		if (!length $fmt and
+		    !length $xs and
+		    @xs and
+		    $xs[0]{E} eq '.') {
+		    # X has   "<earlier>" .                <something>
+		    # Y has   "<earlier>%s" [other args] , <something>
+		    $next_x->(); # eat the '.'
+		    next;
+		}
+		if ($xs =~ m{^\@}) {
+		    $next_y->();
+		    die "\@... => not string" unless is_string($y);
+		    die "\@... => $y->{P}" if $y->{Q} ne '"';
+		    $exactly->($y->{V}, $y->{P});
+		    next;
+		}
+		my $bras = 0;
+		for (;;) {
+		    if (!$bras and !@ys) {
+			last;
+		    }
+		    $next_y->();
+		    if (!$bras and
+			(grep { $y->{E} eq $_ } qw( or xor and not ; :
+						    if unless while when )
+			 or $y->{E} eq ','
+			 or $y->{T} eq 'ket'
+			)) {
+			# lookahead shows close of containing scope
+			# or lower precedence operator
+			unshift @ys, $y;
+			pop @analysed_y;
+			last;
+		    }
+		    $xs =~ s{^\s+}{} if $bras;
+		    if (is_string($y) and $y->{Q} eq '"') {
+			$exactly->($y->{V}, $y->{P});
+			next;
+		    }
+		    $exactly->($y->{E}, $y->{P});
+		    if ($y->{T} eq 'bra' or $y->{E} eq '?') {
+			$bras++;
+		    } elsif ($y->{T} eq 'ket' or $y->{E} eq ':') {
+			die "too many kets at $y->{E}\n" unless $bras;
+			$bras--;
+		    }
+		}
+	    }
+	    next;
+	}
+	die "mismatch $x->{P} => $y->{P}\n";
+    }
+}
+
+sub analyse_chunk () {
+    for (;;) {
+	eval { analyse_chunk_core(); };
+	return unless length $@;
+	if ($@ =~ m{^missing end of here doc (\S+)\n}) {
+	    # fudge this
+	    # (this never happens now, but in the future we might
+	    # want this code again eg to try adding to the chunk)
+	    $before .= "\n$1\n";
+	    $after .= "\n$1\n";
+	    next;
+	} else {
+	    die $@;
+	}
+    }
+}
+
+our @report;
+our $last_filehead = -1;
+
+sub report_on_hunk () {
+    return unless @report;
+    if ($last_filehead != $ifilehead) {
+	foreach (my $i=$ifilehead; $i<$ifirsthunkhead; $i++) {
+	    print $d[$i];
+	}
+	$last_filehead = $ifilehead;
+    }
+    my $dummy_r = { S => (scalar @d)+1, E => (scalar @d)+1 };
+    my $r;
+    for (my $i=$ihunkhead; ; $i++) {
+	for (;;) {
+	    $r //= shift @report;
+	    $r //= $dummy_r;
+	    last if $i < $r->{E};
+	    confess unless $r->{Done} == 03;
+	    $r = undef;
+	}
+
+	last unless $i<$ihunkend;
+
+	foreach my $ds (@{ $debug[$i] }) {
+	    print "# $ds\n";
+	}
+
+	if ($i == $r->{S}) {
+	    print "!! $r->{M}";
+	    $r->{Done} |= 01;
+	}
+	if ($i >= $r->{S}) {
+	    print "!";
+	    $r->{Done} |= 02;
+	} else {
+	    print " ";
+	}
+	print $d[$i];
+    }
+    confess unless $r = $dummy_r;
+}
+
+for ($ifilehead = 0; l_ok $ifilehead; $ifilehead++) {
+    m{^diff} or next;
+    $ifirsthunkhead = $ifilehead;
+    while (l_ok $ifirsthunkhead and
+	   m{^diff|^index|^---|^\Q+++\E}) {
+	$ifirsthunkhead++
+    }
+    $ihunkhead = $ifirsthunkhead;
+    while (l_ok $ihunkhead) {
+	m{^\@\@} or confess "$ihunkhead $_ ?";
+	my $i = $ihunkhead + 1;
+	for (; ; $i++) {
+	    if (!l_ok $i or m{^ } or m{^\@\@}) {
+		if (defined $ichunkstart) {
+		    $ichunkend = $i;
+		    eval { analyse_chunk(); 1; };
+		    if (length $@) {
+			debug $ichunkstart, "done x: @analysed_x";
+			debug $ichunkstart, "done y: @analysed_y";
+			push @report, { M => $@,
+					S => $ichunkstart,
+					E => $ichunkend };
+		    }
+		    $ichunkstart = $ichunkend = $before = $after = undef;
+		}
+		l_ok $i or last;
+		m{^\@\@} and last;
+	    } elsif (m{^[-+]}) {
+		my $which = $& eq '-' ? \$before : \$after;
+		$ichunkstart //= $i;
+		$$which //= '';
+		$$which .= $';
+	    } else {
+		confess "$i $_ ?";
+	    }
+	}
+	$ihunkend = $i;
+	report_on_hunk();
+	$ichunkend = $i;
+	$ihunkhead = $i;
+    }
+}

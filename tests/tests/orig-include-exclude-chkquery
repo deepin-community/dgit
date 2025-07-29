@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-git-config dgit-distro.test-dummy.archive-query ftpmasterapi:
+# ^ that will crash if it gets unexpected file_in_archive queries
+
+# orig-include-exclude will set origs and usvsns
+update-files_in_archive () {
+	for o in $origs; do for usvsn in $usvsns; do \
+		of=${p}_${v%-*}.${o}.tar.gz
+		pat="%/${of//_/\\_}"
+		# curl url-decodes these things so we have to have literals
+		find $tmp/mirror -name $of | \
+			xargs -r sha256sum | \
+			perl -pe '
+				BEGIN { print "["; }
+				chomp;
+				s/^/{"sha256sum":"/;
+				s/  /","filename":"/;
+				s/$/"}$delim/;
+				$delim=",";
+				END { print "]\n"; }
+			' \
+			>$tmp/aq/"file_in_archive/$pat"
+	done; done
+}
+
+test_push_2_hook=update-files_in_archive
+
+. $troot/lib-orig-include-exclude
+
+t-ok

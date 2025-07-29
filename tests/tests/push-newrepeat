@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+cd $p
+git checkout quilt-tip
+cp $troot/pkg-srcs/${p}_1.0.orig.tar.gz ..
+
+t-dgit --quilt=smash build-source
+
+t-expect-fail E:'Push failed, while updating the remote git repository' \
+t-dgit -cdgit-distro.test-dummy.git-url=file:///dev/enoent/fail \
+       push-built --new
+
+t-dgit push-built --new --force-reusing-version
+
+t-ok

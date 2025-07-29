@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-prep-newpackage pari-extra 3-1
+
+cd $p
+t-refs-same-start
+t-ref-head
+
+t-expect-push-fail 'package appears to be new in this suite' \
+t-dgit push-built
+
+t-dgit build
+
+git checkout bogus
+
+set +e
+(set -e; DGIT_TEST_DEBUG=' ' t-dgit push-built --new)
+rc=$?
+set -e
+if [ $rc = 0 ]; then fail "push succeeded when tree mismatch"; fi
+
+git checkout master
+
+t-dgit push-built --new
+
+t-pushed-good master
+
+t-ok

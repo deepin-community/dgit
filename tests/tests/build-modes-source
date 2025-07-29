@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-build-modes
+
+bm-prep
+
+for act in					\
+	build-source				\
+; do
+	bm-guess-e-source-e-targets "$act"
+	cleanmodes="$cleanmodes_all"
+	real_act="$act"
+	bm-act-iterate
+done
+
+t-ok

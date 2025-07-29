@@ -1,0 +1,111 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-reprepro
+
+t-dependencies reprepro
+t-setup-import examplegit
+t-tstunt-parsechangelog
+
+
+# rewrite some things, so we test the rewriting code
+
+mkdir map
+cd map
+git init
+cd ..
+
+record-map () {
+	old=$(t-git-get-ref-exact "refs/original/$r")
+	new=$(t-git-get-ref-exact "$r")
+	if [ "$old" = "$new" ]; then return; fi
+	echo >>$tmp/map/map "$old $new"
+}
+
+filter () {
+	git filter-branch				\
+		--msg-filter 'sed s/Sid/Spong/'		\
+		--tag-name-filter cat			\
+		^archive/test-dummy/2.0			\
+		"$@"
+	for r in "$@"; do
+		record-map "$r"
+	done
+}
+
+cd $p
+filter				\
+  refs/heads/master		\
+  refs/remotes/dgit/dgit/sid
+
+t-ref-head
+
+cd ../git/$p.git
+filter				\
+  refs/dgit/sid
+
+cd $tmp/map
+git add map
+git commit -m 'by test suite'
+git push $tmp/git/$p.git master:refs/dgit-rewrite/map
+cd ..
+
+
+suitespecs=avon
+t-reprepro-cfg ds- downstream
+t-reprepro-setup ds-
+distro=''
+
+
+dscf=$tmp/mirror/pool/main/example_1.1.dsc
+t-reprepro-includedsc avon $dscf ds-
+t-reprepro-regen ds-
+
+
+mkdir $p.import
+cd $p.import
+git init
+t-dgit import-dsc $dscf x
+cd ..
+
+t-git-config dgit-suite.avon.distro downstream
+t-git-config dgit-distro.downstream.git-check false
+
+t-dgit clone example avon example.avon
+
+
+perl -i -pe 's/ test-dummy / unknown-distro / if m/^Dgit:/' $dscf
+cd $p.import
+
+t-expect-fail 'hinted url with protocol file which is unsafe' \
+t-dgit import-dsc $dscf xunk
+
+t-git-config dgit.dsc-url-proto-ok.file true
+t-dgit import-dsc $dscf xunk
+
+cd ..
+
+
+dscf=$tmp/mirror/pool/main/example_2.1.dsc
+t-reprepro-includedsc avon $dscf ds-
+t-reprepro-regen ds-
+
+
+cd $p.avon
+t-dgit fetch
+t-ref-same refs/remotes/dgit/dgit/avon
+
+cd ../$p.import
+git init
+t-dgit import-dsc $dscf +x
+t-ref-same refs/heads/x
+git show x | grep Spong
+
+t-expect-fail 'Your git tree does not have that object' \
+t-dgit --no-chase-dsc-distro import-dsc $dscf +y
+
+cd ../$p
+t-dgit --no-chase-dsc-distro import-dsc $dscf +y
+git show y | grep Sid
+
+t-ok

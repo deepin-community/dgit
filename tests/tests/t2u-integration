@@ -1,0 +1,197 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies T2U jq
+t-restrict x-tag2upload-service-manager
+
+t-debpolicy
+
+t-t2u-settings
+t-t2u-native-prep
+
+# Run this test case with real wall clock time
+unset GIT_COMMITTER_DATE
+unset GIT_AUTHOR_DATE
+
+#---------- start the tag2upload-service-manager daemon ----------
+
+mkdir ../t2usm
+cd ../t2usm
+
+mkdir tmp
+
+cat >t2usm.toml <<END
+
+    [rocket]
+    log_level = "debug"
+    cli_colors = false
+    port = 0
+
+    [t2u]
+    distro = "test-dummy"
+
+    [log]
+    level = "trace"
+
+    [vhosts]
+    ui = ["*"]
+    webhook = ["*"]
+
+    [files]
+    db = "t2usm.db"
+    scratch_dir = "tmp"
+    o2m_socket = "o2m.s"
+    port_report_file = "port"
+    archive_dir = "t2usm-archive"
+
+    [timeouts]
+    socket_stat_interval = "30 s"
+
+    [[t2u.forges]]
+    kind = "gitlab"
+    host = "gitlab.test-dummy.example.org"
+    allow = ["*"]
+
+    [testing]
+    fake_https_dir = "$t2u_fake_https_dir"
+
+END
+
+# We have two independent ways of trying to ensure
+# that the t2usm process doesn't outlive this script.
+#   1. end_kill_pids
+#   2. It will state `o2m_socket` every `socket_stat_interval`.
+#      Since that's a relative path, if this directory is removed,
+#      it will get ENOENT and quit - even if a new directory
+#      with the same name is created.
+
+mkdir t2usm-archive
+
+t-mkfifo port
+exec 3<>port
+# we pass O_RDWR fd to t2usm; that way we get EOF if it crashes
+
+$DGIT_TEST_T2USM_PROGRAM -c t2usm.toml run-manager &
+t2usm_pid=$!
+end_kill_pids+=" $! "
+
+# we don't keep the O_RDWR fd, only an O_RDONLY one
+exec 4<port
+exec 3<&-
+read <&4 port
+
+cd ..
+
+t-mkfifo check-for-banner
+exec 3<>check-for-banner
+nc.openbsd -U t2usm/o2m.s >check-for-banner &
+exec 3<&-
+read banner <check-for-banner
+
+test "$banner" = "t2u-manager-ready"
+
+curl http://127.0.0.1:$port/ >page-front-start.html
+
+#---------- start the tag2upload oracle daemon ----------
+
+t-t2u-exec-t2u-oracled						\
+	--ssh="$troot/ssh"					\
+	--manager=t2u-service-manager-host    			\
+	--no-restart-workers					\
+	--force-production					\
+	--manager-socket=$tmp/t2usm/o2m.s &
+# We don't care about cleanup of this forked oracled:
+# If the manager dies, so will the oracled.
+
+poll1-for-worker-in-front-page () {
+    curl http://127.0.0.1:$port/ >page-front-worker.html
+    if grep -P '\bt2u-b,' page-front-worker.html; then t-poll-done; fi
+}
+t-poll-loop 1000 poll1-for-worker-in-front-page
+# ^ when we abandon gnupg, set this timeout to 5
+
+#---------- make an upload tag and push it to fake salsa ----------
+
+cd $p
+
+t-t2u-setup-repo
+
+t-git-debpush "$@"
+
+#---------- simulate webhook ----------
+
+tagname=test-dummy/$v
+dep14tagref="refs/tags/$tagname"
+tag_objid=$(t-git-get-ref-exact $dep14tagref)
+hook_message=$(git cat-file tag $tagname | sed '1,/^$/d' | jq -sR)
+
+# Prepare the "api call responses" for tag fetches:
+
+fake_tag_dir="$t2u_fake_https_dir/$t2u_fake_salsa_host/api/v4/projects/$t2u_fake_salsa_project_id/repository/tags"
+mkdir -p -- "$fake_tag_dir"
+
+for tag in $(git tag -l); do
+    fake_tag_file="$fake_tag_dir/${tag//\//%2F}"
+    tag_date=$(TZ=UTC git for-each-ref "$dep14tagref" \
+        --format='%(creatordate:format-local:%Y-%m-%dT%H:%M:%SZ)')
+    tag_date="${tag_date/+/.000+}"
+    cat <<END >"$fake_tag_file"
+{
+  "target": "$tag_objid",
+  "created_at": "$tag_date"
+}
+END
+done
+
+cd ..
+
+# Make the web hook request:
+
+curl http://127.0.0.1:"$port"/hook/gitlab -d@- <<END | tee hook-response
+{
+  "object_kind": "tag_push",
+  "after": "$tag_objid",
+  "ref": "refs/tags/test-dummy/$v",
+  "project": {
+    "git_http_url": "file://$t2u_fake_salsa_repo",
+    "id": $t2u_fake_salsa_project_id
+  },
+  "message": $hook_message
+}
+END
+
+egrep 'job received, jid=' hook-response
+
+pol1-for-pattern-in-queued-page () {
+    local slug=$1
+    local pattern=$2
+    curl http://127.0.0.1:$port/recent >page-recent-$slug.html
+    if grep -P -e "$pattern" page-recent-$slug.html; then t-poll-done; fi
+}
+
+t-poll-loop 1000 pol1-for-pattern-in-queued-page processing example
+# ^ when we abandon gnupg, set this timeout to 8
+
+#---------- await completion and check it worked ----------
+
+t-poll-loop 1000 pol1-for-pattern-in-queued-page done Uploaded
+# ^ when we abandon gnupg, set this timeout to 80
+
+cd $p
+
+t-t2u-succeeded
+
+# Fetch the dgit view - in particular, the archive/ tag, from dgit-repos
+t-dgit fetch
+t-pushed-good master
+
+# Check that git tag in dgit-repos is the original one from git-debpush
+t-refs-same-start
+t-ref-same-val git-debpush $tag_objid
+cd ../git/$p.git
+t-ref-same-exact $dep14tagref
+
+#---------- success ----------
+
+t-ok

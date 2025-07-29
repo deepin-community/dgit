@@ -1,0 +1,41 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-build-modes
+
+t-dependencies git-buildpackage
+t-buildproductsdir-config
+
+quirk-clean-fixup () {
+	case $cleanmode in
+	dpkg-source*)
+		# git-buildpackage runs the clean target twice somehow
+		perl -i.unfixed -ne '
+			print unless
+				$_ eq $last &&
+				$_ eq "EXAMPLE RULES TARGET clean\n";
+			$last = $_;
+		' $bmgot
+		;;
+	esac
+}
+bm_quirk_before_diff=quirk-clean-fixup
+
+cleanmodes_dpkgsource_extra=,no-check
+bm-prep
+
+for act in					\
+	'gbp-build -S'				\
+	'gbp-build -b'				\
+	'gbp-build -B'				\
+	'gbp-build -A'				\
+	'gbp-build -F'				\
+	'gbp-build -g'				\
+	'gbp-build -G'				\
+; do
+	bm-guess-e-source-e-targets "$act"
+	real_act="$act --git-ignore-branch"
+	bm-act-iterate
+done
+
+t-ok

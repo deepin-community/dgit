@@ -1,0 +1,2 @@
+# These are self-installing crontabs.
+unusual-interpreter /usr/bin/crontab [usr/share/dgit-infrastructure/debian/tag2upload-*-crontab]

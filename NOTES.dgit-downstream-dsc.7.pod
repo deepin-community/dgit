@@ -1,0 +1,69 @@
+NOTE This text was once going to be part of dgit-downstream-dsc(7) or
+    dgit-downstream-dsc(5).  It probably wants to be reworked, and
+    maybe put there, to fix
+  #810829   want instructions for reprepro-style small repo
+
+This guide is to help you if:
+
+ * you are a distro which is a downstream of Debian (directly
+   or indirectly)
+
+ * you want to publish source packages as well as git branches
+
+You will also need:
+
+ * A git server.  [...]
+
+   There are various options for the git server, depending on how much
+   you trust your uploaders.  There are four levels of trust and
+   sophistication:
+
+ shell account
+
+   For use when uploaders have shell accounts on the server and you
+   trust them completely.  You then do not need to install any special
+   software on the server.
+
+ dgit-repos-server
+
+   Your uploaders do not (necessarily) have shell accounts.
+   You will need to collect their ssh keys and also their PGP
+   signing keys.  You can restrict uploads on a per-package
+   per-key basis by using the Debian `dm.txt' format.
+
+ dgit-repos-server + policy hook
+
+   You want to impose additional policy.  For example, Debian's
+   copyright review process means that uploads of new packages are
+   initially not public: dgit-repos-policy-debian is an example.
+
+ custom implementation
+
+   From the dgit client's point of view, the dgit git server is a git
+   server accessed by ssh (when pushing) or https (when fetching).
+   You may use anything that has the right properties for your needs.
+   dgit primarily authenticates pushes by signing tags, so your
+   software will probably need to check and verify that tag
+   appropriately before accepting a push.  dgit-repos-server knows how
+   to do this properly.
+
+Set up your git server, as follows:
+
+ shell account
+
+   Make a suitable (sub)directory.  You should create a _template.git
+   bare repo, with appropriate permissions.  When new packages are
+   uploaded, this _template.git will be copied.  You will probably
+   want to set core.sharedRepository in the template, and/or arrange
+   for personal groups and 002 umask.
+
+ dgit-repos-server
+
+   Additionally, install dgit-infrastructure.  Create a service
+   account `dgit' on the server.  For each authorised uploader, put
+   their ssh key in dgit's authorized_keys file, with a
+   restricted_command specifying the dgit-repos-server invocation.
+   Put the keyring where dgit-repos-server can find it.
+   Consult the comment at the top of dgit-repos-server for the
+   restricted command rune.
+

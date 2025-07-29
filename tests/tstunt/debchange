@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+spec=$(date --rfc-3339=seconds -d @"${GIT_AUTHOR_DATE% *}")
+spec=${spec%+*}
+
+# The nonsense with TZ is to work around #907264
+tz_set=${TZ+set}
+if ! test "$tz_set"; then tz_undef=-u; fi
+
+set -x
+
+exec \
+env TZ=UTC \
+faketime -f "$spec" \
+env $tz_undef TZ${tz_set:+=}"$TZ" \
+"${DGIT_TEST_REAL_DEBCHANGE-debchange}" "$@"

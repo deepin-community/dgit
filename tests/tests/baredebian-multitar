@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-baredebian
+
+t-dependencies quilt
+
+t-setup-import baredebian
+t-tstunt-parsechangelog
+
+cd $p
+baredebian-test-vars
+baredebian-tarball-mode
+
+rm -f ../example_1.0.orig.tar.*
+cp $troot/pkg-srcs/${p}_${uv}.orig*.tar.* ..
+xorigcomps=docs
+
+git tag -d $uvtag
+
+baredebian-test-minimum
+baredebian-test-core
+
+combine=$(
+	git log --pretty=format:%H \
+	--grep "Combine orig tarballs for example $uv" split.p
+)
+
+parentnum=0
+for comp in '' $xorigcomps; do
+	parentnum=$(( $parentnum + 1 ))
+	fn=${origbase}${comp:+-}${comp}.tar.gz
+
+	git checkout --orphan imp$parentnum
+	git rm -rf .
+	tar --strip-components=1 -axf ../$fn
+	git add -Af .
+
+	git commit -m P$parentnum
+	git diff --stat --exit-code $combine^$parentnum
+
+	count=$(git log $combine^$parentnum | grep -Fc $fn)
+	[ $count = 2 ]
+done
+
+t-ok

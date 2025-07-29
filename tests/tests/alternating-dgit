@@ -1,0 +1,60 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import examplegit
+t-setup-import http-git-check
+
+: '---------- test making dgit-based NMU ----------'
+
+cd $p
+
+git checkout -b nondgit
+t-commit 'non-dgit upload'
+t-non-dgit-upload
+
+cd ..
+
+t-dgit clone $p ./$p.2
+cd $p.2
+
+t-commit 'now a dgit upload again'
+
+t-dgit -wgf push-source
+t-refs-same-start
+t-pushed-good dgit/sid
+
+# combine the histories to make something coherent for the next bit
+
+cd ../$p
+git fetch ../$p.2 dgit/sid
+git checkout FETCH_HEAD .
+git commit -m 'Import changes made by dgit user'
+
+: '---------- test --collab-non-dgit ----------'
+
+t-commit '2nd non-dgit upload, by putative non-dgit-using maintainer'
+t-non-dgit-upload
+
+t-commit 'dgit collab-non-dgit upload'
+
+t-expect-fail E:'HEAD is not a descendant of the archive' \
+t-dgit -wgf push-source
+
+t-refs-same-start
+t-ref-head
+t-dgit -wgf push-source --collab-non-dgit
+t-ref-head # pseudomerge on dgit view only, HEAD wasn't changed
+
+t-refs-same-start
+suite=sid
+t-pushed-good-core
+
+# dgit/dgit/sid is ahead of HEAD
+t-has-parent-or-is dgit/dgit/sid HEAD
+test "$(git log --pretty=oneline HEAD..dgit/dgit/sid)"
+
+# but trees are the same
+git diff --exit-code --stat HEAD dgit/dgit/sid
+
+t-ok

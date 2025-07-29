@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import http-git-check
+
+t-archive pari-extra 3-1
+t-git-none
+
+t-dgit clone $p
+
+cd $p
+t-cloned-fetched-good
+
+v=3-2~dummy1
+t-apply-diff 3-1 $v
+debcommit -a
+
+t-refs-same-start
+t-ref-head
+
+t-dgit push-source
+
+t-pushed-good dgit/sid
+
+t-ok

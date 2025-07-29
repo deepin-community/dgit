@@ -1,0 +1,38 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+cd $p
+revision=1
+
+dgit-with-policy () {
+	local policy=$1; shift
+	t-dgit -cdgit-distro.test-dummy.source-only-uploads=$policy "$@"
+}
+
+t-expect-fail E:'source-only.*entirely NEW' \
+dgit-with-policy not-wholly-new push-source --new
+
+t-expect-fail E:'source-only.*requires \.debs' \
+dgit-with-policy never push-source --new
+
+dgit-with-policy always push-source --new
+
+t-archive-process-incoming sid
+
+t-commit 'Now with binaries'
+
+t-dgit -wgf build
+
+t-expect-fail E:'uploading binaries.*source only' \
+dgit-with-policy always push-built --new
+
+t-commit 'Source-only not NEW'
+
+dgit-with-policy not-wholly-new push-source --new
+
+t-ok

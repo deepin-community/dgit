@@ -1,0 +1,56 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+
+t-dependencies NO-DGIT GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp-noarchive
+
+: 'set up so t-git-debrebase runs gdr via git'
+
+case "$DGIT_GITDEBREBASE_TEST" in
+''|git-debrebase)	;;
+*)
+	t-tstunt
+	st=$tmp/tstunt/git-debrebase
+	export DGIT_GITDEBREBASE_TEST_REAL="$DGIT_GITDEBREBASE_TEST"
+	cat <<'END' >$st
+#!/bin/sh
+set -x
+exec "$DGIT_GITDEBREBASE_TEST_REAL" "$@"
+END
+	chmod +x $st
+	;;
+esac
+
+DGIT_GITDEBREBASE_TEST='git debrebase'
+
+: 'do a simple test'
+
+cd $p
+
+t-some-changes
+
+t-git-debrebase
+t-gdr-good laundered
+
+t-git-debrebase stitch --prose=wombat
+t-gdr-good stitched
+
+: ----- test scrap -----
+
+t-refs-same-start
+t-ref-head
+
+t-git-debrebase
+t-gdr-good laundered
+
+t-some-changes
+t-git-debrebase scrap
+t-gdr-good stitched
+
+t-ref-head
+
+t-ok

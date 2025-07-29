@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+umask 002
+
+srvdir=/srv/dgit.debian.org
+dispatchdir=$srvdir/dispatch-dir
+dgitlive=$srvdir/dgit-live
+
+PERLLIB="$dgitlive${PERLLIB+:}${PERLLIB}" \
+exec $dgitlive/infra/dgit-ssh-dispatch $dispatchdir

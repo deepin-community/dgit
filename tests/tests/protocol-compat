@@ -1,0 +1,83 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-reprepro
+
+t-setup-import examplegit
+t-tstunt-parsechangelog
+
+t-git-config dgit.default.distro foreign
+t-git-config dgit-distro.foreign.cmd-git false
+
+prep () {
+	dscf=$tmp/mirror/pool/main/example_$v.dsc
+}
+
+check () {
+	pd=$p.$suite
+	t-refs-same-start
+
+	t-archive-none $p
+	t-archive-query $suite
+
+	t-dgit clone $p $suite $pd
+	cd $pd
+	t-ref-head
+
+	$1
+
+	local distro=''
+	t-dgit import-dsc $dscf +imported
+	t-ref-same refs/heads/imported
+	cd ..
+}
+
+reset () {
+	cd ..
+	rm -rf $pd
+	mkdir $pd
+	cd $pd
+	git init
+}
+
+: ---------- newer ----------
+
+suite=sid
+v=2.1
+prep
+
+perl -i~ -pe 's/^Dgit: .*/$& EXTRA DATA\n TO BE IGNORED/' $dscf
+
+check reset
+
+: ---------- newline ----------
+
+suite=testing
+v=2.0
+prep
+
+perl -i~ -pe 's/^(Dgit: \w+ \S+ \S+) (.*)/$1\n $2 EXTRA/' $dscf
+
+check reset
+
+: ---------- older ----------
+
+suite=stable
+v=1.2
+prep
+
+perl -i -pe 's/^(Dgit: \w+).*/$1/' $dscf
+
+check
+
+: ---------- expect fail ----------
+
+pd=$p.fail
+
+t-git-config dgit.default.old-dsc-distro downstream
+
+t-expect-fail 'no configured url and .dsc provides no hint' \
+t-dgit clone $p $suite $pd
+
+
+t-ok

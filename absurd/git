@@ -1,0 +1,147 @@
+#!/bin/sh
+set -e
+
+case "$DGIT_ABSURD_DEBUG" in
+''|0)	exec 3>/dev/null ;;
+1)	exec 3>>../../gbp-pq-output ;;
+*)	exec 3>>../../gbp-pq-output 2>&3 ;;
+esac
+
+exec 4>>../../absurd-apply-warnings
+
+log () {
+	echo >&3 "DGIT ABSURD GIT APPLY (DEBUG)  $*"
+	echo >&2 "DGIT ABSURD GIT APPLY (STDERR) $*"
+}
+
+fail () {
+	log "FAILED: $*"
+	exit 127
+}
+
+self=${0%/*}
+npath=${PATH#$self:}
+if test "x$PATH" = "x$npath"; then
+	fail "PATH FILTER FAIL ($0 $self $PATH)"
+fi
+
+filter_path () {
+	PATH=$npath
+}
+
+squash_author () {
+	author_vars='NAME EMAIL DATE'
+	for var in in $author_vars; do
+		eval "GIT_AUTHOR_$var=\$GIT_COMMITTER_$var"
+	done
+}
+
+try_commit () { git commit-tree "$try_commit_obj" </dev/null >/dev/null; }
+
+maybe_squash_author () {
+	if   (set -e; filter_path;                try_commit); then return; fi
+	if ! (set -e; filter_path; squash_author; try_commit); then return; fi
+	read last <../../absurd-apply-applied
+	echo >&4 \
+ "dgit: warning: suppressed corrupted metadata! ($last)"
+	squash_author
+}
+
+bypass=true
+for arg in "$@"; do
+	case "$arg" in
+	apply)	bypass=false; break	;;
+	commit-tree)
+		# Work around #950446 in gbp
+		echo >&3 "DGIT ABSURD GIT APPLY - COMMIT-TREE: $*"
+		try_commit_obj="$2"
+		maybe_squash_author
+		bypass=true; break
+		;;
+	-*)				;;
+	*)	bypass=true; break	;;
+	esac
+done
+
+if $bypass; then
+	filter_path
+	echo >&3 "DGIT ABSURD GIT APPLY - BYPASS: $*"
+	exec git "$@"
+fi
+
+log "NO BYPASS: $*"
+
+case "$DGIT_ABSURD_DEBUG" in
+''|0|1) ;;
+*)	set -x ;;
+esac
+
+#exec >/dev/tty 2>&1
+
+index=0
+noo=0
+
+for arg in "$@"; do
+	case "$noo.$arg" in
+	1.--index)
+		index=1
+		continue
+		;;
+	1.--whitespace=fix)
+		continue
+		;;
+	?.-*)
+		fail "UNKNOWN OPTION $arg ($*)"
+		;;
+	0.apply)
+		;;
+	1.*)	patch="$arg"
+		;;
+	*)
+		fail "BAD USAGE $arg ($noo $*)"
+	esac
+	noo=$(( $noo + 1 ))
+done
+
+if [ $noo != 2 ]; then
+	fail "NO PATCH ($*)"
+fi
+
+pwd=`pwd`
+patch=${patch#$pwd/debian/patches/}
+rm -f debian/patches/series
+
+# Work around #848611.
+# We need a stunt filename which the source package must not
+# contain.  A trick is to use the commit hash of HEAD, whose
+# hash value cannot appear in any file in its own tree.
+omgwtf="dgit-omg-wtf-$(git rev-parse HEAD)"
+cat <<END >debian/patches/$omgwtf
+---
+--- a/$omgwtf	2016-10-31 23:28:47.314155919 +0000
++++ b/$omgwtf	2016-12-18 22:40:01.870058270 +0000
+@@ -0,0 +1 @@
++:
+END
+printf "%s\n" "$omgwtf" >debian/patches/series
+printf "%s\n" "$patch" >>debian/patches/series
+
+# Just in case some joker tries to patch .git/something
+mv .git ../.git
+set +e
+dpkg-source --before-build .
+rc=$?
+set -e
+rm -rf .git
+mv ../.git .
+test $rc = 0
+
+rm -f $omgwtf debian/patches/$omgwtf
+
+rm -rf .pc
+git checkout debian/patches/series
+git add -Af .
+
+log "APPLIED $patch"
+printf >../../absurd-apply-applied '%s\n' "$patch"
+#printf 'APPLIED '; date --iso-8601=ns

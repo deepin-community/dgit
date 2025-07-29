@@ -1,0 +1,11 @@
+#!/usr/bin/crontab -utag2upload-builder
+
+# After changing this file, to make those changes effective on
+# tag2upload-builder-01.debian.org, upgrade dgit-infrastructure.deb
+# there, and then execute
+#   /usr/share/dgit-infrastructure/debian/tag2upload-builder-crontab
+# as the tag2upload-builder UID.
+
+MAILTO=dgit-owner@debian.org
+
+0 3 * * 4 chronic /usr/share/dgit-infrastructure/debian/tag2upload-builder-rebuild

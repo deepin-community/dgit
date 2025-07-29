@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+cd $p
+
+t-refs-same-start
+t-ref-head
+
+t-expect-fail "dsc already contains field Standards-Version" \
+t-dgit push-source --new --dsc-control-add=Standards-Version=who-cares
+
+t-expect-fail "changes already contains field Urgency" \
+t-dgit push-source --new --ch-control-add=Urgency=apocalyptic
+
+t-dgit push-source --new \
+       --dsc-control-add=foo-bar=baz --ch-control-add=bar-baz=quux
+
+t-pushed-good master
+t-grep-mpat E:'^Foo-Bar: baz$' ../${p}_${v}.dsc
+t-grep-mpat E:'^Bar-Baz: quux$' ../${p}_${v}_source.changes
+
+t-ok

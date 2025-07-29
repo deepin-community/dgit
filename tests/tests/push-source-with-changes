@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+cd $p
+
+t-refs-same-start
+t-ref-head
+
+# (1) try pushing a changes file containing binaries
+
+t-dgit build -F
+
+t-expect-push-fail 'user-specified changes file is not source-only' \
+t-dgit -C ../${p}_1.0_multi.changes push-source --new
+
+# (2) try pushing a source-only changes file
+
+t-expect-fail F:'tree contains uncommitted files' \
+t-dgit build-source
+
+cp debian/rules{,~}
+git clean -df
+ls debian/rules~
+
+t-expect-fail F:'tree contains uncommitted files' \
+t-dgit -wdda build-source
+
+t-dgit build-source
+sed -i 's/Architecture: source/Architecture: all/' ../${p}_1.0_source.changes
+
+t-expect-push-fail "purportedly source-only changes has Architecture: all" \
+t-dgit -C ../${p}_1.0_source.changes push-source --new
+
+t-dgit build-source
+
+t-dgit -C ../${p}_1.0_source.changes push-source --new
+
+t-pushed-good master
+t-push-was-source-only
+
+t-ok

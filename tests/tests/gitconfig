@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+cd $p
+
+t-dgit clean | tee ../t.output
+grep 'EXAMPLE RULES TARGET clean' ../t.output
+
+t-git-config dgit.default.clean-mode git
+
+t-dgit clean | tee ../t.output
+
+set +e
+grep 'EXAMPLE RULES TARGET clean' ../t.output
+rc=$?
+set -e
+test $rc = 1
+
+git config dgit.default.clean-mode dpkg-source-d
+
+t-dgit clean | tee ../t.output
+grep 'EXAMPLE RULES TARGET clean' ../t.output
+
+t-git-config dgit.default.opts-dpkg-buildpackage --dgit-fail-global
+git config --add dgit.default.opts-dpkg-buildpackage --dgit-fail-foo
+git config --add dgit.default.opts-dpkg-buildpackage --dgit-fail-bar
+
+t-expect-fail '--dgit-fail-global --dgit-fail-foo --dgit-fail-bar' \
+t-dgit clean
+
+t-dgit -cdgit.default.clean-mode=none clean
+
+# Test that we pass -c options in a way that git accepts.
+t-dgit -cdgit.default.clean-mode=git clean
+
+# Test that we didn't just omit them.
+t-expect-fail \
+'dgit: failed command: x-crash-args -c dgit.default.clean-mode=git clean -xdf' \
+t-dgit -cdgit.default.clean-mode=git --git=x-crash-args clean
+
+t-ok

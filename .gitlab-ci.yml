@@ -1,0 +1,84 @@
+# We're following this recipe
+#   Advanced Use
+#   https://salsa.debian.org/salsa-ci-team/pipeline#advanced-use
+
+include:
+  - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/recipes/debian.yml
+
+
+variables:
+# See:
+#   https://salsa.debian.org/salsa-ci-team/pipeline#skipping-a-job
+#   Skipping a job
+  # Very slow and resource-intensive
+  SALSA_CI_DISABLE_AUTOPKGTEST: 1
+  # We build no arch-specific packages; thse are just wasted faff
+  SALSA_CI_DISABLE_BUILD_PACKAGE_ANY: 1
+  SALSA_CI_DISABLE_CROSSBUILD_ARM64: 1
+  # Doesn't work with unfinalised changelogs
+  SALSA_CI_DISABLE_REPROTEST: 1
+  SALSA_CI_LINTIAN_SUPPRESS_TAGS: changelog-empty-entry
+  # t2usm project
+  T2USM_EXECUTABLE_URL: https://salsa.debian.org/dgit-team/tag2upload-service-manager/-/jobs/artifacts/main/raw/artifacts/tag2upload-service-manager?job=build
+
+.dgit-test-suite:
+  stage: test
+  image: debian:testing
+  dependencies:
+    - build
+  after_script:
+    - tests/maybe-tail-log-of-one-failing-test
+  artifacts:
+    name: logs
+    when: always
+    expire_in: 1 week
+    paths:
+      - tests/tmp/*
+
+dgit-test-suite:
+  extends: .dgit-test-suite
+  script:
+    - apt-get -y update
+    - tests/gitlab-ci-run-all
+
+dgit-test-suite-trixie:
+  extends: dgit-test-suite
+  image: debian:trixie
+  variables:
+    DGIT_TEST_CURRENT_SUITE: trixie
+
+dgit-test-suite-bookworm:
+  extends: dgit-test-suite
+  image: debian:bookworm
+  variables:
+    DGIT_TEST_CURRENT_SUITE: bookworm
+
+dgit-test-suite-bullseye:
+  extends: dgit-test-suite
+  image: debian:bullseye
+  variables:
+    DGIT_TEST_CURRENT_SUITE: bullseye
+
+dgit-test-suite-buster:
+  extends: dgit-test-suite
+  image: debian:buster
+  variables:
+    DGIT_TEST_CURRENT_SUITE: buster
+
+t2u-integration:
+  extends: .dgit-test-suite
+  stage: test
+  script:
+    - apt-get -y update
+    - apt-get -y install curl
+    - curl -L "$T2USM_EXECUTABLE_URL" >tag2upload-service-manager
+    - chmod +x tag2upload-service-manager
+    - export DGIT_TEST_T2USM_PROGRAM=$(pwd)/tag2upload-service-manager
+    - export TESTSCRIPTS=$(tests/list-t2u-integration-tests)
+    - tests/gitlab-ci-run-all
+
+t2u-integration-bookworm:
+  extends: t2u-integration
+  image: debian:bookworm
+  # Don't set DGIT_TEST_CURRENT_SUITE just in case that might suppress the
+  # very test case(s) we care about.

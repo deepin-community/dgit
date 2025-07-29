@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+
+srcdir=$1; shift
+destdir=$1; shift
+
+mkdir -p "$srcdir"
+
+docs=( $( ( cd "$srcdir" && find man -type f ) | sed 's#\.pod$##' ) )
+
+echo ${docs[*]}
+
+x () {
+	echo "+ $*";
+	"$@"
+}
+
+if [ "${#docs}" = 0 ]; then exit 0; fi
+
+x ${MAKE-make} -s -C "$srcdir" -f ../../Makefile ${docs[@]}
+
+mandest=$destdir/usr/share
+
+for f in "${docs[@]}"; do
+	mkdir -p "$mandest/${f%/*}"
+	x cp "$srcdir/$f" "$mandest/$f"
+done

@@ -1,0 +1,17 @@
+#!/bin/bash
+#
+# usage:
+#   cd .../dgit.git
+#   tests/using-intree tests/test/some-test
+# or
+#   cd .../dgit.git
+#   tests/using-intree tests/run-all
+#
+# effects:
+#   sets DGIT_TEST_INTREE which causes tests/lib to have test scripts
+#   using programs etc. from the working tree
+
+set -e
+pwd=`pwd`
+export DGIT_TEST_INTREE="$pwd"
+exec "$@"

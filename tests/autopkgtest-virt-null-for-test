@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Work around #868576 and #1092771 for bookworm.
+# The bugs are fixed for trixie, and we already don't run the relevant
+# t2u tests on bullseye & buster due to needing newer python3-pygit2.
+
+set -ex
+
+export TMPDIR="$DGIT_TEST_TMP/autopkgtest-tmp"
+test -d "$TMPDIR" || mkdir "$TMPDIR"
+
+if ! dpkg --compare-versions \
+     "$(dpkg-query -f '${Version}' -W autopkgtest)" '<<' 5.47~; then
+    exec autopkgtest-virt-null --retain-tmp "$@"
+    x
+fi
+
+bodge="$TMPDIR/autopkgtest-virt-null-bodged"
+troot="$DGIT_TEST_TROOT"
+
+if ! test -e "$bodge"; then
+    orig="$(type -p autopkgtest-virt-null)" 
+    # This patching is morally equivalent to maintaining a local fork of
+    # autopkgtest-virt-null here in the dgit test suite,
+    # with the unusual property that we insist on being able to update
+    # automatically, and fail the test if the patch doesn't apply.
+    #
+    # Other options considered but rejected:
+    #
+    # clone-and-hack autopkgtest-virt-null here and expect that the
+    # VirtSubProc API is stable enough: also unprincipled, and ISTM more
+    # likely to appear to work, but malfunction.
+    #
+    # Put a stunt version of `rm` on the PATH.  This would work until
+    # VirtSubProc uses rmtree, and would then silently stop working.
+    #
+    # Even if #1092771 is addressed, we still need to probe for its
+    # availability, and fall back to this patching, until all Debian
+    # releases supported by dgit.dgit#main have the new autopkgtest.
+    cp -- "$orig" "$bodge"
+    patch $bodge <"$troot/autopkgtest-virt-null.bodge.patch" >&2
+fi
+
+# work around #868576 (which is fixed only in autopkgtest 5.44, in trixie!)
+perl -we '
+    my $child = open CHILD, "|-", @ARGV;
+    $child // die $!;
+    open STDOUT, ">&2" or die $!;
+    sub quit () {
+	waitpid $child, 0;
+	die "failed @ARGV $?" if $? && $? != 15;
+        exit 0;
+    }
+    $SIG{CHLD} = \&quit;
+    while (<STDIN>) {
+        print CHILD or die $!;
+	flush CHILD or die $!;
+    }
+    $SIG{CHLD} = "DEFAULT";
+    kill 15, $child;
+    quit();
+' \
+"$bodge" ${DGIT_TEST_NDEBUG- -d} "$@"

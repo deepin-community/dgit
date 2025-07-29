@@ -1,0 +1,81 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive ruby-rails-3.2 3.2.6-1
+t-git-none
+
+cp $troot/pkg-srcs/${p}_3.2.6.orig.tar.gz .
+t-worktree test
+cd $p
+
+t-dgit --quilt=try-linear -wgf quilt-fixup
+
+build () {
+	t-dgit -wg --dpkg-buildpackage:-d build
+}
+
+expect-fail-distro-series () {
+	local why=$1; shift
+	t-expect-fail \
+	E:"Found active distro-specific series file.*(.*$why.*)" \
+	"$@"
+}
+
+mkdir -p debian/patches
+
+cat >debian/patches/boo <<'END'
+Description: add boo
+Author: Ian Jackson <ijackson@chiark.greenend.org.uk>
+
+---
+
+--- a/boo
++++ b/boo
+@@ -0,0 +1 @@
++content
+END
+
+echo boo >debian/patches/test-dummy.series
+
+git add debian/patches/boo
+git add debian/patches/test-dummy.series
+t-commit 'Add boo (on test-dummy)' 3.2.6-2
+
+expect-fail-distro-series 'distro being accessed' \
+build
+
+defaultvendor=$(perl -we '
+	use Dpkg::Vendor;
+	print lc Dpkg::Vendor::get_current_vendor
+')
+git mv debian/patches/test-dummy.series \
+       debian/patches/$defaultvendor.series
+t-commit 'Move boo (to default vendor)' 3.2.6-3
+
+expect-fail-distro-series 'current vendor' \
+build
+
+git mv debian/patches/$defaultvendor.series \
+       debian/patches/test-dummy-aside.series
+t-commit 'Move boo (to test-dummy-aside)' 3.2.6-4
+
+build
+
+DEB_VENDOR=test-dummy-aside \
+expect-fail-distro-series DEB_VENDOR \
+t-dgit push-built
+
+t-dgit push-built
+
+cd ..
+perl -i~ -pe 's/^Dgit:.*\n//' incoming/${p}_${v}.dsc
+t-archive-process-incoming sid
+
+rm -rf $p
+
+DEB_VENDOR=test-dummy-aside \
+expect-fail-distro-series DEB_VENDOR \
+t-dgit clone $p
+
+t-ok

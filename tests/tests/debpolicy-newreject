@@ -1,0 +1,144 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-debpolicy
+t-prep-newpackage example 1.0
+
+cd $p
+revision=1
+git tag start
+t-dgit setup-mergechangelogs
+
+git config dgit.default.push-subcmd built
+
+echo FORBIDDEN >debian/some-file
+git add debian/some-file
+t-commit 'Commit a forbidden thing'
+
+bad=`git rev-parse HEAD:debian/some-file`
+t-policy-admin taint --global "$bad" "forbidden for testing"
+t-policy-admin taint --global "$bad" "forbidden for testing - again"
+
+t_expect_push_fail_hook+='
+t-git-objects-not-present "" $bad
+'
+
+t-dgit build
+t-expect-push-fail-tainted \
+ 'Reason: forbidden for testing' \
+t-dgit push --new
+t-git-dir-check enoent
+
+git reset --hard start
+t-commit 'will vanish from NEW'
+vanished=$v
+t-dgit build
+t-dgit push --new
+t-git-dir-check secret
+
+t-policy-periodic
+t-git-dir-check secret
+
+# pretend it vanished from new:
+rm $tmp/incoming/*
+t-archive-none example
+
+t-git-dir-time-passes
+
+t-policy-periodic
+t-git-dir-check enoent
+
+t-commit 'should require --deliberately...questionable'
+t-dgit build
+
+t-expect-push-fail-tainted \
+ "Reason: tag $tagpfx/${vanished//./\\.} referred to this object.*all previously pushed versions were found to have been removed" \
+t-dgit push --new
+t-git-dir-check enoent
+
+vanished=$v
+
+t-dgit push --new --deliberately-include-questionable-history \
+	--force-reusing-version
+t-git-dir-check secret
+
+t-policy-periodic
+t-git-dir-check secret
+
+t-archive-process-incoming new
+t-git-dir-time-passes
+
+t-policy-periodic
+t-git-dir-check secret
+
+oldobj=`git rev-parse HEAD`
+git reset --hard start
+t-commit 'should require --deliberately..not-ff'
+t-dgit build
+
+# Rewound, without passing the option
+t-expect-push-fail-retriably \
+ E:"^dgit: error: .* HEAD is not a descendant of the archive's version" \
+t-dgit push
+
+# Rewound, passing stunt option to defeat local checks
+# so we check that remote check is effective.
+t-expect-push-fail \
+ E:"^remote: Package is in NEW and has not been accepted or rejected yet" \
+t-dgit --deliberately-TEST-dgit-only-not-fast-forward push
+
+t-dgit --deliberately-not-fast-forward --force-reusing-version push
+
+cd $dgitrepo
+t-expect-fail "Not a valid object name" \
+git cat-file -p $oldobj
+cd $tmp/$p
+
+t-commit 'Still not accepted, will override taint'
+t-dgit build
+t-expect-push-fail-tainted \
+    "Package is in NEW and has not been accepted or rejected yet" \
+t-dgit push
+
+t-dgit push --deliberately-include-questionable-history \
+	--force-reusing-version
+
+t-archive-process-incoming sid
+
+t-commit 'Check taint is no longer there'
+t-dgit build
+t-dgit push
+
+git checkout -b stoats $tagpfx/$vanished
+t-commit 'Simulate accidentally building on rejected version'
+t-dgit build
+t-expect-push-fail \
+ E:"^dgit: error:.* HEAD is not a descendant of the archive's version" \
+t-dgit push
+
+: "check that uploader can't force it now"
+t-expect-push-fail \
+ E:"^remote: .*: reject: not fast forward on dgit branch" \
+t-dgit --deliberately-not-fast-forward push \
+       --deliberately-include-questionable-history \
+       --force-push-tainted
+# Ideally ^ this would be detected locally first, in which case we would
+# use t-expect-push-fail-tainted or something like it.  But it isn't.
+
+t-dgit pull
+t-dgit build
+t-expect-push-fail-tainted \
+    'Reason: rewound suite sid; --deliberately-not-fast-forward specified' \
+t-dgit --force-reusing-version push
+
+: "override the previous taint check"
+t-dgit --force-reusing-version push-source \
+	--deliberately-include-questionable-history
+
+t-commit 'Check taint is truly gone'
+t-dgit push-source
+
+t-ok

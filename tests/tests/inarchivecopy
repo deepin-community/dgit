@@ -1,0 +1,79 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import examplegit
+t-tstunt-parsechangelog
+
+cd $p
+git checkout -b dgit/stable dgit/dgit/stable
+cd ..
+
+t-inarchive-copy () {
+	local vm=$1
+	local from=${2:-sid}
+	local to=${3:-stable}
+	egrep "^${vm//./\\.}" aq/package.$from.$p >>aq/package.$to.$p
+	t-aq-archive-updated $to $p
+}
+
+copy-check-good () {
+	git diff $vtag
+	t-refs-same refs/remotes/dgit/dgit/$tosuite
+	t-ref-head
+	t-has-parent-or-is HEAD $vtag
+}
+
+copy-check () {
+	local vm=$1
+	local tosuite=${2:-stable}
+	t-inarchive-copy $vm '' $tosuite
+
+	vtag=$(v=$vm t-v-tag)
+
+	cd $p
+	 t-refs-same-start
+	 t-dgit fetch $tosuite
+	 git merge --ff-only dgit/dgit/$tosuite
+
+	 copy-check-good
+	 local fetched; fetched=$(t-sametree-parent HEAD)
+	cd ..
+
+	rm -rf example.cloned
+	t-dgit clone $p $tosuite example.cloned
+
+	cd example.cloned
+	 t-refs-same-start
+	 copy-check-good
+	 local cloned; cloned=$(t-sametree-parent HEAD)	 
+	cd ..
+
+	rm -rf example.initd
+	mkdir example.initd
+	cd example.initd
+	 git init
+	 t-refs-same-start
+	 t-dgit -p $p fetch $tosuite
+	 git reset --hard refs/remotes/dgit/dgit/$tosuite
+	 copy-check-good
+	 local initd; initd=$(t-sametree-parent HEAD)
+	cd ..
+
+	t-refs-same-start
+	t-ref-same-val fetched $fetched
+	t-ref-same-val cloned $cloned
+	t-ref-same-val initd $initd
+}
+
+copy-check 2.0
+
+copy-check 2.1
+
+cd $p
+git checkout -b dgit/testing $(v=1.1 t-v-tag)
+cd ..
+
+copy-check 2.1 testing
+
+t-ok

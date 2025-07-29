@@ -1,0 +1,131 @@
+# problems / outstanding questions:
+#
+#  * new-upstream has an awkward UI for multiple upstream pieces.
+#    You end up with giant runic command lines.  Does this matter /
+#    One consequence of the lack of richness it can need -f in
+#    fairly sensible situations.
+#
+#  * There should be a good convention for the version number,
+#    and unfinalised or not changelog, after new-upstream.
+#
+#  * Handing of multi-orig dgit new-upstream .dsc imports is known to
+#    be broken.  They may be not recognised, improperly converted, or
+#    their conversion may be unrecognised.
+#
+#  * We need to develop a plausible model that works for derivatives,
+#    who probably want to maintain their stack on top of Debian's.
+#    downstream-rebase-launder-v0 may be a starting point?
+#    maybe the hypothetical git-ffqrebase is part of it too.
+	
+
+# undocumented usages:
+#
+#    git-debrebase [<options>] downstream-rebase-launder-v0  # experimental
+
+
+========================================
+
+Theory for ffq-prev
+
+  refs/ffq-prev/REF    relates to refs/REF
+
+When we strip a pm, we need to maybe record it (or something) as the
+new start point.
+
+When we do a thing
+
+    with no recorded ffq-prev
+
+        ffq-prev is our current tip
+
+        obviously it is safe to say we will overwrite this
+        we do check whether there are not-included changes in the remotes
+        because if the new ffq-prev is not ff from the remotes
+        the later pushes will fail
+
+        this model tends to keep ad-hoc commits made on our
+        tip branch before we did rebase start, in the
+        `interchange view' and also in the rebase stack.
+
+        also we can explicitly preserve with
+        git-debrebase stitch
+
+	It is always safe to rewind ffq-prev: all
+	that does is overwrite _less_ stuff.
+
+        in any case putative ffq-prev must be ff from remote.
+        Otherwise when we push it will not be ff, even though we have
+        made pseudomerge to overwrite ffq-prev.  So if we spot
+        this, report an error.  see above
+
+    with a recorded ffq-prev
+
+        we may need to advance ffq-prev, to allow us to generate
+        future pseudomerges that will be pushable
+
+        advancing ffq-prev is dangerous, since it might
+        effectively cancel the commits that will-ovewrite is advanced
+        over.
+
+        ??? advance it to merge-base( current remote, current tip )
+        if possible (see above), - ie to current remote, subject
+        to the condition that that is an ancestor of current tip
+
+        currently this is not implemented
+
+        better maybe to detect divergence ?  but it is rather late
+        by then!
+
+We check we are ff from remotes before recording new ffq-prev
+
+========================================
+
+how to handle divergence and merges (if not detected soon enough)
+
+same problem
+ if merge, look at branches before merge
+ generate new combined branch
+ pseudomerge to overwrite merge
+
+current available strategies:
+
+ maybe launder foreign branch
+
+ if foreign branch is nmuish, can rebase it onto ours
+
+ could merge breakwaters (use analyse to find them)
+ merge breakwaters (assuming same upstream)
+ manually construct new patch queue by inspection of
+  the other two patch queues
+
+ instead of manually constructing patch queue, could use
+  gbp pq export and git merge the patch queues
+  (ie work with interdiffs)
+
+ if upstreams are different and one is ahead
+  simply treat that as "ours" and
+  do the work to import changes from the other
+
+ if upstreams have diverged, can
+  resolve somehow to make new upstream
+  do new-upstream on each branch separately
+  now reduced to previously "solved" problem
+
+ in future, auto patch queue merge algorithm
+  determine next patch to apply
+  there are three versions o..O, l..L, r..R
+  we have already constructed m (previous patch or merged breakwater)
+  try using vector calculus in the implied cube and compute
+   multiple ways to check consistency ?
+
+========================================
+
+For downstreams of Debian, sketch of git-ffqrebase
+
+#    git-ffqrebase start [BASE]
+#                # records previous HEAD so it can be overwritten
+#                # records base for future git-ffqrebase
+#    git-ffqrebase set-base BASE
+#    git-ffqrebase <git-rebase options>
+#    git-ffqrebase finish
+#    git-ffqrebase status [BRANCH]

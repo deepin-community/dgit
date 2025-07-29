@@ -1,0 +1,260 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-skip-suite,bullseye
+t-restrict x-dgit-skip-suite,buster
+t-dependencies T2U DEBORIG mpack pristine-tar
+
+t-t2u-settings
+t-debpolicy
+export DGIT_TEST_MUNPACK=munpack
+
+t-archive-none example
+t-git-none
+t-worktree 1.0
+
+v=1.0-1
+uv=${v%-*}
+
+cd $p
+git checkout -b native 
+
+git checkout --orphan upstream quilt-tip-2
+git rm -rf debian
+git commit -m 'pseudo-upstream'
+upstreamtag=UPSTREAM/RELEASE/1.0
+git tag $upstreamtag
+
+git checkout -B master quilt-tip-2
+
+echo foo >bar
+git add bar
+git commit -m"corrupt the upstream source to test upstream-nonidentical check"
+
+t-t2u-setup-repo
+
+tagname=test-dummy/$v
+
+t-expect-fail "the upstream source in tag $upstreamtag is not identical to the upstream source in refs/heads/master" \
+t-t2u-test --quilt=gbp --upstream=$upstreamtag
+
+git reset --hard HEAD~1
+
+t-expect-fail "upstream tag $upstreamtag is not an ancestor of refs/heads/master" \
+t-t2u-test --quilt=gbp --upstream=$upstreamtag
+
+t-expect-fail "upstream tag $upstreamtag is not an ancestor of refs/heads/master" \
+t-t2u-test --quilt=gbp --force=changed-suite --force=no-such-force-option --upstream=$upstreamtag
+
+git deborig $upstreamtag
+pristine-tar commit ../${p}_${uv}.orig.tar.xz $upstreamtag
+t-expect-fail "pristine-tar data present" \
+t-t2u-test --quilt=gbp --force=changed-suite \
+           --force=upstream-nonancestor \
+           --upstream=$upstreamtag
+git branch -D pristine-tar
+
+t-t2u-test --quilt=gbp --force=changed-suite --force=no-such-force-option-1 \
+              --force=upstream-nonancestor,no-such-force-option-2 \
+              --upstream=$upstreamtag
+t-t2u-succeeded
+t-pushed-good master
+
+t-sponsee-dep14tag-check-kept
+
+ident=ok
+
+mv-ident () {
+	local f=$tmp/$1
+	if test -e $f; then
+		mv $f $f--$ident
+	fi
+}
+
+next-mangle () {
+	# In case the test case doesn't send mail, when it should do,
+	# prevent it from grepping this test cases' sent email.
+	mv-ident sendmail.last
+	mv-ident t2u-message
+	ident=$1
+}
+
+with-mangled () {
+	local perl=$1; shift
+	perl <../basetag >../badtag-$ident -pe "$perl"
+	git tag -u Senatus -f -s -m "$(cat ../badtag-$ident)" "$tagname"
+
+	t-t2u-run-drs $tmp/$p "$@"
+}
+
+expect-quit () {
+	next-mangle "$1"
+	local perl=$2
+	local mregexp=$3
+	with-mangled "$perl" irrecoverable
+	egrep -e "$mregexp" $tmp/t2u-message
+}
+
+expect-email () {
+	next-mangle "$1"
+	local perl=$2
+	local mregexp=$3
+	with-mangled "$perl" irrecoverable "$mregexp"
+}
+
+raw-mangled () {
+	local tagobj
+	tagobj=$(git hash-object -w -t tag ../tagobj-$ident)
+	git update-ref refs/tags/$tagname "$tagobj"
+	t-t2u-run-drs $tmp/$p "$@"
+}
+
+next-mangle timeout
+# It's important that we arrange the deliberate hang to happen before
+# the d-r-s processing child touches gnupg, because our gnupg serialisation
+# might result in nearly-arbitrary delays.  The git fetch fits that bill.
+t-tstunt git-remote-t-sleep
+t2u_oracled_args=(--processing-timeout=10)
+t-t2u-run-drs t-sleep::20 irrecoverable \
+	'tag2upload processing interrupted by timeout'
+# Because of the gnupg serialisation (and just to avoid fragility),
+# most tests have no timeout.  Restore that default.
+t2u_oracled_args=()
+
+git cat-file tag $tagname >../basetag
+v=1.0-2
+tagname=test-dummy/$v
+
+perl -i -ne '
+	next if $.==1../^$/;
+	next if m/^----/..0;
+	s/\b1\.0-1\b/1.0-2/g;
+	print or die $!;
+' ../basetag
+
+tagname=test-dummy/1.2
+t-expect-fail "couldn't find tag name" \
+t-t2u-run-drs $tmp/$p NO-RESPONSE
+
+tagname=splorf/$v     ; expect-quit baddistro '' 'tag .* not for this distro'
+tagname=test-dummy/1,2; expect-quit badver    '' 'tag .* bad version'
+tagname=test-dummy/$v
+
+expect-email noplease s/please-upload/plunk/ 'tag missing "please-upload"'
+
+expect-email nosource "s/ source=$p//" 'missing source='
+
+expect-email vermatch 's/ version=/$&3/' 'rejected: tag has version mismatch'
+
+expect-email unkinfo 's/^\[dgit please-upload/$& Rejectme/' \
+	'unknown critical dgit info in tag'
+
+expect-email unkdistro 's/test-dummy/ubuntu/ if m/^\[dgit/' \
+	'not for this distro'
+
+expect-email notsplit 's/ split / no-split /' 'rejected: tag missing "split"'
+
+expect-email upsnot1 's/ upstream=/ uxstream=/' \
+	'rejected: tag has upstream=.* and not upstream-tag=.*, or v-v'
+
+expect-email upsnot2 's/ upstream-tag=/ uxstream-tag=/' \
+	'rejected: tag has upstream=.* and not upstream-tag=.*, or v-v'
+
+expect-email bupstag1 's/ upstream-tag=/$&:/' \
+	"failed command: git check-ref-format"
+
+expect-email bupstag2 's/ upstream-tag=/$&x/' \
+	"[Cc]ouldn't find remote ref refs/tags/xUPSTREAM"
+
+expect-email wrongver '' 'mismatch: changelog Version'
+
+v=1.0-2
+
+expect-email noversion "s/ version=$v//" 'missing version='
+
+t-dch-commit -v $v -m bump
+t-dch-commit-r
+
+expect-email upsmism 's/ upstream=/$&3/' \
+	"but tag refers to"
+
+# Without this, subsequent uploads of this same package produce the
+# "tainted objects" error (because we're re-uploading things stuck in
+# incoming, without explicitly saying we intend to not rewind).
+#
+# This could cause success test cases to fail, and it can also
+# cause failing test cases to fail in unexpected ways.
+#
+# We must do this no earlier than here, because the `upstream=` test
+# case above depends on us actually trying to make origs from the tag,
+# which doesn't happen if the already-uploaded origs for the same version
+# are in the archive.
+t-archive-process-incoming sid 1.0-1
+
+t2u_job_package=xexample
+expect-email wrongpkg 's/ source=/$&x/' 'mismatch: changelog Source'
+unset t2u_job_package
+expect-quit wrongpkg2 's/ source=/$&x/' \
+	'rejected: parsed source package xexample but manager said example'
+
+next-mangle hannibal
+git tag -u Hannibal -f -s -m "$(cat ../basetag)" "$tagname"
+t-t2u-run-drs $tmp/$p irrecoverable "$@"
+egrep -e 'key not found in keyrings' $tmp/t2u-message
+
+next-mangle baddm
+git tag -u Populus -f -s -m "$(cat ../basetag)" "$tagname"
+# We don't need to nobble dm.txt, because our *success* cases
+# (eg in drs-push-rejects) are set up to authorise Populus for pari-extra,
+# but not for example.
+t-t2u-run-drs $tmp/$p irrecoverable "$@"
+egrep -e 'package example not allowed for key' $tmp/t2u-message
+
+# we are going to trash $p because it will contain corrupted objects
+# which makes our end-of-test fsck fail
+cp -al ../$p ../$p.save
+cd ../$p
+
+git cat-file tag $tagname >../raw-base
+
+next-mangle sigfail
+perl -pe <../raw-base >../tagobj-$ident 's/ split / split ignoreme /'
+raw-mangled irrecoverable 'bad signature'
+
+next-mangle nosig
+perl -ne <../raw-base >../tagobj-$ident 'print unless m/^-----/..0'
+raw-mangled irrecoverable 'missing signature'
+
+git cat-file tag $tagname >../raw-base
+
+# This test case only works properly before bookworm, before which git
+# is willing to make the busted tag.  And, d-r-s t2u mode verifies
+# the tag signature first, whereas this test case generates a mangled
+# *unsigned* tag.  It would be nice to reinstate this, perhaps by
+# using git's config options for tolerating bad objects.
+: <<'END_TODO'
+next-mangle badtagger
+perl -pe <../raw-base '
+	s/\+\d+$/xyz/ if m/^tagger /;
+	exit 0 if m/^$/;
+' >../tagobj-$ident
+echo >>../tagobj-$ident
+cat ../basetag >>../tagobj-$ident
+set +e
+(set -e; LC_MESSAGES=C raw-mangled false 2>../mktag.err)
+rc=$?
+set -e
+if [ $rc = 0 ]; then
+  grep 'failed to fish tagger out of tag' "$tmp/sendmail.last"
+elif [ $rc = 128 ] && egrep 'error: object fails fsck: badTimezone: invalid author/committer line - bad time zone' ../mktag.err; then :
+else
+  fatal 'failed to make raw-mangled'
+fi
+END_TODO
+
+cd ..
+rm -rf $p
+mv $p.save $p
+
+t-ok

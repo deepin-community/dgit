@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive-none example
+
+t-dependencies libhttp-server-simple-static-perl
+
+$troot/http-static-server >$tmp/must-clean/api.port $tmp/aq
+
+read <$tmp/must-clean/api.port api_port
+
+t-git-config --global dgit-distro.test-dummy.archive-query ftpmasterapi:
+t-git-config --global dgit-distro.test-dummy.archive-query-url \
+   http://127.0.0.1:$api_port/
+
+t-dgit archive-api-query suites
+
+t-ok

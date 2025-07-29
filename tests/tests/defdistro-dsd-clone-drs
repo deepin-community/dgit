@@ -1,0 +1,14 @@
+#!/bin/bash
+. tests/lib
+
+t-restrict x-dgit-intree-only
+t-restrict x-dgit-git-only
+
+export DGIT_TEST_DSD_CLONE_DRS_HOOK='
+	t-git-config dgit.default.distro test-dummy
+	url=$(git config dgit-distro.test-dummy.git-url)
+	t-git-config dgit-distro.test-dummy/push.git-url "$url"
+	t-git-config dgit-distro.test-dummy.git-url nosuchprotocol://
+'
+
+t-alt-test

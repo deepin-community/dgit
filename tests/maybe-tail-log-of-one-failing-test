@@ -1,0 +1,40 @@
+#!/bin/bash
+
+set -e -o pipefail
+shopt -s inherit_errexit # #514862, wtf
+
+num_fails=0
+
+for log in tests/tmp/*.log; do
+	case "$log" in
+	tests/tmp/run-all.log) continue;;
+	esac
+
+	if test -f ${log%.log}.ok; then continue; fi
+	this_lines=$(wc -l <"$log")
+	num_fails=$(( num_fails + 1))
+	if [ "$best_lines" != "" ] && [ $this_lines -gt $best_lines ]; then
+		continue
+	fi
+	best_lines=$this_lines
+	best_log=$log
+done
+
+if [ "$best_log" = '' ]; then exit 0; fi
+
+length_limit=10000
+
+cat <<END
+========== shortest individual log  ==========
+:
+$best_log (last $length_limit lines)
+:
+END
+
+tail -$length_limit $best_log
+
+cat <<END
+========== ^ $best_log (last $length_limit lines)  ==========
+
+$num_fails failures in all.
+END

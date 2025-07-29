@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+exec \
+with-lock-ex -w "$DGIT_TEST_GNUPG_GLOBAL_LOCK" \
+	sh -c '
+		"$@" 9>&2 2>>"$DGIT_TEST_GNUPG_LOG"
+		rc=$?
+		if [ $rc = 0 ]; then exit 0; fi
+		if [ "x$DGIT_TEST_BYHAND" != x ]; then
+			echo >&2 "BYHAND, not dumping $DGIT_TEST_GNUPG_LOG"
+		else
+			echo >&2 "########################################"
+			echo >&2 "$DGIT_TEST_GNUPG_LOG"
+			sed '\''s/^/\[gnupg-workarounds] /'\'' >&2 \
+				"$DGIT_TEST_GNUPG_LOG"
+			echo >&2 "end of $DGIT_TEST_GNUPG_LOG"
+			echo >&2 "########################################"
+		fi
+		exit $rc
+	' x \
+	"$DGIT_TEST_TROOT"/tstunt/gpg-withagent "$@"

@@ -1,0 +1,19 @@
+#!/bin/bash
+. tests/lib
+
+t-defdistro
+
+t-select-package example
+t-worktree 1.0
+
+cd example
+
+t-git-config dgit-suite.DGIT-SETUP-TREE.distro test-dummy
+
+t-dgit setup-useremail
+t-dgit setup-mergechangelogs
+t-dgit setup-gitattributes
+
+t-dgit setup-new-tree
+
+t-ok

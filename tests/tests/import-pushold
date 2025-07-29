@@ -1,0 +1,37 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+p=example
+old=1.0-1
+current=1.0-1.100
+
+t-archive $p $current
+t-git-none
+
+mkdir $p
+cd $p
+git init
+t-dgit import-dsc $troot/pkg-srcs/${p}_${old}.dsc main
+git checkout main
+
+t-dgit fetch
+
+: "attempt push of old"
+
+t-expect-fail 'trying to push an old version' \
+t-dgit push-source --deliberately-not-fast-forward --overwrite
+
+: "attempt push of current"
+
+t-dgit checkout sid
+
+t-expect-fail 'trying to push an old version' \
+t-dgit push-source --deliberately-not-fast-forward --overwrite
+
+t-dgit push-source --force-uploading-old-version
+t-pushed-good dgit/sid
+
+t-ok

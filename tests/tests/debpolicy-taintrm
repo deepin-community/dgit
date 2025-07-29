@@ -1,0 +1,70 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-debpolicy
+t-prep-newpackage example 1.0
+
+cd $p
+revision=1
+git tag start
+t-dgit setup-mergechangelogs
+
+
+: upload
+
+t-dgit push-source --new
+
+t-commit 'edit after first push'
+
+t-expect-push-fail-tainted \
+ 'Package is in NEW and has not been accepted or rejected yet' \
+t-dgit push-source --new
+
+: cut
+
+rm $tmp/incoming/*
+t-archive-none example
+
+touch -d 'now -1 day' $tmp/git/example*
+
+t-policy-periodic # xxx maybe want test both with and without this
+
+: edit
+t-commit 'edit after cut'
+
+: push, needs --deliberately
+
+t-expect-push-fail-tainted \
+ 'Reason:.* all previously pushed versions were found to have been removed from NEW' \
+t-dgit push-source --new
+
+t-expect-push-fail-tainted \
+ 'Reason:.* all previously pushed versions were found to have been removed from NEW' \
+t-dgit push-source --new --deliberately-not-fast-forward \
+	--force-reusing-version
+
+t-dgit push-source --new --deliberately-include-questionable-history \
+	--force-reusing-version
+
+t-archive-process-incoming new
+
+# : t-policy-periodic # maybe want test with this
+
+: accept
+
+mv -f $tmp/aq/package.{new,sid}.$p
+t-aq-archive-updated sid $p
+
+# : t-policy-periodic # maybe want test with this
+
+t-git-dir-time-passes
+
+: 3rd push, no deliberately
+
+t-commit 'edit after accept'
+t-dgit push-source
+
+t-ok

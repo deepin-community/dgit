@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-intree-only
+t-restrict x-dgit-git-only
+
+t-dsd
+eval "$DGIT_TEST_DSD_CLONE_DRS_HOOK"
+
+cd $tmp
+t-dgit clone-dgit-repos-server drs-cloned
+
+cd drs-cloned
+ls -al infra/dgit-repos-server
+
+t-ok

@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-build-modes
+
+t-dependencies sbuild
+t-restrict x-dgit-schroot-build
+
+t-buildproductsdir-config
+
+bm_quirk_after_act=bm-quirk-sbuild-after-act
+bm-prep
+
+act="sbuild -c $schroot --no-arch-all"
+real_act="$act"
+
+bm-guess-e-source-e-targets "$act"
+bm-act-iterate
+
+t-ok

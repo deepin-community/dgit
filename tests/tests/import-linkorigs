@@ -1,0 +1,76 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-import-chk
+
+t-dependencies xz-utils
+
+t-tstunt-parsechangelog
+
+t-archive-none example
+v=1.0-1
+
+link_src_files () {
+	mkdir $1
+	cp $troot/pkg-srcs/${p}_* $1
+	dscfn=$1/$dscleaf
+}
+
+combo () {
+	case $bpdhow in
+	none)	bpd=..				;;
+	abs)	bpd=$tmp/$subdir/bpd		;;
+	rel)	bpd=../bpd			;;
+	*)	x-unknown-bpdhow $bpdhow	;;
+	esac
+
+	mkdir -p $bpd
+	git config --local dgit.default.build-products-dir $bpd
+
+	dscleaf=${p}_${v}.dsc
+	dscfn=$troot/pkg-srcs/$dscleaf
+
+	case $dschow in
+	abs)					;;
+	rel)	link_src_files ../copies	;;
+	bpd)	link_src_files $bpd		;;
+	*)	x-unknown-dschow $dschow	;;
+	esac
+
+	t-dgit import-dsc $dscfn +import
+	git reset --hard import
+
+	t-dch-commit -v$v.1 -m 'New version'
+	t-dch-commit-r
+	t-dgit build-source
+}
+
+for bpdhow in none rel abs; do
+	for dschow in rel abs; do
+
+		subdir=$bpdhow-$dschow
+		mkdir $subdir
+		cd $subdir
+
+		mkdir $p
+		cd $p
+
+		git init
+		combo
+		cd ../..
+	done
+done
+
+rm -rf dupes
+cp -a rel-rel dupes
+cd dupes
+orig=${p}_${v%-*}.orig.tar
+zcat bpd/$orig.gz | xz -1 >$orig.xz
+cd $p
+
+ls -al ../bpd
+
+t-expect-fail 'Duplicate/inconsistent orig tarballs' \
+t-dgit build-source
+
+t-ok

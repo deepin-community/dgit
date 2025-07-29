@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+suitespecs+=' stable'
+
+. $troot/lib-orig-include-exclude
+
+ofb=example_1.1.orig.tar
+zcat $ofb.gz >$ofb.SPONG
+gzip -1Nv $ofb.SPONG
+mv $ofb.SPONG.gz $ofb.gz
+
+cd $p
+
+test-push-1 1.1-1.3 '' stable
+
+t-expect-fail E:'archive contains .* with different checksum' \
+test-push-2 --new
+
+t-ok

@@ -1,0 +1,26 @@
+#!/bin/sh
+set -e
+
+root=/srv/dgit.debian.org
+
+repos=$root/unpriv/repos
+outfile=$root/etc/projects.cgit
+lockfile=$outfile.lock
+template=$root/config/cgit-template
+
+flock $lockfile -c '
+	outfile='"$outfile"'
+	repos='"$repos"'
+	exec >"$outfile.tmp"
+	for ff in "$repos"/[0-9a-z]*.git; do
+		f=${ff##*/}
+		p=${f%.git}
+		cat <<END
+repo.url=$f
+repo.path=$repos/$f
+END
+		sed "s/%PACKAGE%/$p/g" <'"$template"'
+		echo
+	done
+	mv -f "$outfile.tmp" "$outfile"
+'

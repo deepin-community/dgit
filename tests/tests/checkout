@@ -1,0 +1,59 @@
+#!/bin/bash
+set -e
+. tests/lib
+t-tstunt-parsechangelog
+
+t-setup-import examplegit
+
+now-on () {
+	local branch=$(git symbolic-ref HEAD)
+	test "$branch" = "refs/heads/$1"
+}
+
+p=example
+
+mkdir $p.2
+cd $p.2
+
+git init
+t-dgit setup-new-tree
+t-dgit checkout -p $p unstable
+
+now-on dgit/sid
+t-refs-same-start
+t-ref-head
+t-ref-same refs/tags/test-dummy/$v
+
+t-dgit checkout -p $p stable
+now-on dgit/stable
+
+t-dgit checkout -d no-such-distro sid
+t-ref-head
+now-on dgit/sid
+
+t-dgit checkout stable
+now-on dgit/stable
+
+git branch -D dgit/sid
+t-dgit checkout -d no-such-distro sid
+t-ref-head
+now-on dgit/sid
+
+git reflog --pretty=tformat:%gs >../reflog.got
+cat >../reflog.expect <<END
+dgit checkout sid
+dgit checkout stable
+dgit checkout sid
+dgit checkout stable
+dgit checkout unstable
+END
+diff -u ../reflog.{expect,got}
+
+git for-each-ref --format='%(refname)' refs/heads | t-sort >../refs.got
+cat >../refs.expect <<END
+refs/heads/dgit/sid
+refs/heads/dgit/stable
+END
+diff -u ../refs.{expect,got}
+
+t-ok

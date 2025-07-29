@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-archive example 1.0-1
+t-git-none
+
+t-dgit --no-rm-on-error clone $p
+
+cd $p
+
+bad-dpkg-source () {
+	t-expect-fail E:"dpkg-source:.*unexpected upstream changes" \
+	t-dgit --quilt=nofix -wgf build-source
+	find * -name .git -print0 | xargs -0r rm --
+}
+
+ignores=$(t-dgit print-dpkg-source-ignores)
+
+spurious-git-must-be-excluded () {
+	dpkg-source $ignores -b .
+	mkdir check
+	cd check
+	dpkg-source -x ../../${p}_${v}.dsc
+	cd ${p}-${v%-*}
+	find -name .git >../bad
+	diff /dev/null ../bad
+	cd ../..
+	find * -name .git -print0 | xargs -0r rm -rf --
+	git clean -xdff
+}
+
+mkdir docs/.git
+echo hi >docs/.git/ho
+spurious-git-must-be-excluded
+
+echo hi >docs/.git
+spurious-git-must-be-excluded
+
+mkdir not-really.git
+echo fee >not-really.git/something
+echo fi >not-really.gitfoo
+echo fo >some.git
+echo fum >some.gitfoo
+git add .
+git commit -m 'want these'
+
+t-dgit --quilt=smash -wgf build-source
+t-dgit --force-uploading-old-version -wgf push-built
+
+t-ok

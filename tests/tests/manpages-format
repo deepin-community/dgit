@@ -1,0 +1,81 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+
+t-dependencies man-db make groff git-debrebase git-debpush
+
+cd $root
+
+printenv |grep MAKE ||: |t-sort
+manpages=$(MAKEFLAGS= MAKELEVEL= make list-manpages)
+
+export MANWIDTH=80
+
+run_man () {
+	if [ "x${DGIT_MANPAGES_SOURCE_DIR}" = x ]; then
+		cmd='man --warnings "$@" $section $page'
+	else
+		make $roff >&2
+		cmd='man --warnings "$@" -l $roff'
+	fi
+	eval "$cmd 2>&1 >/dev/null |tee $errs"
+}
+
+cat >$tmp/always-expected <<'END'
+ERROR.*
+END
+
+for roff in $manpages; do
+	for fmt in txt ps; do
+		cat $tmp/always-expected >$tmp/$roff.$fmt-expected
+	done
+done
+
+expected () {
+	cat >>$tmp/$2.$1-expected
+}
+
+not_egrep_vxPf () {
+	# egrep -vxPf does not work, so we reimplement it
+	perl -ne '
+		BEGIN () {
+			open PATS, shift @ARGV or die $!;
+			$re = join "|", map { chomp; qr{^(?:$_)$} }
+				qr{^(?=a)b}, <PATS>;
+			print STDERR "RE $re\n";
+		}
+		next if m{$re};
+		print STDERR "unexpected: $_";
+		$bad = 1;
+		END { die "unexpected errors\n" if $bad; }
+	' "$@"
+}
+
+expected txt dgit.1 <<'END'
+END
+
+prep () {
+	fmt=$1
+	errs=$tmp/$roff.$fmt-errs
+}
+
+check () {
+	perl -0777 -i~ -pe 's/\n[ \t]+/ # /' $errs
+	not_egrep_vxPf $tmp/$roff.$fmt-expected $errs
+}
+
+for roff in $manpages; do
+	section=${roff##*.}
+	page=${roff%.*}
+
+	prep txt
+	run_man
+	check
+
+	prep ps
+	run_man -Tps
+	check
+done
+
+t-ok

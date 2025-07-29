@@ -1,0 +1,148 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+
+t-dependencies NO-DGIT GDR quilt
+
+t-tstunt-parsechangelog
+t-tstunt debchange
+t-setup-import gdr-convert-gbp-noarchive
+
+wreckage-before () {
+	junkref=refs/debrebase/wreckage/junk
+	git update-ref $junkref v2.1
+}
+
+wreckage-after () {
+	test '' = "$(t-git-get-ref-exact $junkref)"
+	git for-each-ref refs/debrebase/wreckage | egrep .
+}
+
+no-wreckage () {
+	if git for-each-ref refs/debrebase/wreckage | egrep .; then
+		fail wreckage
+	fi
+}
+
+: ----- prepare the baseline -----
+
+cd $p
+
+t-gdr-prep-new-upstream 2.1
+git tag v2.1 upstream
+
+t-some-changes before
+t-git-debrebase quick
+
+: ===== early failure in walk =====
+
+: ----- prepare other -----
+
+git checkout -b other
+t-some-changes other '' -other
+
+git branch other-before-new-upstream
+
+t-git-debrebase new-upstream 2.1
+t-git-next-date
+
+: ----- prepare master -----
+
+git checkout master
+t-git-debrebase new-upstream 2.1
+t-git-next-date
+
+git branch master-before-merge
+
+: ----- make the merge -----
+
+git merge --no-edit -s ours other
+
+# we have to do a little dance to make this not a pseudomerge
+t-git-next-date
+t-debchange -a 'Merge, only conflict was in debian/changelog'
+t-dch-r-rune t-debchange
+git commit -a --amend --no-edit
+
+wreckage-before
+
+t-expect-fail F:'divergent anchors' \
+t-git-debrebase
+
+wreckage-after
+
+: ===== late failure in apply =====
+
+git checkout other
+git reset --hard other-before-new-upstream
+
+echo other-upstream-confict >>docs/README
+git commit -m 'other-upstream-conflict' docs/README
+
+t-git-debrebase quick
+
+no-wreckage
+
+: ----- make the merge -----
+
+git checkout master
+git reset --hard master-before-merge
+
+t-merge-conflicted-stripping-conflict-markers other docs/README
+t-git-debrebase stitch
+
+: ----- expect failure -----
+
+wreckage-before
+
+t-expect-fail F:'docs/README' \
+t-git-debrebase
+
+wreckage-after
+
+: ===== resolve the conflict =====
+
+# omg
+
+quilt_faff_before () {
+	git checkout -b fix$1 debrebase/wreckage/merged-patchqueue
+	QUILT_PATCHES=debian/patches quilt push -a
+}
+quilt_faff_after () {
+	QUILT_PATCHES=debian/patches quilt refresh
+	git add debian/patches
+	git commit -m FIX
+	git reset --hard
+	git clean -xdff
+	t-git-debrebase record-resolved-merge-experimental
+	git checkout master
+}
+
+: ----- badly -----
+
+quilt_faff_before 1
+quilt_faff_after
+
+t-expect-fail E:'upstream files are not the same' \
+t-git-debrebase
+
+t-git-debrebase scrap
+no-wreckage
+
+: ----- well -----
+
+t-expect-fail F:'docs/README' \
+t-git-debrebase
+wreckage-after
+
+quilt_faff_before 2
+git checkout master docs/README
+git reset docs/README
+quilt_faff_after
+
+t-git-debrebase
+
+t-gdr-good laundered
+
+t-ok

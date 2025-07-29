@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+. tests/lib
+t-tstunt-parsechangelog
+
+t-archive example 1.0-1+absurd
+t-git-none
+
+t-expect-fail 'gbp pq import failed' \
+t-dgit --force-import-gitapply-no-absurd clone $p
+
+t-dgit clone $p
+
+cd $p
+grep moo moo
+
+t-ok

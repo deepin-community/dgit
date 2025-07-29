@@ -1,0 +1,220 @@
+#!/usr/bin/perl -w
+# dgit repos policy admin script for Debian
+#
+# Copyright (C) 2015-2016  Ian Jackson
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+use strict;
+
+use Debian::Dgit::Infra; # must precede Debian::Dgit; - can change @INC!
+use Debian::Dgit;
+setup_sigwarn();
+
+our $usage = <<'END';
+usage:
+  dgit-repos-admin-debian [<options>] operation...
+options:
+  --git-dir /path/to/git/repo/or/working/tree
+  --repos /path/to/dgit/repos/directory    } alternatives
+  --db /path/to/dgit/repos/policy.sqlite3  }
+  (at least one of above required; if only one, cwd is used for other)
+operations:
+  create-db
+  list-taints
+  taint [--global|<package>] <gitobjid> '<comment>'
+  untaint [--global|<package>] <gitobjid>
+END
+
+use POSIX;
+use DBI;
+
+use Debian::Dgit::Policy::Debian;
+
+sub badusage ($) { die "bad usage: $_[0]\n$usage"; }
+
+use Getopt::Long qw(:config posix_default gnu_compat bundling);
+
+our ($git_dir,$repos_dir,$db_path);
+
+GetOptions("git-dir=s" => \$git_dir,
+	   "repos=s" => \$repos_dir,
+	   "db=s" => \$db_path)
+    or die $usage;
+
+$db_path //= poldb_path($repos_dir) if defined $repos_dir;
+$db_path // $repos_dir ||
+    die <<'END'.$usage;
+Must supply --git-dir and/or --repos (or --db instead of --repos).
+If only one of --git-dir and --repos is supplied, other is taken to
+be current working directory.
+END
+# /
+
+$git_dir //= '.';
+$repos_dir //= '.';
+
+our $p;
+our $gitobjid;
+
+sub get_package_objid () {
+    $p = shift @ARGV;  $p // badusage "operation needs package or --global";
+    if ($p eq '--global') {
+	$p = '';
+    } else {
+	$p =~ m/^$package_re$/ or badusage 'package name or --global needed';
+    }
+    $gitobjid = shift @ARGV;
+    $gitobjid // badusage "operation needs git object id";
+    $gitobjid =~ m/\W/ && badusage "invalid git object id";
+}
+
+sub sort_out_git_dir () {
+    foreach my $sfx ('/.git', '') {
+	my $path = "$git_dir/$sfx";
+	if (stat_exists "$path/objects") {
+	    $ENV{GIT_DIR} = $git_dir = $path;
+	    return;
+	}
+    }
+    die "git directory $git_dir doesn't seem valid\n";
+}
+
+sub show_taints ($$@) {
+    my ($m, $cond, @condargs) = @_;
+    my $q = $poldbh->prepare
+	("SELECT package,gitobjid,gitobjtype,time,comment, ".
+	 " (gitobjdata IS NOT NULL) hasdata".
+	 " FROM taints WHERE $cond".
+	 " ORDER BY package, gitobjid, time");
+    $q->execute(@condargs);
+    print "$m:\n" or die $!;
+    my $count = 0;
+    while (my $row = $q->fetchrow_hashref) {
+	my $t = strftime "%Y-%m-%dT%H:%M:%S", gmtime $row->{time};
+	my $objinfo = $row->{gitobjtype}. ($row->{hasdata} ? '+' : ' ');
+	my $comment = $row->{comment};
+	$comment =~ s/\\/\\\\/g; $comment =~ s/\n/\\n/g;
+	printf(" %s %-30s %s %7s %s\n",
+	       $t, $row->{package}, $row->{gitobjid},
+	       $objinfo, $row->{comment})
+	    or die $!;
+	$count++;
+    }
+    return $count;
+}
+
+sub cmd_list_taints ($) {
+    badusage "no args/options" if @ARGV;
+    my $count = show_taints("all taints","1");
+    printf "%d taints listed\n", $count or die $!;
+}
+
+sub cmd_create_db ($) {
+    badusage "no args/options" if @ARGV;
+
+    $poldbh->do(<<END);
+	CREATE TABLE IF NOT EXISTS taints (
+	    taint_id   INTEGER NOT NULL PRIMARY KEY ASC AUTOINCREMENT,
+	    package    TEXT    NOT NULL,
+	    gitobjid   TEXT    NOT NULL,
+	    comment    TEXT    NOT NULL,
+	    time       INTEGER,
+	    gitobjtype TEXT,
+	    gitobjdata TEXT
+	    )
+END
+    $poldbh->do(<<END);
+	CREATE INDEX IF NOT EXISTS taints_by_gitobjid
+	    ON taints (gitobjid, package)
+END
+    # any one of of the listed deliberatelies will override its taint
+    # the field `deliberately' contains `--deliberately-blah-blah',
+    # not just `blah blah'.
+    $poldbh->do(<<END);
+	CREATE TABLE IF NOT EXISTS taintoverrides (
+	    taint_id  INTEGER NOT NULL
+		      REFERENCES taints (taint_id)
+			  ON UPDATE RESTRICT
+			  ON DELETE CASCADE
+		      DEFERRABLE INITIALLY DEFERRED,
+	    deliberately TEXT NOT NULL,
+	    PRIMARY KEY (taint_id, deliberately)
+	)
+END
+
+    $poldbh->commit;
+}
+
+sub show_taints_bypackage ($) {
+    my ($m) = @_;
+    show_taints($m, "package = ?", $p);
+}
+
+sub show_taints_bygitobjid ($) {
+    my ($m) = @_;
+    show_taints($m, "gitobjid = ?", $gitobjid);
+}
+
+sub show_relevant_taints ($) {
+    my ($what) = @_;
+    show_taints_bypackage($p ? "$what taints for package $p"
+			  : "$what global taints");
+    show_taints_bygitobjid("$what taints for object $gitobjid");
+}
+
+sub cmd_taint () {
+    get_package_objid();
+    my $comment = shift @ARGV;
+    $comment // badusage "operation needs comment";
+    @ARGV && badusage "too many arguments to taint";
+
+    sort_out_git_dir();
+    $!=0; $?=0; my $objtype = `git cat-file -t $gitobjid`;
+    chomp $objtype or die "$? $!";
+
+    $poldbh->do("INSERT INTO taints".
+		" (package, gitobjid, gitobjtype, time, comment)".
+		" VALUES (?,?,?,?,?)", {},
+		$p, $gitobjid, $objtype, time, $comment);
+    $poldbh->commit;
+    print "taint added\n" or die $!;
+    show_relevant_taints("resulting");
+}
+
+sub cmd_untaint () {
+    get_package_objid();
+    @ARGV && badusage "too many arguments to untaint";
+
+    show_relevant_taints("existing");
+    my $affected =
+	$poldbh->do("DELETE FROM taints".
+		    " WHERE package = ? AND gitobjid = ?",
+		    {}, $p, $gitobjid);
+    $poldbh->commit;
+    printf "%d taints removed\n", $affected or die $!;
+    exit +($affected ? 0 : 1);
+}
+
+
+my $cmd = shift @ARGV;
+$cmd // badusage "need operation";
+
+$cmd =~ y/-/_/;
+my $fn = ${*::}{"cmd_$cmd"};
+$fn or badusage "unknown operation $cmd";
+
+poldb_setup($db_path);
+
+$fn->();

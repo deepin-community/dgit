@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import examplegit
+
+cd example
+
+suite=stable
+
+t-commit 'No changes, just send to stable' '' stable
+
+t-dgit -wgf build
+
+t-expect-fail 'HEAD is not a descendant' \
+t-dgit push-built stable
+
+t-dgit push-built --overwrite=1.2 stable
+
+t-ok

@@ -1,0 +1,62 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp
+
+cd $p
+
+t-dgit setup-mergechangelogs
+
+: 'maintainer'
+
+v=2.0-3
+t-maintainer-commit-some-changes
+
+t-git-next-date
+
+: 'non-dgit upload (but we prepare it with dgit anyway)'
+
+t-git-next-date
+git checkout origin/master
+
+v=2.0-2+nmu1
+t-nmu-upload-1 nmu
+gbp pq import
+t-nmu-upload-2
+t-nmu-commit-an-upstream-change
+t-nmu-upload-3
+
+: 'ad hocery'
+
+t-git-next-date
+git checkout master
+t-nmu-causes-ff-fail
+
+git cherry-pick 'dgit/dgit/sid^{/UPSTREAM NMU}'
+
+t-expect-fail 'Automatic merge failed; fix conflicts' \
+git merge --squash -m 'Incorporate NMU' dgit/dgit/sid
+
+git rm -rf debian/patches
+git commit -m 'Incorporate NMU'
+
+git merge -s ours -m 'Declare incorporate NMU' dgit/dgit/sid
+
+: 'right, how are we'
+
+t-git-next-date
+
+t-git-debrebase
+t-gdr-good laundered
+
+t-git-debrebase stitch
+t-gdr-good stitched
+
+
+t-nmu-reconciled-good patch-queue/nmu
+
+t-ok

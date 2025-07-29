@@ -1,0 +1,42 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+
+t-dependencies NO-DGIT GDR locales-all
+t-restrict x-dgit-out-of-tree-only
+# We don't run this test in-tree because:
+#  1. The .mo files that we would use might need to be built
+#     and would certainly have to be `installed' somewhere we
+#     could reference them.  We could do that here maybe,
+#     but it would risk dirtying the tree because the i18n
+#     machinery is dirtying, and also:
+#  2. The locale system does not provide a path-like variable
+#     we could use to point to our not-yet-installed .mo files.
+#     There is LOCPATH but setting it breaks everything because
+#     it disables `locale archives' and those are what provides
+#     important infrastructure.
+
+t-setup-import gdr-convert-gbp-noarchive
+
+cd $p
+
+t-gdr-prep-new-upstream 2.1
+git tag v2.1 upstream
+
+git branch startpoint
+v=2.1-1
+
+git checkout master
+
+anchor=$(t-git-debrebase anchor)
+
+expect_fail_lcmessages=C.UTF-8
+t-expect-fail F:'old anchor is recognised' \
+t-git-debrebase --anchor=$anchor new-upstream 2.1
+
+expect_fail_lcmessages=en_US.UTF-8
+t-expect-fail F:'old anchor is recognized' \
+t-git-debrebase --anchor=$anchor new-upstream 2.1
+
+t-ok

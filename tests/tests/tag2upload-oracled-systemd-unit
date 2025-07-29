@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies dgit-infrastructure systemd
+t-restrict x-dgit-out-of-tree-only
+
+unit=$root/debian/dgit-infrastructure.tag2upload-oracled.user.service
+
+# Exits zero if the unit file is valid, and it can find
+# /usr/bin/tag2upload-oracled (hence out-of-tree only).
+systemd-analyze verify $unit
+
+# Check --force-production isn't present except possibly in a comment.
+perl -wne'/^#/ && next; /--force-production\b/ && die' $unit

@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies libhttp-server-simple-static-perl
+
+t-setup-done '' --files-from=/dev/null '
+ $troot/http-static-server >$tmp/must-clean/git-check.port $tmp/git
+ read <$tmp/must-clean/git-check.port git_check_port
+
+ t-git-config --global dgit-distro.test-dummy.git-check        url
+ t-git-config --global dgit-distro.test-dummy.git-check-suffix .git/HEAD
+ t-git-config --global dgit-distro.test-dummy.git-check-url    \
+	   http://127.0.0.1:$git_check_port
+'

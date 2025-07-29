@@ -1,0 +1,50 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-skip-suite,bullseye
+t-restrict x-dgit-skip-suite,buster
+t-dependencies T2U DEBORIG
+
+t-setup-import gbp
+
+t-t2u-settings
+t-debpolicy
+
+cd $p
+
+git deborig
+
+t-t2u-setup-repo
+
+tagname=test-dummy/$v
+t-expect-fail "please supply a --quilt= argument" t-t2u-test
+
+# Seed a quilt mode with an upload that never was.
+# Also test git-debpush's --print-tag-text option.
+t-git-debpush --tag-only --print-tag-text \
+				 --quilt=gbp \
+				 >$tmp/t.output
+t-grep-mpat E:'^\[dgit distro=test-dummy split --quilt=gbp\]$' \
+	    $tmp/t.output
+
+v=1.0-2
+t-dch-commit -v $v -m bump
+t-dch-commit-r
+
+t-dgit -wgf --quilt=gbp --dgit-view-save=split.b quilt-fixup
+
+# Test that git-debpush can now figure out the quilt mode for itself.
+tagname=test-dummy/$v
+t-t2u-test
+t-t2u-succeeded
+
+git branch split.p dgit/dgit/sid # we didn't generate this here
+
+t-gbp-pushed-good sid
+
+t-t2u-gittarxz-unpack
+t-dgit --quilt=gbp --dgit-view-save=split.t quilt-fixup
+t-t2u-gittarxz-reproduced
+
+t-ok

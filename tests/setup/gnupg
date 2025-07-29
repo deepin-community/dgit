@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+mkdir -p $tmp/gnupg
+cp $troot/gnupg/* $tmp/gnupg
+chmod go-rw $tmp/gnupg/*
+
+export DGIT_TEST_GNUPG_GLOBAL_LOCK=$tmp/gnupg/dgit-test-global-lock
+export DGIT_TEST_GNUPG_LOG=$tmp/gnupg-workarounds.log
+
+setup='
+	export GNUPGHOME=$tmp/gnupg
+	export DGIT_TEST_GNUPG_GLOBAL_LOCK DGIT_TEST_GNUPG_LOG
+
+	cat >$tmp/gnupg/gpg-agent.conf <<END
+	log-file $tmp/gnupg/AGENT.log
+END
+	#debug-all
+
+	: ${DGIT_TEST_REAL_GPG_AGENT:=$(type -p gpg-agent)}
+	export DGIT_TEST_REAL_GPG_AGENT=$(type -p gpg-agent)
+	export DGIT_STUNT_AGENT=$troot/tstunt/gpg-agent
+	t-tstunt gpg
+'
+
+eval "$setup"
+
+gpg --list-secret
+
+t-setup-done 'DGIT_TEST_GNUPG_GLOBAL_LOCK DGIT_TEST_GNUPG_LOG' \
+	'gnupg' "$setup"

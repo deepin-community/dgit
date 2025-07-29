@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+set -o pipefail
+shopt -s inherit_errexit # #514862, wtf
+find -name .git -type d -exec sh -xec '
+	cd "$1"
+	git for-each-ref \
+ --format='\''update refs/dgit-test-keep/g%(objectname) %(objectname)'\'' \
+' x "{}" \; | \
+	sort -u | git update-ref --stdin

@@ -1,0 +1,65 @@
+#!/bin/sh
+
+t-restriction-x-dgit-intree-only () {
+	if [ "x$DGIT_TEST_INTREE" != x ]; then return 0; fi
+	echo 'running installed package version'
+	return 1
+}
+
+t-restriction-x-dgit-out-of-tree-only () {
+	if [ "x$DGIT_TEST_INTREE" = x ]; then return 0; fi
+	echo 'running out of development tree'
+	return 1
+}
+
+t-restriction-x-dgit-git-only () {
+	if test -d .git; then return 0; fi
+	echo 'not running out of git clone'
+	return 1
+}
+
+t-restriction-x-dgit-skip-suite () {
+	if [ "x$1" != "x$DGIT_TEST_CURRENT_SUITE" ]; then return 0; fi
+	echo "not running, DGIT_TEST_CURRENT_SUITE is $DGIT_TEST_CURRENT_SUITE"
+	return 1
+}
+
+t-restriction-x-dgit-schroot-build () {
+	# if DGIT_SCHROOT_CHROOT is set, user wants not to skip this test
+	if [ "x${DGIT_SCHROOT_CHROOT}" != x ]; then return 0; fi
+
+	case "$LD_PRELOAD" in
+	*eatmydata*)
+		local l=":$LD_PRELOAD:"
+		l=${l//:libeatmydata.so:/:}
+		l=${l#:}
+		l=${l%:}
+		LD_PRELOAD="$l"
+		;;
+	esac
+
+	schroot -l -c build 2>&1 >/dev/null || return 1
+}
+
+t-restriction-x-tag2upload-service-manager () {
+	# DGIT_TEST_T2USM_PROGRAM being the command to run for the
+	# tagupload-service-manager.
+	# It can contain spaces: it's run as $DGIT_TEST_T2USM_PROGRAM -c ...
+	#
+	# In principle we could have done this with a formal dependency
+	# on a .deb which isn't in the Debian archive, but this is
+	# a lot simpler and good enough at least for now.
+
+	if [ "x${DGIT_TEST_T2USM_PROGRAM}" != x ]; then return 0; fi
+	echo 'DGIT_TEST_T2USM_PROGRAM not set'
+	return 1
+}
+
+t-restriction-x-dgit-unfinished () {
+	echo 'unfinished test, or unfinished feature'
+	return 1
+}
+
+t-restriction-hint-testsuite-triggers () {
+	:
+}

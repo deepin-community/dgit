@@ -1,0 +1,4 @@
+#!/bin/sh
+set -x
+exec \
+"${DGIT_TEST_REAL_DPKG_DEB}" -Znone "$@"
