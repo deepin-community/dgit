@@ -1,0 +1,17 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-baredebian
+
+t-dependencies quilt
+
+t-setup-import baredebian
+t-tstunt-parsechangelog
+
+cd $p
+baredebian-test-vars
+quiltmode=baredebian+git
+
+baredebian-test-minimum
+
+t-ok

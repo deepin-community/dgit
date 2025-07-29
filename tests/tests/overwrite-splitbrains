@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-gbp-example-prep-no-ff
+
+t-dgit --quilt=gbp --dgit-view-save=split.b build-source
+
+t-dgit fetch
+
+t-refs-same-start
+t-ref-head
+
+t-expect-fail 'maybe --trust-changelog is needed' \
+t-dgit --quilt=gbp --dgit-view-save=split.p push-built
+
+t-refs-same-start
+t-ref-head
+
+t-dgit --quilt=gbp --dgit-view-save=split.p --trust-changelog push-built
+
+t-gbp-pushed-good
+
+t-ok

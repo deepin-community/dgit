@@ -1,0 +1,60 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp
+
+cd $p
+
+t-dgit setup-mergechangelogs
+
+subcmd () {
+	cmd=("$@")
+
+	branch origin 'origin commit'
+}
+
+branch () {
+	branch=$1
+	git checkout gdr-unprocessable/$branch
+	msgcore=$2
+	expected-$expected
+}
+
+cmd () {
+	t-git-debrebase "${cmd[@]}"
+}
+
+expected- () {
+	t-expect-fail E:"$(printf "$mfmt" "$msgcore")" \
+	cmd
+}
+
+expected-ok () {
+	f=../out.$branch."${cmd/[^-a-zA-Z//_}"
+	cmd | tee $f
+	for mfmt in "${mfmts[@]}"; do
+		grep "$(printf "$mfmt" "$msgcore")" $f
+	done
+}
+
+mfmt='found unprocessable commit.*%s'
+subcmd
+subcmd quick
+subcmd new-upstream 2.0 upstream/2.0
+subcmd make-patches
+subcmd breakwater
+subcmd anchor
+
+expected=ok
+mfmts=(' Unprocessable (%s)')
+subcmd analyse
+
+mfmts=('branch not in git-debrebase form'
+	'found unprocessable commit, cannot cope: %s')
+subcmd status
+
+t-ok

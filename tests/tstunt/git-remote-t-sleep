@@ -1,0 +1,8 @@
+#!/bin/sh
+set -e
+repo="$1"
+args="$2"
+
+sleep -- "$args"
+
+exit 127

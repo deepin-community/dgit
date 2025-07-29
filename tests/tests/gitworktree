@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive example 1.0-1
+t-git-none
+
+t-dgit --no-rm-on-error clone $p
+
+mv $p maintree
+cd maintree
+git branch -m maintree-head
+git worktree add ../$p
+cd ../$p
+
+t-dgit fetch
+
+t-dgit setup-new-tree
+
+echo hi >>modification
+git add modification
+git commit -m 'want this'
+t-dgit -wgf quilt-fixup
+
+t-dgit -wgf --quilt=nofix push-source --force-uploading-old-version
+
+t-ok

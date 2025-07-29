@@ -1,0 +1,328 @@
+=head1 NAME
+
+dgit-sponsorship - tutorial for Debian upload sponsorship, using git
+
+=head1 INTRODUCTION AND SCOPE
+
+This tutorial describes how a Debian sponsored contributor
+and
+a sponsoring DD (or DM)
+can collaborate and publish using git.
+
+The sponsor must be intending to use dgit for the upload.
+(If the sponsor does not use dgit,
+it is not possible to properly publish
+a sponsee's git branch.)
+
+It is best if the sponsee also uses dgit;
+but also covered (later on) is the case where
+the sponsee provides a proposed upload in source package form,
+but the sponsor would like to work in git.
+
+This tutorial does not provide a checklist for the sponsor's review.
+Both contributors are expected to be familiar with Debian
+packaging and Debian's processes, and with git.
+
+=head1 SPONSEE WORKFLOW
+
+This section is addressed to the sponsee:
+
+=head2 General
+
+You should prepare the package as if you were going
+to upload it with C<dgit push-source> or C<dgit push-built> yourself.
+
+For a straightforward NMU, consult L<dgit-nmu-simple(7)>.
+
+If you are the (prospective) maintainer,
+you can adopt any suitable (dgit-compatible)
+git workflow.
+The L<dgit-maint-*(7)> tutorials describe some of the possibilities.
+
+=head2 Upload preparation
+
+You should go through all of the steps 
+a self-uploading maintainer would do,
+including building for ad hoc tests,
+and checking via a formal build (eg using C<dgit sbuild>)
+that the package builds on sid (or the target release).
+
+At the point where you would,
+if you were a DD, 
+do the actual upload
+by running dgit push,
+you hand off to your sponsor.
+
+If you were going to use one of the
+C<--quilt=>
+options to dgit, or
+C<dgit --gbp> or C<dgit --dpm>,
+you must specify that in your handoff email - see below.
+
+=head2 git+origs based handoff
+
+The elements of the handoff consists of:
+
+=over
+
+=item *
+
+The git branch.
+
+=item *
+
+Any .orig tarballs which will be needed,
+or sample git-deborig(1),
+git-archive(1)
+or gbp-buildpackage(1)
+command(s) to generate them.
+
+=item *
+
+A sample dgit push-source command, containing
+any dgit --quilt=, --gbp or --dpm option needed
+
+=item *
+
+Plus of course all the usual information about the state
+of the package,
+any caveats or areas you would like the sponsor to focus their review,
+constraints about upload timing, etc.
+
+=back
+
+If the handoff is done by email,
+the elements above should be a in a single, signed, message.
+This could be an RFS submission
+against the sponsorship-requests pseudo-package.
+
+=head3 git branch
+
+=over 4
+
+The sponsee should push their HEAD as a git branch
+to any suitable git server.
+They can use their own git server;
+salsa is another possibility.
+
+The branch names used by the sponsee on their local machine,
+and on the server, do not matter.
+
+Instead, the sponsee should include the
+git commit id of their HEAD
+in their handover email.
+
+=back
+
+=head3 orig tarballs
+
+=over 4
+
+If there are any .origs that are not in the archive already,
+the sponsor will need them as part of the upload.
+(When using a native source package format, no origs are needed.)
+
+If the sponsee generated these tarballs with
+git-deborig(1), git-archive(1)
+or gbp-buildpackage(1),
+they can simply include a sample invocation of
+git-deborig(1) or git-archive(1)
+or ensure that a suitable gbp.conf is present
+in the source package
+to generate the tarball.
+
+Otherwise, the simplest approach is to
+commit the orig tarballs
+with pristine-tar(1), e.g.
+
+=over 4
+
+    % pristine-tar commit ../foo_1.2.3.orig.tar.xz upstream/1.2.3
+
+=back
+
+and be sure to push the pristine-tar branch.
+If you are using git-buildpackage(1), just pass
+I<--git-pristine-tar> and I<--git-pristine-tar-commit>.
+
+Alternatively,
+the sponsee can put them on a suitable webserver,
+or attach to the e-mail,
+if they are small.
+
+The sponsee should quote sha256sums of the .origs in their
+handoff email,
+unless they supplied commands to generate them.
+
+=back
+
+=head3 quilt options
+
+=over 4
+
+Some workflows involve git branches which are not natively
+dgit-compatible.
+Normally dgit will convert them as needed, during push.
+
+Supply a sample "dgit push-source" command
+including any
+C<--gbp> (aka C<--quilt=gbp>),
+C<--dpm> (aka C<--quilt=dpm>),
+or other C<--quilt=> option
+they need to use.
+e.g.
+
+=over 4
+
+    % dgit --gbp push-source
+
+=back
+
+=back
+
+=head1 SPONSOR WORKFLOW
+
+This part is addressed to the sponsor:
+
+=head2 Receiving and validating the sponsorship request
+
+You should check the signature on the email.
+
+Use C<git fetch> or C<git clone> to obtain the git branch
+prepared by your sponsee,
+and obtain any .origs mentioned by the sponsee
+(to extract .origs committed with pristine-tar,
+you can use origtargz(1),
+or use "gbp clone --pristine-tar".)
+
+Check the git commit ID of the sponsee's branch tip,
+and the sha256sums of the .origs,
+against the handoff email.
+
+Now you can check out the branch tip,
+and do your substantive review.
+
+=head2 Dealing with branches that want --quilt=
+
+If your sponsee mentioned a C<--quilt>
+option, and you don't want to grapple with their preferred tree format,
+you can convert their tree into the standard dgit view:
+
+=over 4
+
+    % dgit -wgf --quilt=foo --dgit-view-save=unquilted quilt-fixup
+    % git checkout unquilted
+
+=back
+
+You should check that what you're looking at is a descendant of
+the sponsee's branch.
+
+=head2 Some hints which may help the review
+
+C<dgit fetch sid> will get you an up-to-date
+C<refs/remotes/dgit/dgit/sid>
+showing what's in the archive already.
+
+C<dgit -wgf --damp-run push-source>
+will check that dgit can build an appropriate source package.
+
+There is no need to run debdiff.
+dgit will not upload anything that doesn't unpack
+to exactly the git commit you are pushing,
+so you can rely on what you see in C<git diff>.
+
+=head2 Doing the upload
+
+When you have completed your source review,
+and use
+C<dgit -wgf [--quilt=...] sbuild -A -C>
+or similar, to to the build, and then
+C<dgit -wgf [--quilt=...] push-source>
+or
+C<dgit -wgf [--quilt=...] push-built>
+to do the upload.
+
+Check whether the sponsee made a debian/I<version> tag.
+If they did,
+ensure you have their tag in the repository you are pushing from,
+or pass C<--no-dep14tag>.
+This avoids identically named, non-identical tags,
+which can be confusing.
+
+(It is possible to upload from
+the quilt-cache dgit view.
+If you want to do this,
+B<do not> pass the C<--quilt> or C<--gbp> or C<--dpm> options again,
+and B<do> pass C<--no-dep14tag>,
+since the debian/I<version> tag
+should go on the sponsee's branch.)
+
+If this was the first upload done with dgit,
+you may need to pass
+C<--trust-changelog>
+to dgit.
+
+Alternatively,
+if this was the first ever dgit push of the package to this suite,
+you can pass C<--deliberately-not-fast-forward>
+instead of C<--trust-changelog>.
+This avoids introducing a new origin commit
+into the dgit view of
+the sponsee's git history
+which is unnecessary and could be confusing.
+
+=head1 SPONSORING A NON-GIT-USING SPONSEE
+
+This part is addressed to the sponsor:
+
+If your sponsee does not use git,
+you can still do your review with git,
+and use dgit for the upload.
+
+Your sponsee will provide you with a source package:
+that is, a .dsc and the files it refers to.
+Obtain these files, and check signatures as appropriate.
+Then:
+
+=over 4
+
+    % dgit clone PACKAGE
+    % cd PACKAGE
+    % dgit import-dsc /path/to/sponsee's.dsc +sponsee
+    % git checkout sponsee
+
+=back
+
+Or for an entirely new package:
+
+=over 4
+
+    % mkdir PACKAGE
+    % cd PACKAGE
+    % git init
+    % dgit -pPACKAGE import-dsc /path/to/sponsee's.dsc +sponsee
+
+=back
+
+This will leave you looking at the sponsee's package,
+formatted as a dgit branch.
+
+When you have finished your review and your tests,
+you can do the
+dgit push-source
+(or dgit sbuild and dgit push-built)
+directly from the "sponsee" branch.
+
+You will need to pass
+C<--trust-changelog>
+to dgit push for every successive upload.
+This disables a safety catch which would normally spot
+situations where changes are accidentally lost.
+When your sponsee is sending you source packages -
+perhaps multiple source packages with the same version number -
+these safety catches are inevitably ineffective.
+
+=head1 SEE ALSO
+
+dgit(1), dgit(7), dgit-nmu-simple(7), dgit-maint-*(7)

@@ -1,0 +1,19 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive ruby-rails-3.2 3.2.6-1
+t-git-none
+
+t-dgit clone $p
+cd $p
+
+echo 'added line' >>metadata.yml
+git add metadata.yml
+git commit -m metadata
+
+git config --global color.ui always
+
+t-dgit -wgf build-source
+
+t-ok

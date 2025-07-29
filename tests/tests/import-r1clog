@@ -1,0 +1,94 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+p=sunxi-tools
+v_upstr=1.2
+v_base=$v_upstr-2
+v_input=$v_base.~~dgittest
+
+dpkg-source -x $troot/pkg-srcs/${p}_${v_input}.dsc unmang
+
+mkdir $p
+cd $p
+git init
+cd ..
+
+perl-i-clog () {
+	perl -i "$@" debian/changelog
+}
+
+mangle-start () {
+	mang=$1
+	v="$v_base.$mang"
+	cp -al unmang $mang
+	cd $mang
+	perl-i-clog -pe 's{\~\~dgittest}{'$mang'} if $.==1'
+	cat >>debian/changelog <<'END'
+
+sunxi-tools (1.0-1) unstable; urgency=medium
+
+  * Lies for dgit testing
+
+ -- Example <example@example.org>  Sat, 12 Jul 2011 20:51:56 +0100
+END
+}
+mangle-import () {
+	rm -f debian/*~
+	dpkg-source -b .
+	cd ../$p
+	t-dgit import-dsc ../${p}_${v}.dsc $mang
+	git checkout $mang
+}
+mangle-done () {
+	cd ..
+}
+
+mangle-start good
+mangle-import
+
+: ---------- 'check that if all is well we make right author line' ----------
+
+perl -ne <debian/changelog '
+	next unless m{^'$p' \('$v_upstr'-1\) }...m{^\S};
+	next unless m{^ -- (.*)  (.*) ([-+]\d+)};
+	$time_t = `date -d "$2 $3" +%s`;
+	chomp $time_t;
+	$authline = "$1 $time_t $3";
+	print "author $authline\n";
+	print "committer $authline\n";
+	exit 0;
+' >../headlines-exp
+ch=$(git log -P --grep '^\[dgit import orig ' --pretty='format:%H')
+git cat-file commit $ch |
+perl -ne 'next if m/^$/..0; print if m/^(?:author|committer) /' \
+	>../headlines-got-orig
+diff ../headlines-exp ../headlines-got-orig
+
+mangle-done
+
+: ---------- 'test missing finalisation data in -1' ----------
+
+mangle-start missingdate
+perl-i-clog -pe '$_="" if m{^ -- .* Sat, 12 Jul 2014 20:51:56}'
+mangle-import
+mangle-done
+
+: ---------- 'test garbage before -1' ----------
+
+mangle-start garbage
+perl-i-clog -ne '$_ = "GARBAGE\n" if (m{^\S} && $. != 1) .. 0; print;'
+mangle-import
+mangle-done
+
+: ---------- 'test malformed authline' ----------
+
+mangle-start bademail
+# This causes the output syntax check in clogp_authline to trip;
+# (that's the one which is intended to stop us feeding bad data to git).
+perl-i-clog -pe '
+	next unless m{^ -- .* Sat, 12 Jul 2014 20:51:56.*};
+	s{^([^<]+) }{ -- cause <things to choke> };
+'
+mangle-import
+mangle-done

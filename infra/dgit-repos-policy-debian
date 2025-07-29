@@ -1,0 +1,659 @@
+#!/usr/bin/perl -w
+# dgit repos policy hook script for Debian
+#
+# Copyright (C) 2015-2019  Ian Jackson
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+use strict;
+
+use Debian::Dgit::Infra; # must precede Debian::Dgit; - can change @INC!
+use Debian::Dgit qw(:DEFAULT :policyflags);
+setup_sigwarn();
+
+use POSIX;
+use JSON;
+use File::Temp qw(tempfile);
+use DBI;
+use IPC::Open2;
+use Data::Dumper;
+
+use Debian::Dgit::Policy::Debian;
+
+initdebug('%');
+enabledebuglevel $ENV{'DGIT_DRS_DEBUG'};
+
+END { $? = 127; } # deliberate exit uses _exit
+
+our $distro = shift @ARGV // die "need DISTRO";
+our $repos = shift @ARGV // die "need DGIT-REPOS-DIR";
+our $dgitlive = shift @ARGV // die "need DGIT-LIVE-DIR";
+our $distrodir = shift @ARGV // die "need DISTRO-DIR";
+our $action = shift @ARGV // die "need ACTION";
+
+our $publicmode = 02775;
+our $new_upload_propagation_slop = 3600*4 + 100;# fixme config;
+
+our $poldbh;
+our $pkg;
+our $pkgdir;
+our ($pkg_exists,$pkg_secret);
+
+our $stderr;
+
+our ($version,$suite,$tagname);
+our %deliberately;
+
+# We assume that it is not possible for NEW to have a version older
+# than sid.
+
+# Whenever pushing, we check for
+#   source-package-local tainted history
+#   global tainted history
+#   can be overridden by --deliberately except for an admin prohib taint
+# 
+# ALL of the following apply only if history is secret:
+# 
+# if NEW has no version, or a version which is not in our history[1]
+#   (always)
+#   check all suites
+#   if any suite's version is in our history[1], publish our history
+#   otherwise discard our history,
+#     tainting --deliberately-include-questionable-history
+# 
+# if NEW has a version which is in our history[1]
+#   (on push only)
+#   require explicit specification of one of
+#     --deliberately-include-questionable-history
+#     --deliberately-not-fast-forward
+#       (latter will taint old NEW version --d-i-q-h)
+#   (otherwise)
+#   leave it be
+# 
+# [1] looking for the relevant git tag for the version number and not
+#    caring what that tag refers to.
+#
+#    When we are doing a push to a fresh repo, any version will do: in
+#    this case, this is the first dgit upload of an existing package,
+#    and we trust that the uploader hasn't included in their git
+#    history any previous non-dgit uploads.
+#
+# A wrinkle: if we approved a push recently, we treat NEW as having
+# a version which is in our history.  This is because the package may
+# still be being uploaded.  (We record this using the timestamp of the
+# package's git repo directory.)
+
+# We aim for the following invariants and properties:
+#
+# - .dsc of published dgit package will have corresponding publicly
+#   visible dgit-repo (soon)
+#
+# - when a new package is rejected we help maintainer avoid
+#   accidentally including bad objects in published dgit history
+#
+# - .dsc of NEW dgit package has corresponding dgit-repo but not
+#   publicly readable
+
+sub apiquery ($) {
+    my ($subpath) = @_;
+    local $/=undef;
+    my $dgit = "$dgitlive/dgit";
+    $dgit = "dgit" if !stat_exists $dgit;
+    my $cmd = "$dgit -d$distro \$DGIT_TEST_OPTS";
+    $cmd .= " -".("D" x $debuglevel) if $debuglevel;
+    $cmd .= " archive-api-query $subpath";
+    printdebug "apiquery $cmd\n";
+    $!=0; $?=0; my $json = `$cmd`;
+    defined $json && !$? or die "$subpath $! $?";
+    my $r = decode_json $json;
+    my $d = new Data::Dumper([$r], [qw(r)]);
+    printdebug "apiquery $subpath | ", $d->Dump() if $debuglevel>=2;
+    return $r;
+}
+
+sub vsn_in_our_history ($) {
+    my ($vsn) = @_;
+
+    # Eventually, when we withdraw support for old-format (DEP-14
+    # namespace) tags, we will need to change this to only look
+    # for debiantag_new.  See the commit
+    #   "Tag change: Update dgit-repos-policy-debian"
+    # (reverting which is a good start for that change).
+
+    my @tagrefs = map { "refs/tags/".$_ } debiantags $vsn, $distro;
+    printdebug " checking history  vsn=$vsn tagrefs=@tagrefs\n";
+    open F, "-|", qw(git for-each-ref), @tagrefs;
+    $_ = <F>;
+    close F;
+    return 1 if defined && m/\S/;
+    die "$pkg tagrefs @tagrefs $? $!" if $?;
+    return 0;
+}
+
+sub specific_suite_has_suitable_vsn ($$) {
+    my ($suite, $vsn_check) = @_; # tests $vsn_check->($version)
+    my $in_suite = apiquery "dsc_in_suite/$suite/$pkg";
+    foreach my $entry (@$in_suite) {
+	my $vsn = $entry->{version};
+	die "$pkg ?" unless defined $vsn;
+	printdebug " checking history found suite=$suite vsn=$vsn\n";
+	return 1 if $vsn_check->($vsn);
+    }
+    return 0;
+}
+
+sub new_has_vsn_in_our_history () {
+    return specific_suite_has_suitable_vsn('new', \&vsn_in_our_history);
+}
+
+sub good_suite_has_suitable_vsn ($) {
+    my ($vsn_check) = @_; # as for specific_suite_has_specific_vsn
+    my $suites = apiquery "suites";
+    foreach my $suitei (@$suites) {
+	my $suite = $suitei->{name};
+	die unless defined $suite;
+	next if $suite =~ m/\bnew$/;
+	return 1 if specific_suite_has_suitable_vsn($suite, $vsn_check);
+    }
+    return 0;
+}
+
+sub statpackage () {
+    $pkgdir = "$repos/$pkg.git";
+    if (!stat_exists $pkgdir) {
+	printdebug "statpackage $pkg => ENOENT\n";
+	$pkg_exists = 0;
+    } else {
+	$pkg_exists = 1;
+	$pkg_secret = !!(~(stat _)[2] & 05);
+	printdebug "statpackage $pkg => exists, secret=$pkg_secret.\n";
+    }
+}
+
+sub getpackage () {
+    die "need PACKAGE" unless @ARGV >= 1;
+    $pkg = shift @ARGV;
+    die unless $pkg =~ m/^$package_re$/;
+
+    statpackage();
+}
+
+sub add_taint ($$) {
+    my ($refobj, $reason) = @_;
+
+    printdebug "TAINTING $refobj\n",
+        (map { "\%| $_" } split "\n", $reason),
+        "\n";
+
+    my $tf = new File::Temp or die $!;
+    print $tf "$refobj^0\n" or die $!;
+    flush $tf or die $!;
+    seek $tf,0,0 or die $!;
+
+    my $gcfpid = open GCF, "-|";
+    defined $gcfpid or die $!;
+    if (!$gcfpid) {
+	open STDIN, "<&", $tf or die $!;
+	exec 'git', 'cat-file', '--batch';
+	die $!;
+    }
+
+    close $tf or die $!;
+    $_ = <GCF>;
+    defined $_ or die;
+    m/^(\w+) (\w+) (\d+)\n/ or die "$_ ?";
+    my $gitobjid = $1;
+    my $gitobjtype = $2;
+    my $bytes = $3;
+
+    my $gitobjdata;
+    if ($gitobjtype eq 'commit' or $gitobjtype eq 'tag') {
+	$!=0; read GCF, $gitobjdata, $bytes == $bytes
+	    or die "$gitobjid $bytes $!";
+    }
+    close GCF;
+
+    $poldbh->do("INSERT INTO taints".
+		" (package, gitobjid, gitobjtype, gitobjdata, time, comment)".
+		" VALUES (?,?,?,?,?,?)", {},
+		$pkg, $gitobjid, $gitobjtype, $gitobjdata, time, $reason);
+
+    my $taint_id = $poldbh->last_insert_id(undef,undef,"taints","taint_id");
+    die unless defined $taint_id;
+
+    $poldbh->do("INSERT INTO taintoverrides".
+		" (taint_id, deliberately)".
+		" VALUES (?, '--deliberately-include-questionable-history')", 
+		{}, $taint_id);
+}
+
+sub add_taint_by_tag ($$) {
+    my ($tagname,$refobjid) = @_;
+    add_taint($refobjid,
+	      "tag $tagname referred to this object in git tree but all".
+	      " previously pushed versions were found to have been".
+	      " removed from NEW (ie, rejected) (or never arrived)");
+}
+
+sub check_package () {
+    # This is not read-only, but it is safe to call within a
+    # policy-client-query, because it will do one of the following:
+    #
+    #  * Do nothing much.
+    #  * Find that the package has been ACCEPTed, make it not secret,
+    #    and mirror it.
+    #  * Find that the package has been REJECTed and add some taints
+    #    to the db.  This may be rolled back, but that's OK because
+    #    future calls will discover the same.
+    #
+    # (This is a consequence of this function being idempotent,
+    # cron-callable, and correct in the sense that it doesn't make
+    # wrongly-sequenced updates to both the DB and the FS.)
+    #
+    # An (often useful) side-effect is to chdir to the package repo.
+    return 0 unless $pkg_exists;
+    return 0 unless $pkg_secret;
+
+    printdebug "check_package\n";
+
+    chdir $pkgdir or die "$pkgdir $!";
+
+    stat '.' or die "$pkgdir $!";
+    my $mtime = ((stat _)[9]);
+    my $age = time -  $mtime;
+    printdebug "check_package age=$age\n";
+
+    if (good_suite_has_suitable_vsn(\&vsn_in_our_history)) {
+	chmod $publicmode, "." or die $!;
+	$pkg_secret = 0;
+	eval {
+	    my $mirror_hook = "$distrodir/mirror-hook";
+	    if (stat_exists $mirror_hook) {
+		my @mirror_cmd =
+		    ($mirror_hook, $distrodir, "updated-hook", $pkg);
+		debugcmd " (mirror)",@mirror_cmd;
+		system @mirror_cmd and failedcmd @mirror_cmd;
+	    }
+	};
+	if (length $@) {
+	    chomp $@;
+	    print STDERR "policy hook: warning:".
+		" failed to mirror publication of \`$pkg':".
+		" $@\n";
+	}
+	return 0;
+    }
+
+    return 0 if $age < $new_upload_propagation_slop;
+
+    return 0 if new_has_vsn_in_our_history();
+
+    printdebug "check_package secret, deleted, tainting\n";
+
+    git_for_each_ref('refs/tags', sub {
+	my ($objid,$objtype,$fullrefname,$tagname) = @_;
+	add_taint_by_tag($tagname,$objid);
+    });
+
+    return FRESHREPO;
+}
+
+sub action_check_package () {
+    getpackage();
+    return check_package();
+}
+
+sub getpushinfo () {
+    die unless @ARGV >= 4;
+    $version = shift @ARGV;
+    $suite = shift @ARGV;
+    $tagname = shift @ARGV;
+    my $delibs = shift @ARGV;
+    foreach my $delib (split /\,/, $delibs) {
+	$deliberately{$delib} = 1;
+    }
+}
+
+sub deliberately ($) { return $deliberately{"--deliberately-$_[0]"}; }
+
+sub package_questionable_head_msg () {
+    # This lets us reuse some of the same code, and the same message,
+    # for checking during actual push, and for pre-push taint check.
+    #
+    # In principle it might be nicer to unify this code, with some
+    # kind of super realistic dry run push function.  However, that
+    # dry run function would have to involve sending the client's git
+    # objects to the server.  We wouldn't want to do that twice, so it
+    # would have to be cached somehow, but we don't want to allow
+    # un-signed things to lurk about on the server.  (The super dry
+    # run mode would have to involve the server tolerating an unsigned
+    # tag, or something, but that would be OK in principle.)  The dry
+    # run mode would have to be careful about what subsets of the
+    # actions it took.
+    #
+    # So instead we apply ad-hoc checks, with separate implementations
+    # for the push path, and the pre-push checks.  The tainted-objects
+    # policy-client-query exists to support this: it allows the
+    # efficient reimplementation of the tainted objects check, without
+    # transferring the objects to the server.
+
+    return undef unless $pkg_exists;
+    return undef unless $pkg_secret;
+    # TODO: ideally this would be translated at the client end but
+    # that would involve marking it i_ here (which is part of
+    # dgit-intrastructure.deb) and then having the string appear in
+    # the po for dgit.deb.
+    return <<END;
+Package is in NEW and has not been accepted or rejected yet.
+Unfortunately, we cannot determine automatically what should happen.
+You will have to pass either --deliberately-not-fast-forward or
+--deliberately-include-questionable-history to specify whether you are
+keeping or discarding the previously pushed history.
+
+The choice is important, to ensure that your git history is both
+suitable for public distribution and as useful as possible.  Please
+see the descriptions of these options in dgit(1).
+END
+}
+
+sub action_push () {
+    getpackage();
+    getpushinfo();
+
+    check_package(); # might make package public, or might add taints
+
+    my $questionable_head_msg = package_questionable_head_msg();
+    return 0 unless defined $questionable_head_msg;
+
+    # we suppose that NEW has a version which is already in our
+    # history, as otherwise the repo would have been blown away
+
+    if (deliberately('not-fast-forward')) {
+	add_taint(server_ref($suite),
+		  "rewound suite $suite; --deliberately-not-fast-forward".
+		  " specified in signed tag $tagname for upload of".
+		  " version $version");
+	return NOFFCHECK|FRESHREPO;
+    }
+    if (deliberately('include-questionable-history')) {
+	return 0;
+    }
+    die "\n". $questionable_head_msg. "\n";
+}
+
+sub action_push_confirm () {
+    getpackage();
+    getpushinfo();
+    die unless @ARGV >= 1;
+    my $freshrepo = shift @ARGV;
+
+    my $initq = $poldbh->prepare(<<END);
+        SELECT taint_id, gitobjid FROM taints t
+            WHERE (package = ? OR package = '')
+END
+    $initq->execute($pkg);
+
+    my @objscatcmd = qw(git);
+    push @objscatcmd, qw(--git-dir), $freshrepo if length $freshrepo;
+    push @objscatcmd, qw(cat-file --batch);
+    debugcmd '|',@objscatcmd if $debuglevel>=2;
+
+    my @taintids;
+    my $chkinput = tempfile();
+    while (my $taint = $initq->fetchrow_hashref()) {
+	push @taintids, $taint->{taint_id};
+	print $chkinput $taint->{gitobjid}, "\n" or die $!;
+	printdebug '|> ', $taint->{gitobjid}, "\n" if $debuglevel>=2;
+    }
+    flush $chkinput or die $!;
+    seek $chkinput,0,0 or die $!;
+
+    my $checkpid = open CHKOUT, "-|" // die $!;
+    if (!$checkpid) {
+	open STDIN, "<&", $chkinput or die $!;
+	delete $ENV{GIT_ALTERNATE_OBJECT_DIRECTORIES};
+	# ^ recent versions of git set this in the environment of
+	# receive hooks.  This can cause us to see things which
+	# the user is trying to abolish.
+	exec @objscatcmd or die $!;
+    }
+
+    my ($taintinfoq,$overridesanyq,$untaintq,$overridesq);
+
+    my $overridesstmt = <<END;
+        SELECT deliberately FROM taintoverrides WHERE (
+            1=0
+END
+    my @overridesv = sort keys %deliberately;
+    $overridesstmt .= <<END foreach @overridesv;
+            OR deliberately = ?
+END
+    $overridesstmt .= <<END;
+	) AND taint_id = ?
+        ORDER BY deliberately ASC
+END
+
+    my $mustreject=0;
+    my %hinted;
+
+    while (my $taintid = shift @taintids) {
+	$!=0; $_ = <CHKOUT>;
+	die "($taintid @objscatcmd) $!" unless defined $_;
+	printdebug "|< ", $_ if $debuglevel>=2;
+
+	next if m/^\w+ missing$/;
+	die "($taintid @objscatcmd) $_ ?" unless m/^(\w+) (\w+) (\d+)\s/;
+	my ($objid,$objtype,$nbytes) = ($1,$2,$3);
+
+	my $drop;
+	(read CHKOUT, $drop, $nbytes) == $nbytes
+	    or die "($taintid @objscatcmd) $!";
+
+	$!=0; $_ = <CHKOUT>;
+	die "($taintid @objscatcmd) $!" unless defined $_;
+	die "($taintid @objscatcmd) $_ ?" if m/\S/;
+
+	$taintinfoq ||= $poldbh->prepare(<<END);
+            SELECT package, time, comment FROM taints WHERE taint_id =  ?
+END
+        $taintinfoq->execute($taintid);
+
+	my $ti = $taintinfoq->fetchrow_hashref();
+	die "($taintid)" unless $ti;
+
+        printdebug "SQL overrides: @overridesv $taintid /\n$overridesstmt\n";
+
+        $overridesq ||= $poldbh->prepare($overridesstmt);
+	$overridesq->execute(@overridesv, $taintid);
+	my ($ovwhy) = $overridesq->fetchrow_array();
+	my $ovstatus;
+	if (!defined $ovwhy) {
+	    $overridesanyq ||= $poldbh->prepare(<<END);
+	        SELECT 1 FROM taintoverrides WHERE taint_id = ? LIMIT 1
+END
+	    $overridesanyq->execute($taintid);
+	    my ($ovany) = $overridesanyq->fetchrow_array();
+	    $ovwhy = $ovany ? '' : undef;
+            $mustreject = 1;
+	} else {
+            $untaintq ||= $poldbh->prepare(<<END);
+                DELETE FROM taints WHERE taint_id = ?
+END
+            $untaintq->execute($taintid);
+        }
+
+	$stderr .= tainted_objects_message({
+	    %$ti,
+	    gitobjid => $objid,
+	    gitobjtype => $objtype,
+	}, $ovstatus, \%hinted);
+
+    }
+    close CHKOUT;
+
+    if ($mustreject) {
+	$stderr .= <<END;
+
+Rejecting push due to questionable history.
+END
+        return 1;
+    }
+
+    if (length $freshrepo) {
+	if (!good_suite_has_suitable_vsn(sub { 1; })) {
+	    stat $freshrepo or die "$freshrepo $!";
+	    my $oldmode = ((stat _)[2]);
+	    my $oldwrites = $oldmode & 0222;
+	    # remove r and x bits which have corresponding w bits clear
+	    my $newmode = $oldmode &
+		(~0555 | ($oldwrites << 1) | ($oldwrites >> 1));
+	    printdebug sprintf "chmod %#o (was %#o) %s\n",
+	        $newmode, $oldmode, $freshrepo;
+	    chmod $newmode, $freshrepo or die $!;
+	    utime undef, undef, $freshrepo or die $!;
+	}
+    }
+
+    return 0;
+}
+
+sub action_check_list () {
+    opendir L, "$repos" or die "$repos $!";
+    while (defined (my $dent = readdir L)) {
+	next unless $dent =~ m/^($package_re)\.git$/;
+	$pkg = $1;
+	statpackage();
+	next unless $pkg_exists;
+	next unless $pkg_secret;
+	print "$pkg\n" or die $!;
+    }
+    closedir L or die $!;
+    close STDOUT or die $!;
+    return 0;
+}
+
+sub polclqu_tainted_objects () {
+    check_package();
+    my $suite = shift @ARGV // die "need SUITE";
+
+    my $topq = $poldbh->selectall_arrayref(<<END,
+        SELECT taint_id, gitobjtype, gitobjid, time, comment
+          FROM taints
+         WHERE (package = ? OR package = '')
+END
+					   { Slice => {} },
+					   $pkg);
+    foreach my $row (@$topq) {
+	my $delibs = $poldbh->selectall_arrayref(<<END,
+        SELECT deliberately
+          FROM taintoverrides
+         WHERE taint_id = ?
+END
+				 { },
+				 $row->{taint_id});
+        $row->{overrides} = [ map { $_->[0] } @$delibs ];
+	delete $row->{taint_id};
+	# remove any undef entries, for nice json
+	foreach my $k (keys %$row) {
+	    defined $row->{$k} or delete $row->{$k};
+	}
+    }
+    if (defined(my $questionable_head_msg = package_questionable_head_msg())) {
+	# We would reject this in push.  We need to arrange that the
+	# client will detect this.  The object tainting mechanism can
+	# be (ab)used for this: we tell the client that HEAD is tainted.
+	my $head = git_rev_parse(server_ref($suite).'~0');
+	push @$topq, {
+          gitobjtype => 'commit',
+          gitobjid => $head,
+          comment => 'Package is in NEW, need a --deliberately',
+          hint => $questionable_head_msg,
+          # If the client was told -d-i-q-h, then they can go ahead -
+          # our push will be placated.  If the client was told -d-n-f-f
+          # then presumably they aren't sending the old HEAD, so there
+          # won't be a tainted object reachable from their head - so
+          # -d-n-f-f isn't listed here.  After all, this is for controlling
+          # when the client will regard this as a blocking problem, not
+          # for advising the user about overriding options.
+          overrides => [qw(--deliberately-include-questionable-history)]
+        };
+    }
+    print encode_json $topq, "\n" or die $!;
+}
+
+my $fn_name;
+
+if ($action eq 'policy-client-query') {
+    getpackage();
+    my $query = shift @ARGV // die "need QUERY-OP";
+    $fn_name = "polclqu_$query";
+} else {
+    $fn_name = "action_$action";
+}
+$fn_name =~ y/-/_/;
+my $fn = ${*::}{$fn_name};
+
+if (!$fn) {
+    printdebug "dgit-repos-policy-debian: unknown $fn_name\n";
+    _exit 0;
+}
+
+my $sleepy=0;
+my $rcode;
+
+my $db_busy_exception= 'Debian::Dgit::Policy::Debian::DB_BUSY';
+
+my @orgargv = @ARGV;
+
+for (;;) {
+    @ARGV = @orgargv;
+    eval {
+	poldb_setup(poldb_path($repos), sub {
+	    $poldbh->{HandleError} = sub {
+		return 0 unless $poldbh->err == 5; # SQLITE_BUSY, not in .pm :-(
+		die bless { }, $db_busy_exception;
+	    };
+
+	    eval ($ENV{'DGIT_RPD_TEST_DBLOOP_HOOK'}//'');
+	    die $@ if length $@;
+	    # used by tests/tests/debpolicy-dbretry
+        });
+
+	$stderr = '';
+
+	$rcode = $fn->();
+
+	if ($action eq 'policy-client-query') {
+	    close STDOUT or die $!;
+	    _exit 0;
+	} else {
+	    die unless defined $rcode;
+
+	    $poldbh->commit;
+	    printdebug "poldbh commit\n";
+	}
+    };
+    last unless length $@;
+    die $@ unless ref $@ eq $db_busy_exception;
+
+    die if $sleepy >= 20;
+    $sleepy++;
+    print STDERR "[policy database busy, retrying (${sleepy}s)]\n";
+
+    eval { $poldbh->rollback; };
+}
+
+print STDERR $stderr or die $!;
+flush STDERR or die $!;
+_exit $rcode;

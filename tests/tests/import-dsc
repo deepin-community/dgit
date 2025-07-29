@@ -1,0 +1,126 @@
+#!/bin/bash
+set -e
+. tests/lib
+t-tstunt-parsechangelog
+
+t-setup-import examplegit
+
+p=example
+
+check-import () {
+	path=$1
+	v=$2
+	opts=$3
+	branch=t.$v
+
+	dsc=${path}/${p}_${v}.dsc
+	t-dgit $opts import-dsc $dsc $branch
+
+	git checkout $branch
+
+	check-imported $dsc
+}
+
+check-imported () {
+	local dsc=$1
+	(
+	rm -rf ../t.unpack
+	mkdir ../t.unpack
+	cd ../t.unpack
+	dpkg-source -x $dsc
+	)
+
+	git checkout HEAD~0
+	git branch -D u.$v ||:
+	git checkout -b u.$v $branch
+	git rm -rf .
+	git clean -xdf
+	cp -al ../t.unpack/*/. .
+	git add -Af .
+
+	git diff --stat --exit-code
+}
+
+cd $p
+
+check-import ../mirror/pool/main 1.2
+
+dgit12=`git rev-parse HEAD`
+
+dsc2=../mirror/pool/main/${p}_2.0.dsc
+
+git checkout $branch
+t-expect-fail 'is checked out - will not update' \
+t-dgit import-dsc $dsc2 $branch
+
+git checkout HEAD~0
+
+t-expect-fail 'Not fast forward' \
+t-dgit import-dsc $dsc2 $branch
+
+t-expect-fail 'Not fast forward' \
+t-dgit import-dsc $dsc2 ..$branch
+
+t-dgit import-dsc $dsc2 +$branch
+check-imported $dsc2
+
+dsc3=$troot/pkg-srcs/example_1.0-1+brokenmeta.dsc
+t-dgit import-dsc $dsc3 +$branch
+check-imported $dsc3
+
+cd ..
+mkdir $p.2
+cd $p.2
+
+git init
+
+check-import $troot/pkg-srcs 1.0-1
+
+cd ..
+v=1.0-1+absurd
+rm -f ${p}_*
+dsc=$troot/pkg-srcs/${p}_${v}.dsc
+cd $p.2
+
+cp $dsc ..
+t-expect-fail 'No such file or directory' \
+check-import .. $v
+
+mkdir ../enoents
+cp $dsc ../enoents
+t-expect-fail 'No such file or directory' \
+check-import ../enoents $v
+
+cd ..
+rm -f ${p}_${v}.dsc
+dget -du file://$dsc
+cd $p.2
+
+check-import .. $v
+
+t-expect-fail "Your git tree does not have that object" \
+check-import ../mirror/pool/main 1.2 --no-chase-dsc-distro
+
+check-import ../mirror/pool/main 1.2 --force-import-dsc-with-dgit-field
+
+v=1.0-1.100
+dsc2=$troot/pkg-srcs/${p}_${v}.dsc
+
+t-expect-fail E:'Branch.*already exists' \
+t-dgit import-dsc $dsc2 $branch
+
+git branch merge-reset
+t-dgit import-dsc $dsc2 ..$branch
+t-has-ancestor merge-reset $branch
+
+git push . +merge-reset:$branch
+
+t-dgit import-dsc $dsc2 +$branch
+
+mb=$(t-git-merge-base merge-reset $branch)
+test "x$mb" = x
+
+t-expect-fail 'signature check failed' \
+t-dgit import-dsc --require-valid-signature $dsc2 +$branch
+
+t-ok

@@ -1,0 +1,3 @@
+#!/bin/sh
+echo >&2 'W: dgit test suite stunt lintian detects no problems'
+exit 0

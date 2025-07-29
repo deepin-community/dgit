@@ -1,0 +1,219 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-drs
+t-git-none
+
+t-select-package pari-extra
+t-worktree drs
+
+cd $p
+
+git remote set-url origin \
+ "ext::$troot/drs-git-ext %S /pari-extra.git"
+
+mustfail () {
+	local mpat="$1"; shift
+	t-expect-push-fail "$mpat" \
+	git push origin "$@"
+}
+
+mustsucceed () {
+	t-reporefs pre-push
+	git push origin "$@"
+	t-reporefs post-push
+	if diff $tmp/show-refs.{pre,post}-push >$tmp/show-refs.diff; then
+		fail "no refs updated"
+	fi
+}
+
+prep () {
+	local suite=$1
+	csuite=$2
+	cp $tmp/masters/* $tmp/.
+	tag_signer='-u Senatus'
+	tag_message="$p release $version for $suite ($csuite) [dgit]
+
+[dgit distro=test-dummy]"
+	re-prep
+}
+re-prep () {
+	tag_name=$tagpfx/$version
+	push_spec1="HEAD:refs/dgit/$csuite"
+	push_spec2="refs/tags/$tag_name"
+	push_spec="$push_spec1 $push_spec2"
+}
+mktag () {
+	t-git-next-date
+	git tag -f $tag_signer -m "$tag_message" $tag_name "$@"
+}
+
+mkdir $tmp/masters
+cp $tmp/d[dm].* $tmp/masters
+
+version=3-2_dummy1
+
+prep unstable sid
+tag_signer='-a'
+mktag
+mustfail 'missing signature' $push_spec
+
+git cat-file tag $tag_name >goodtag
+
+for h in object type tag; do
+  for how in missing dupe; do
+
+    case $how in
+    missing) perl -pe 's/^tag /wombat$&/ if 1..m/^$/'  <goodtag >badtag ;;
+    dupe)   perl -pe 'print if 1..m/^$/ and m/^'$h' /' <goodtag >badtag ;;
+    esac
+
+    rm -f badtag.asc
+    gpg --detach-sign --armor -u Senatus badtag
+    cat badtag.asc >>badtag
+
+    set +e
+    LC_MESSAGES=C git hash-object -w -t tag badtag >badtag.hash 2>badtag.err
+    rc=$?
+    set -e
+
+    if [ $rc = 128 ] && egrep 'fatal: corrupt tag|error: object fails fsck: missing.*Entry: invalid format' badtag.err; then
+      continue
+    elif [ $rc != 0 ]; then
+      cat badtag.err
+      fail "could not make tag"
+    fi
+
+    read <badtag.hash badtag
+    git update-ref refs/tags/$tag_name $badtag
+
+    mustfail 'multiple headers '$h' in signed tag object' $push_spec
+
+    t-expect-fsck-fail $badtag
+  done
+done
+
+prep unstable sid
+tag_message='something'
+mktag
+mustfail 'tag summary line not in expected format' $push_spec
+
+prep unstable sid
+mktag
+mustfail 'sid != sponge' HEAD:refs/dgit/sponge $push_spec2
+
+# fixme test --sig-policy-url string
+# fixme cannot test   reject "signature is not of type 00!";
+
+prep unstable sid
+mktag
+mustfail 'push is missing tag ref update' $push_spec1
+mustfail 'push is missing head ref update' +$push_spec2
+mustfail 'pushing unexpected ref' $push_spec HEAD:refs/wombat
+mustfail 'pushing multiple heads' $push_spec HEAD:refs/dgit/wombat
+mustfail E:'pushing multiple tags|pushing too many similar tags|need exactly one archive' \
+	$push_spec HEAD:refs/tags/$tagpfx/wombat
+
+prep unstable sid
+mktag
+echo woody >$tmp/suites
+mustfail 'unknown suite' $push_spec
+cp $root/tests/suites $tmp/.
+
+# fixme:
+#    or reject "command string not understood";
+#    reject "unknown method" unless $mainfunc;
+
+
+prep unstable sid
+mktag
+cp $tmp/dm.gpg $tmp/dd.gpg
+mustfail 'key not found in keyrings' $push_spec
+
+prep unstable sid
+mktag HEAD~
+mustfail 'tag refers to wrong commit' $push_spec
+
+prep unstable sid
+mktag HEAD~:
+mustfail 'tag refers to wrong kind of object' $push_spec
+
+prep unstable sid
+tag_name=$tagpfx/wombat
+mktag
+#git update-ref $tagpfx/$version $tagpfx/wombat
+mustfail 'tag name in tag is wrong' \
+	refs/tags/$tagpfx/wombat:refs/tags/$tagpfx/$version $push_spec1
+
+set +e
+badcommit=$(
+	set -e
+	LC_MESSAGES=C t-make-badcommit 2>badcommit.err
+	echo "$badcommit"
+)
+rc=$?
+set -e
+if [ $rc = 0 ]; then
+  git checkout -b broken $badcommit
+  prep unstable sid
+  mktag
+  mustfail "corrupted object $badcommit" $push_spec
+elif [ $rc = 128 ] && egrep 'error: object fails fsck: missingCommitter: invalid format' badcommit.err; then :; else
+  cat badcommit.err
+  fail "could not bad commit"
+fi
+
+git checkout dgit/sid
+prep unstable sid
+mktag
+mustsucceed $push_spec # succeeds
+
+mktag
+mustfail 'push is missing head ref update' $push_spec1 +$push_spec2
+
+git commit --allow-empty -m 'Dummy update'
+mktag
+mustfail 'not replacing previously-pushed version' +$push_spec1 +$push_spec2
+
+re-prep
+mktag
+mustfail 'not replacing previously-pushed version' +$push_spec1 +$push_spec2
+
+git reset --hard HEAD~
+
+prep_dm_mangle () {
+	prep unstable sid
+	perl -i.bak -pe '
+		next unless m/^fingerprint: 3A82860837A0CD32/i../^$/;
+	' -e "$1" $tmp/dm.txt
+	tag_signer='-u Populus'
+	mktag
+}
+
+git commit --amend --message 'Make it not a fast forward'
+version=3-2_dummy2
+prep unstable sid
+mktag
+mustfail 'not fast forward on dgit branch' +$push_spec1 +$push_spec2
+
+git checkout v2
+version=3-2_dummy2
+
+prep_dm_mangle ''
+perl -i.bak -ne 'print if 1..s/(pari-extra).*\n/$1/' $tmp/dm.txt
+mustfail '' $push_spec # malformed (truncated) dm.txt; don't care about msg
+
+prep_dm_mangle 's/allow:/asponge:/i'
+mustfail 'missing Allow section in permission' $push_spec
+
+prep_dm_mangle 's/\bpari-extra\b/sponge/i'
+mustfail "package $p not allowed for key" $push_spec
+
+prep_dm_mangle 'y/0-9/5-90-4/ if m/^fingerprint:/i'
+mustfail "not in permissions list although in keyring" $push_spec
+
+prep_dm_mangle ''
+mustsucceed $push_spec # succeeds
+
+t-ok

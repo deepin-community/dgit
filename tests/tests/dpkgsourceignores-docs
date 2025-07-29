@@ -1,0 +1,54 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-intree-only
+# we need the .pod source, which is not shipped
+
+cd $tmp
+
+: ----- extract args from document -----
+
+perl -ne '
+	BEGIN { print "\n=head1 dgit-test-title\n\n"; }
+	next unless
+		m/^=for dgit-test dpkg-source-ignores begin/..
+		m/^=for dgit-test dpkg-source-ignores end/;
+	next unless m/dpkg-buildpackage.*-i.*-I/;
+	s/\s*dpkg-buildpackage\s+//;
+	s/\s+-S\s*//;
+	print;
+' $root/dgit-maint-merge.7.pod >doc.pod
+
+pod2text doc.pod >doc.txt
+
+perl -ne '
+	next unless m/\S/;
+	next if m/dgit-test-title/;
+	print "for arg in ";
+	print;
+	print " do\n";
+' doc.txt >doc.sh
+
+cat >>doc.sh <<'END'
+	printf "%s\n" "$arg"
+done
+END
+
+chmod +x doc.sh
+./doc.sh >doc.args
+
+: ----- extract args from dgit -----
+
+args=$( t-dgit print-dpkg-source-ignores )
+
+>dgit.args
+for arg in $args; do
+	printf >>dgit.args "%s\n" "$arg"
+done
+
+: ----- compare -----
+
+diff -u dgit.args doc.args
+
+t-ok

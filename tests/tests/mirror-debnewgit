@@ -1,0 +1,26 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-mirror
+
+t-dependencies rsync
+
+t-debpolicy
+
+t-archive pari-extra 3-1
+t-git-none
+
+t-mirror-setup
+
+t-dgit clone $p
+
+cd $p
+t-cloned-fetched-good
+
+t-commit 'test commit' 3-2
+
+t-dgit build
+t-dgit push-built
+t-check-mirrored
+
+t-ok

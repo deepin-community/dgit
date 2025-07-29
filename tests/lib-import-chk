@@ -1,0 +1,98 @@
+# -*- sh -*-
+
+t-import-chk-authorship () {
+	perl -ne 'print $1,"\n" if m/^ -- (\S.*\>)  /' debian/changelog \
+		| t-sort -u \
+		> $tmp/authorship.changelog
+	${import_chk_changelog_massage:-:} $tmp/authorship.changelog
+	git log --pretty=format:'%an <%ae>%n%cn <%ce>' \
+		| t-sort -u \
+		> $tmp/authorship.commits
+	diff $tmp/authorship.{changelog,commits}
+}
+
+t-import-chk1 () {
+	p=$1
+	v=$2
+
+	t-archive $p $v
+}
+t-import-chk2() {
+	t-git-none
+	rm -rf $p
+	t-dgit --no-rm-on-error clone $p
+
+	# And now we make an update using the same orig tarball, and
+	# check that the orig import is stable.
+
+	cd $p
+
+	t-import-chk-authorship
+
+	git branch first-import
+
+	m='Commit for import check'
+	echo "$m" >>import-check
+
+	v=${v%-*}-99
+	dch -v $v -D unstable -m "$m"
+
+	git add import-check debian/changelog
+	git commit -m "$m"
+
+	t-dgit -wgf quilt-fixup
+	t-dgit -wgf build-source
+
+	# The resulting .dsc does not have a Dgit line (because dgit push
+	# puts that in).  So we just shove it in the archive now
+
+	ln $bpd/${p}_${v}.* $tmp/mirror/pool/main/
+	t-archive-query
+
+	t-dgit fetch
+
+	git branch first-2nd-import remotes/dgit/dgit/sid
+
+	t-git-next-date
+
+	git update-ref refs/remotes/dgit/dgit/sid first-import
+
+	t-dgit fetch
+
+	t-refs-same-start
+	t-ref-same refs/remotes/dgit/dgit/sid
+	t-ref-same refs/heads/first-2nd-import
+
+	for orig in $bpd/${p}_${v%-*}.orig*.tar.*; do
+		tar -atf $orig | t-sort >$bpd/files.o
+		pfx=$(perl <$bpd/files.o -ne '
+			while (<>) {
+				m#^([^/]+/)# or exit 0;
+				$x //= $1;
+				$x eq $1 or exit 0;
+			}
+			print "$x\n";
+		')
+		perl -i~ -pe '
+			s#^\Q'"$pfx"'\E##;
+			$_="" if m/^$/ || m#/$# || m#^\.git/#;
+		' $bpd/files.o
+		orig=${orig#$bpd/}
+		pat="^Import ${orig//./\\.}\$"
+		t-refs-same-start
+		for start in first-import first-2nd-import; do
+			git log --pretty='tformat:%H' --grep "$pat" $start \
+				>$bpd/t.imp
+			test $(wc -l <$bpd/t.imp) = 1
+			imp=$(cat $bpd/t.imp)
+			t-ref-same-val "$orig $start" "$imp"
+		done
+		git ls-tree -r --name-only "$t_ref_val:" \
+			| t-sort >$bpd/files.g
+		diff $bpd/files.{o,g}
+	done
+	cd ..
+}
+
+t-import-chk() { t-import-chk1 "$@"; t-import-chk2; }
+

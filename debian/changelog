@@ -1,5 +1,3571 @@
-template-repository (1.0-1) unstable; urgency=medium
+dgit (12.15) unstable; urgency=medium
 
-  * Initial release
+  git-debpush bugfixes:
+  * Fix package dependencies.
+  * Do not pointlessly print "pristine-tar is /usr/bin/pristine-tar".
+  * Some shell quoting fixes.
 
- -- Tsic404 <liuheng@deepin.org>  Sat, 28 Jan 2023 13:46:49 +0800
+  Shell scripts:
+  * Use shopt -s inherit_errexit everywhere to work around #514862.
+
+  Testing:
+  * New more-minimal standalone test cases for git-debpush.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 22 Jun 2025 17:53:17 +0100
+
+dgit (12.14) unstable; urgency=medium
+
+  * tests: t2u: Add missing dependency on pristine-tar; fixes CI.
+  * git-debpush: Suppress some spurious and confusing messages.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 16 Jun 2025 17:58:19 +0100
+
+dgit (12.13) unstable; urgency=medium
+
+  git-debpush behavioural change:
+  * Detect apparent intent to use pristine-tar (which is not supported).
+    Otherwise we could upload source packages (to the ftp archive) which,
+    while correct, were not what the user expected.  Closes: #1105862.
+    [Sean Whitton; reports from Simon Josefsson, Anton Gladky]
+
+  Documentation:
+  * git-debpush(1): Fix erroneous dedent location for
+    end of list of options.  [Sean Whitton]
+  * i18n: Updated message translation for nl.
+    Closes: #1106481.  [Frans Spiesschaert]
+
+  Administrivia/testing:
+  * gitlab CI metadata: Add dgit-test-suite trixie job.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 13 Jun 2025 16:09:04 +0100
+
+dgit (12.12) unstable; urgency=medium
+
+  Bugfixes:
+  * git-debrebase: Use add -f for d/p/series in merge resolution
+    Closes: #1101958.  [Report from Sean Whitton]
+  * Honour debian-nonupload keyring as a DM keyring.  Will enable
+    "non-uploading" DDs who have DM permissions to dgit push, and
+    use tag2upload.  Closes:1102202.
+
+  Process metadata [Sean Whitton]:
+  * dgit-infrastructure package description:
+    Say "git depository" as per delegation.
+  * Set Maintainer to role address, with humans in Uploaders.
+  * Set a GitLab issue template.
+
+  Documentation:
+  * git-debrebase(1): fix xref to git-debrebase(5).  [Tony Finch]
+  * i18n: Updated nl translations for dgit-user(7) and messages.
+    Closes: #1103908, #1103910.  [Frans Spiesschaert]
+
+  tag2upload internals:
+  * tag2upload-oracled: Add function prototypes.  [Sean Whitton]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 09 May 2025 14:38:16 +0100
+
+dgit (12.11) unstable; urgency=high
+
+  dgit, dgit-repos-server, Dgit.pm [Ian Jackson]:
+  * Install countermeasures for 'rm -r' failure (see #1101580).
+  * Replace File::Path::rmtree with a subroutine of our own.
+
+  tag2upload-oracled [Ian Jackson]:
+  * Fix worker PID tracking, and rigorously avoid sending wild signals.
+    Closes: #1101690.
+  * Do not ignore SIGCHLD.
+  * Quit if the link count of the workercwd becomes zero.
+
+  Test suite:
+  * autopkgtest-virt-null-for-test: Avoid 'mkdir -p'.
+    Don't recreate the whole test's $tmp directory from here.  [Ian Jackson]
+  * autopkgtest-virt-null-for-test: Always set TMPDIR.
+    In particular, when autopkgtest is new enough not to require workarounds.
+    [Ian Jackson]
+  * tag-updates test: Fix $tagname variable.
+    Broken for a while, revealed by git 2.49.0 hitting sid.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Mon, 31 Mar 2025 11:45:54 +0800
+
+dgit (12.10) unstable; urgency=medium
+
+  dgit:
+  * Avoid crash with EEXIST on single-debian-patch and --split-view=always.
+    Closes: #1076983.  [Report from Aaron M. Ucko]
+  * Better tolerate source trees without debian/rules, eg with debputy.
+    Closes: #1092929.  [Niels Thykier; report from Andrea Pappacoda]
+
+  git-debrebase:
+  * Unconditionally enable general merge resolution attempts;
+    improve relevant documentation, and invite bug reports.
+    (Previously this required --experimental-merge-resolution).
+  * upstream: Strip epoch in human-facing outputs.  Closes: #1099311.
+
+  workflow manpages:
+  * dgit-maint-bpo(7): Replace a lingering --overwrite.  [Sean Whitton]
+  * dgit-nmu-simple(7): Be less pessimistic about rebasing.  Closes: #1099519.
+  * Disambiguate what we mean by "first ever dgit push".  [Sean Whitton]
+
+  translations [Frans Spiesschaert]:
+  * nl: Update translation for messages.  Closes: #1090762.
+  * nl: Update translation for dgit-user(7).  Closes: #1090763.
+
+  Infrastructure:
+  * Improve handling of stderr output from gpgv.
+    (Improves the output for users of dgit push, and tag2upload emails.)
+
+  tag2upload:
+  * Builder: Use dgit and gdr from testing.  [Sean Whitton]
+  * dgit-repos access control): Expect a separate tag2upload public keyring.
+  * Oracle: Pass -u to dput to suppress a spurious warning in email reports.
+  * Oracle: Speak oracle-to-manager protocol version 4.
+  * Oracle: Report fidelity to Manager (whether we're the production codebase).
+  * Oracle/Builder: Always report source package (using info from Manager).
+  * Oracle: Improved consistency and informativeness of logging.
+  * tests: t2u: Add a test case for a completely unknown signing key.
+  
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 29 Mar 2025 18:04:29 +0000
+
+dgit (12.9) unstable; urgency=medium
+
+  tag2upload development:
+  * tag2upload-oracled:
+    - Query systemd re whether we are a production or testing instance.
+    - New --force-production option.
+  * tag2upload-oracled systemd unit:
+    - Fix WantedBy= so the user unit starts on reboot.
+    - Add additional Documentation= values.
+  * TAG2UPLOAD-MANAGER-PROTOCOL.md: Define v3, including worker fidelity.
+    [Ian Jackson]
+
+  Test suite:
+  * Bypass autopkgtest-virt-null workarounds with newer autopkgtest.
+    This should fix our autopkgtest in sid.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Fri, 14 Mar 2025 22:32:23 +0800
+
+dgit (12.8) unstable; urgency=medium
+
+  Bugfix to dgit:
+  * Fix passing -c options to git.
+    While -c options intended to affect dgit work, it was discovered
+    that -c options for git itself have been broken since dgit 2.0.
+    [Ian Jackson]
+
+  tag2upload development:
+  * Improvements to generated e-mail messages:
+    - Reorder parts to put the tag last.  [Ian Jackson]
+    - Make the log disposition inline.  [Ian Jackson]
+    - Add a Reply-To header, use our dgit-owner@ role address in From.
+      This fixes our mail not reaching debian-tag2upload@lists.debian.org.
+    - Make tag2upload-oracled's --noreply option a full From field value.
+      Use this to capitalise "Debian" in "Debian tag2upload service".
+    - Replace long line splitting with encoding in quoted-printable.
+      DSA's MTA is already doing a conversion to quoted-printable so
+      it's cleaner to replace our own long line splitting with this.
+      [Ian Jackson]
+  * tag2upload-oracled: Don't invoke dgit-repos-server more than once
+    in the same working directory, as required by its calling convention.
+    This fixes using more than one worker.
+  * tag2upload-oracled systemd unit:
+    - Work around 'podman exec' failing to set HOME.
+    - Work around 'podman exec --user=...' breaking autopkgtest-virt-podman.
+      Prefix an invocation of su(1) to switch user, instead.
+    - Set IgnoreSIGPIPE=false.
+  * Save a copy of all outgoing mail in case of MTA issues.
+    [Ian Jackson & Sean Whitton]
+  * Have the Oracle use precisely the one available signing key.
+    Pass it as a -k option to 'dgit rpush-source'.
+    Closes: #932553.  [Ian Jackson]
+  * Pass --no-tags to 'git fetch'.  [Ian Jackson]
+  * tag2upload-builder-rebuild:
+    - Copy in DSA's /etc/ssh/ssh_known_hosts.
+    - Copy in Builder's SSH key for dgit-repos access.
+    - Copy in public part of Oracle's package signing key.
+    - Install dgit and git-debrebase from Debian backports.
+    - Install python3-pygit2.
+    - Add several abstractions to make it easier to customise our images.
+  * tag2upload-oracle-crontab: Add a job to delete old outgoing mail copies.
+  * tag2upload-*-crontab: Add comments about how to make changes effective.
+
+  Test suite [Ian Jackson]:
+  * t2u-integration: Increase test timeouts.
+  * match-check-template: Fix some more output indentation.
+  * Move t-dgit lib -> lib-core, simplify tstunt/dgit.
+  * Replace generic someuser@somehost with more specific dummy strings.
+  * No longer dump sendmail.last.
+
+  Miscellaneous [Ian Jackson]:
+  * Consistently use scalars vs arrays for shell-quoted commands and
+    not-yet-shell-quoted argument lists, respectively.
+    This fixes issues running commands in the tag2upload virt.
+  * tag2upload-oracled: Minor improvements to some error handling.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Sun, 02 Mar 2025 13:58:10 +0800
+
+dgit (12.7) unstable; urgency=medium
+
+  tag2upload development:
+  * Fixes to tag2upload-oracled:
+    - Pass -N to nc.openbsd on the Manager.
+      This is required for the connection to be properly terminated.
+    - Fix protocol violation in the case where '--builder=USER@...'.
+    - Actually validate the protocol messages generated by
+      'dgit-repos-server --tag2upload5'.
+  * dgit-repos-server, tag2upload support:
+    - Impose a length limit on various values.  [Ian Jackson]
+    - Split long lines in the e-mail.  [Ian Jackson]
+  * Other improvements to tag2upload-oracled:
+    - Before reporting readiness to the Manager,
+      + establish a connection to the Builder;
+      + test we can really run commands in the isolation environment; and
+      + test we have a usable signing key.
+    - New -D option to set the Debian::Dgit debug level.
+    - New --worker-restart-timeout option.  [Ian Jackson]
+    - Drop old SIGALRM handler, no longer used by test suite.
+    - Add [USER@] to --manager and --builder in usage docs.
+  * tag2upload-oracled systemd unit:
+    - Fill in remaining config values for our current hosts.
+    - Instruct autopkgtest-virt-podman not to unshare the netns.
+    - Set a value for TimeoutStopSec equal to the processing timeout.
+  * Provide tag2upload-builder-rebuild script.
+    Previously maintained in dgit-infra-notes-scripts.git.
+  * Provide self-installing crontabs for the Oracle and the Builder.
+
+  Test suite:
+  * Completely rewrite mocking up tag2upload-service-manager.  [Ian Jackson]
+    - tag2upload-oracled now connects to a real socket.
+    - Correctly handle the tag2upload-oracled child process, to fix a race.
+  * Pass new 'run-manager' subcommand to tag2upload-service-manager.
+    [Ian Jackson]
+  * gitlab-ci-run-all: Add a per-test-case timeout.   [Ian Jackson]
+    This avoids GitLab timing out the whole job and thus losing logs.
+  * Always pass new -D option to tag2upload-oracled.
+  * Work around autopkgtest-virt-* not exiting (#868576).  [Ian Jackson]
+  * autopkgtest-virt-null-for-test: Fix shebang.  [Ian Jackson]
+  * Rename template-match-check to match-check-template.  [Ian Jackson]
+  * match-check-template: Fix some output indentation.  [Ian Jackson]
+  * Print "success." after the log dumps, for reassurance.  [Ian Jackson]
+
+  Documentation:
+  * dgit-maint-debrebase(7), dgit-maint-merge(7): Consistently use
+    lowercase 'debian' for the salsa.d.o namespace.  [Dr Tobias Quathamer]
+  * dgit-maint-gbp(7): In one place, list all three push commands
+    instead of just the 'dgit push' alias.  [Dr Tobias Quathamer]
+  * dgit-maint-merge(7): Replace a reference to alioth's collab-maint.
+    [Dr Tobias Quathamer]
+  * TAG2UPLOAD-MANAGER-PROTOCOL.md:
+    - Document additional things Oracle should do before saying 'ack'.
+      [Ian Jackson]
+    - Fix a reference to the worker ID.
+  * dgit-user(7): Fix typo comments->commits.  Closes: #1098688.
+    [Reported by Ben Harris]
+
+  Miscellaneous:
+  * Debian::Dgit::ProtoConn: Call printdebug in expect.
+    This ensure we see both halves of the conversation.  [Ian Jackson]
+  * get-dm-txt: Take data dir using a positional param, not an env var.
+  * d/control: Drop unnecessary Testsuite field.
+  * Override 'unusual-interpreter /usr/bin/crontab' Lintian warning.
+  * Comment out mismatched file-contains-trailing-whitespace override.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Tue, 25 Feb 2025 12:36:05 +0800
+
+dgit (12.6) unstable; urgency=medium
+
+  tag2upload development:
+  * Implement & test timing out the work done by dgit-repos-server's
+    tag2upload mode, for robustness.  [Ian Jackson]
+  * tag2upload-oracled: New --process-timeout option.  [Ian Jackson]
+  * tag2upload-oracled systemd unit: Pass --process-timeout.  [Ian Jackson]
+  * tag2upload-oracled systemd unit: Fix line continuation syntax.
+  * tag2upload-oracled: Tidy up logging and then exiting non-zero.
+
+  Test suite:
+  * Use new template-match-check utility to test the content of the
+    success e-mail from the tag2upload mode of dgit-repos-server.
+    [Ian Jackson]
+  * t2u-email test: Also do the mpack MIME check here.  [Ian Jackson]
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Thu, 30 Jan 2025 09:13:55 +0000
+
+dgit (12.5) unstable; urgency=medium
+
+  tag2upload development:
+  * Rewrite the tag2upload mode of the dgit-repos-server program in
+    order to satisfy a number of requirements of the design that the
+    old code did not.  [Ian Jackson]
+    In particular, we now send much better e-mails.
+  * Set the Git-Tag-Tagger and Git-Tag-Info fields.  Closes: #932753.
+  * Implement & test CCing the tag signing key's owner.
+    - Don't CC them if they're probably also the Git tagger.
+    - More strictly validate tag2upload Git tag taggers.
+    - New 'preferred-mail-domains' dgit-repos-server configuration.
+
+  * tag2upload-oracled:
+    - Validate & log the protocol messages generated by
+      'dgit-repos-server --tag2upload5'.
+    - Don't expect "ok" in response to "quit".  [Ian Jackson]
+      Instead, waitpid the adt virt server.  See #1092808.
+    - Improved debug printing.  [Ian Jackson]
+    - New --retain-tmp option.  [Ian Jackson]
+    - Pass ssh timeout options to builder SSH, too.
+
+  * Pass --ssh:-oBatchMode=yes to dgit in dgit-repos-server t2u mode.
+  * Patch autopkgtest-virt-null so as to retain the temp dir.
+    [Ian Jackson]
+  * Set dgit-repos-server $0 to something else in tag2upload mode.
+    [Ian Jackson]
+
+  Test suite [Ian Jackson]:
+  * Complete the end-to-end t2u-integration test.
+    - Add GitLab CI definition to run it on bookworm as well as sid.
+  * Add a test case for a DM attempting to git-debpush a package they
+    are not authorized to upload.
+  * Fix spuriously removing 'git cat-file tag' trailing newline.
+  * Rewrite t2u-ssh-for-t2u-oracled in Perl.
+  * Provide and use new general facility for polling in tests.
+  * tag2upload-oracled test: Don't kill tag2upload-oracled again.
+  * Output improvements when testing 'mini-git-tag-fsck --audit'.
+  * Introduce T2U dependencies alias.
+
+  Documentation:
+  * dgit-maint-debrebase(7): Improve sample 'git remote add'.
+    [Andrea Pappacoda]
+  * git-debpush(1): Fix -sn versus -sk.  Closes: #1093216.
+    [Reported by Ben Harris]
+  * dgit(1), dgit usage message: List push-built|push-source not push.
+    This is better because plain push issues a warning, at present.
+    Closes: #1092904.  [Ian Jackson, report from Niels Thykier]
+  * dgit usage message: Mention rpush-source, and tidy.  [Ian Jackson]
+
+  Miscellaneous:
+  * dgit-repos-server: Improved error handling when invoking gpgv.
+    [Ian Jackson]
+  * Update copyright for dgit, dgit-repos-server & tag2upload-oracled.
+  * Fix documentation of --expect-version option.
+  * mini-git-tag-fsck: Fix bytestring regexp syntax.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Fri, 24 Jan 2025 13:55:00 +0000
+
+dgit (12.4) unstable; urgency=medium
+
+  dgit changes:
+  * New --dsc-control-add and --ch-control-add options.
+  * With --dry-run, dgit now always writes an edited .changes to a
+    temporary file, as it has long done for the edited .dsc.
+
+  tag2upload development:
+  * tag2upload-oracled: Speak version 2 of the simple Oracle protocol.
+  * dgit-repos-server: Take JOB-ID from tag2upload-oracled.
+  * dgit: In --tag2upload-builder-mode, include a _source.buildinfo.
+    This is work towards #932802.
+
+  Specifications [Ian Jackson]:
+  * Define version 2 of the Manager-to-Oracle protocol.
+    The protocol now additionally conveys the job ID.
+
+  Test suite fix:
+  * Set "Rules-Requires-Root: binary-targets" in example_1.0.tar.
+    Closes: #1092190.
+
+  CI job definitions [Ian Jackson]:
+  * dgit-test-suite, t2u-integration: Use a Debian testing image.
+    This means that the inputs to our CI are gated by our own tests.
+  * t2u-integration: Explicitly install curl.
+
+  Documentation fix [Xiyue Deng]:
+  * git-debrebase(5): Fix a few typos of repeated words.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Wed, 08 Jan 2025 09:11:11 +0000
+
+dgit (12.3) unstable; urgency=medium
+
+  tag2upload development:
+  * dgit: Make --tag2upload-builder-mode imply --dep14tag-reuse=must.
+  * tag2upload-oracled.user.service: Use @packages.d.o address in From.
+  * Document proposed new calling convention between tag2upload-oracled
+    and 'dgit-repos-server --tag2upload4' [Ian Jackson].
+
+  Test suite fix:
+  * tag2upload-oracled-systemd-unit: Restore default test dependencies.
+    This was breaking this test under autopkgtest.
+  
+ -- Sean Whitton <spwhitton@spwhitton.name>  Sun, 15 Dec 2024 10:38:57 +0800
+
+dgit (12.2) unstable; urgency=medium
+
+  * git-debpush options improvements:
+    - Rename patches-applicable check to patches-nonapplicable.
+    - Rename suite check to changed-suite.
+    - Rename existing -n/--no-push to -t/--tag-only.
+    - New -n/--dry-run and --print-tag-text options.
+    Closes: #935085.  [Report & suggestions from Ian Jackson]
+  
+  * git-debpush output improvements:
+    - Use uniform line prefix "git-debpush: check failed: ".
+      This should make it easier to see which checks failed.
+    - Disable whitespace warnings from git-apply.
+    Closes: #940590.  [Report & suggestion from Andrej Shadura]
+  
+  * Test suite fixes:
+    - Fix overlapping use of file descriptor 5 by the tests.
+      This was breaking all the tag2upload tests under autopkgtest.    
+    - t2u-gbp: Replace an unwarranted change of pipefail settings.
+    - t2u-gdr: Fix dependencies and environment variable issue.
+  
+ -- Sean Whitton <spwhitton@spwhitton.name>  Fri, 13 Dec 2024 17:06:02 +0800
+
+dgit (12.1) unstable; urgency=high
+
+  Critical bugfix:
+  * Once again honour command line options --delayed, -c, -m.
+    (-c would sometimes still work, depending on the usage).
+    Regressed in 12.0.  Closes:#1089632.  [Report from Sean Whitton]
+
+  New feature for dgit [Xiyue Deng]:
+  * New passthrough option, --allow-unrelated-histories.
+
+  Documentation:
+  * dgit(1), dgit-user(7): Document dgit's backwards installability.
+
+  tag2upload development [Sean Whitton]:
+  * Complete mini-git-tag-fsck by implementing its --audit mode.
+  * Complete the integration tests for mini-git-tag-fsck.
+  * Make the Oracle always invoke mini-git-tag-fsck.
+  * Don't call 'git deborig' if we got one from the archive.
+  * Fix hardcoded debian/ tag prefix in git-debpush.
+  * Test git-debpush's fishing the quilt mode out of history.
+  * Some minor code style changes.
+
+  Internal changes & test suite:
+  * Tidy up some control of split brain mode.
+  * Demonstrate --collab-non-dgit for a native package.
+  * Strip junk from a number of tarballs used to set up tests.
+  * Fix the gdr-convert-gbp canned setup to call t-select-package
+    [Sean Whitton].
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 13 Dec 2024 02:16:53 +0000
+
+dgit (12.0) unstable; urgency=medium
+
+  Possible incompatible changes:
+  * dgit push-*: Retain existing DEP-14 tag, even if unsigned, by default.
+    New --dep14 options (and config settings) to control the behaviour.
+    DEP-14 tag handling and docs overhauled and debugged.
+    Closes: #1073787.
+  * Command option option handling (--cmd:... etc.):
+    Reimplement, with behavioural change bugfix: now you can
+    always override configured information from the command line.
+    Other misbehaviours and crashes in this area fixed.
+
+  Documentation:
+  * dgit-user(7): Use `apt-get build-dep .` in build examples.
+  * dgit-sponsorship(7): Mention possible lack of origs.
+  * Update Dutch (.nl) translation.  Closes:#1070141  [Frans Spiesschaert]
+  * Fix minor docs typos.  [Otto Kekäläinen]
+
+  Other improvements:
+  * dgit: Include split-maint-view-tag metadata item in dgit view tag.
+  * dgit rpush: Better error handling when child fails.
+  * dgit rpush: debug prints: show the files-end message.
+
+  Packaging:
+  * debian/control: Bump to debhelper compat level 12.
+
+  Testing - compatibility and bug fixes:
+  * Replace use of apt-key with trusted.gpg.d.
+    Closes:#1088220.  [Report from Julian Andres Klode]
+  * Strip libeatmydata.so out of LD_PRELOAD when using schroot.
+    (Fixes in-tree run failures on trixie.)
+  * CI: Disable new changelog-empty-entry warning.
+
+  Testing - other improvements:
+  * enumerate-tests: Honour TESTSCRIPTS
+  * Turn off gbp-buildpackage desktop notifications.
+  * CI: Add jobs to test on old releases, back to buster.
+  * CI: Better error reporting; use eatmydata; disable two empty jobs.
+  * Supporting changes and refactoring.
+
+  tag2upload development:
+  * tag2upload-oracled: New program, still in development.
+  * Add systemd user unit for tag2upload-oracled.
+  * Relax syntax of WORKER-ID in o2m protocol.
+  * Break out ProtoConn module for reuse in o2m.
+  * New test: integration with tag2upload-service-manager.
+  * Run existing tag2upload tests via tag2upload-oracled.
+  * Further development of mini-git-tag-fsck.
+  * Supporting changes to and refactoring of dgit-repos-server.
+
+  Much of the work described above was done by, or with,
+  or reviewed by, Sean Whitton.  Thanks, Sean!
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 29 Nov 2024 01:40:28 +0000
+
+dgit (11.11) unstable; urgency=medium
+
+  [ Ian Jackson ]
+  * dgit-repos-server, tag2upload support:
+    - Introduce t2uv_* prefix to distinguish trusted parts of t2u flow.
+    - New parameter for mail addresses to Cc error messages to.
+  * dgit-repos-server, general:
+    - New always-accept AUTH-SPEC.
+    - Fix & update some debug printing.
+    - Some other refactorings.
+  * Dgit.pm:
+    - git_rev_parse: New \@prefix parameter.
+
+  * dgit: Fix documentation of the rpush protocol.
+  * TAG2UPLOAD-MANAGER-PROTOCOL.md: New protocol specification.
+
+  * Test suite:
+    - New .gitlab-ci.yml to enable salsa CI.
+    - Pass --no-same-owner to tar.
+      Fixes running the tests as root.
+    - Move some variables out from tests/drs-git-ext to tests/lib.
+    - tag2upload: Check for drs dgit success (t-tagupl-succeeded).
+    - tests/enumerate-tests: New facility for printing package names.
+    - Various renames to replace 'tagupl' abbreviation with 't2u'.
+      Not yet complete.
+  
+  [ Sean Whitton ]
+  * dgit:
+    - Check that a source-only changes has "Architecture: source".
+    - New --expect-suite, --expect-version options for rpush.
+      The initiator now checks the values of these options, and that of
+      -p/--package, against the parsed changelog, .changes and .dsc sent
+      by the responder.  This protects against a misbehaving or
+      compromised responder attempting to use the initiator to sign
+      .changes and .dsc files for some other package, version or target
+      suite.  This is relevant for how the security of the tag2upload
+      design relies on the rpush protocol.
+    - New --tag2upload-builder-mode, --tag2upload-upstream and
+      --tag2upload-upstream-commit options.
+      These are used to invoke mini-git-tag-fsck in the right way, and
+      --tag2upload-builder-mode may enable other things in the future.
+      (As of this release, they are not yet passed by dgit-repos-servers.)
+  
+  * git-debpush: Add source= & version= to the in-tag metadata (for real
+    this time) (Closes: #1069001).
+  
+  * dgit-repos-server, tag2upload support:
+    - Obtain the source package and version from the [dgit ...] metadata.
+      (The target suite is still obtained from the first line of the tag
+      message; this will change.)
+    - Replace invoking 'dgit push-source' with 'dgit rpush-source'.
+      This is work towards the new tag2upload three node design.
+    - Pass the new --package, --expect-suite and --expect-version.
+    - Some other tidying up.
+  
+  * TAG2UPLOAD-DESIGN.txt: Document SOURCE_VERSION.git.tar.xz.
+  * mini-git-tag-fsck: New script to handle SOURCE_VERSION.git.tar.xz.
+    Its functionality is only partially implemented as of this release.
+  
+  * Test suite:
+    - Test the new rpush security by mocking up an MITM of the responder
+      (tests/ssh-rpush-mitm).
+    - Very basic test for --tag2upload-builder-mode.
+    - t2u-gbp: Drop an unnecessary, confusing include.
+
+  * Update copyright notices for Ian and me for core files.
+  * Add .dir-locals.el.
+  * Add some file mode indicators in various places.
+
+  [ Sean Whitton & Ian Jackson ]
+  * Add TAG2UPLOAD-FAQ.md.
+    With thanks to Russ Allbery for review.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Tue, 03 Sep 2024 13:55:01 +0100
+
+dgit (11.10) unstable; urgency=medium
+
+  * Add TAG2UPLOAD-DESIGN.txt [Ian Jackson].
+  * git-debpush: Revert changes to in-tag metadata from the last upload.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Wed, 22 May 2024 20:42:50 +0100
+
+dgit (11.9) unstable; urgency=medium
+
+  * tag2upload(5):
+    - The COMMITID must be an abbreviated hash.
+    - Explain why upstream-tag=TAG is required.
+    - Add source= & version= to the in-tag metadata.
+  * git-debpush:
+    - Quote an argument to git-cat-file.
+    - Add source= & version= to the in-tag metadata.
+  * Replace http->https in GPL file headers.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Tue, 21 May 2024 14:08:20 +0100
+
+dgit (11.8) unstable; urgency=medium
+
+  * Fix installation of tag2upload(5).
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Sun, 14 Apr 2024 20:34:49 +0800
+
+dgit (11.7) unstable; urgency=medium
+
+  [ Ian Jackson ]
+  * dgit: Introduce --trust-changelog, as the new name for --overwrite,
+    and recommend it everywhere.  As requested in #1050713;
+    may help with #913451 #990667 (requests for better docs).
+  * dgit: New --collab-non-dgit option.  Closes: #1050713.
+    [Apropos informal reports from several people]
+  * dgit diff generation: Avoid breaking if user has ui.color=always.
+    Closes: #1067222.  [Report from Rafael Laboissière]
+  * tag2upload(5): New manpage documenting the tag2upload protocol.
+    Closes: #1068231.
+
+  [ Sean Whitton ]
+  * Add myself to Uploaders.
+  
+ -- Sean Whitton <spwhitton@spwhitton.name>  Sat, 13 Apr 2024 21:14:43 +0800
+
+dgit (11.6) unstable; urgency=medium
+
+  Improved behaviour:
+  * dgit: Delete the playground on success, by default.
+    [Report from gregor herrmann]  Closes: #1056103.
+
+  Documentation:
+  * dgit(7): Don't falsely assert that *.dgit.d.o is usually `origin`.
+  * dgit-user(7): Deprioritise information about jessie.
+
+  Tests:
+  * autopkgtests: Install locales-all for i18n-messages test.
+  * Stunt httpd: don't respond to HEAD with 404+body.  Closes: #1063341.
+  * autopkgtests: Reduce primary log size when running under autopkgtest:
+    Save the stderr/stdout to a file which appears (compressed) in
+    the artifacts, and is only printed if the test fails.
+  * Add comment about benchmarking of the gzip -1 flag on artifacts.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 09 Feb 2024 12:05:39 +0000
+
+dgit (11.5) unstable; urgency=medium
+
+  * dgit: Fix harmless but annoying warning about rebinding $date.
+    [Report from Étienne Mollier]  Closes: #1055528.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 10 Nov 2023 13:12:42 +0000
+
+dgit (11.4) unstable; urgency=medium
+
+  dgit dsc import fixes:
+  * Do not fail when source package has broken changelog for -1 upload.
+    Closes: #1054630.  See also #1051961.  [Report from Peter Green]
+  * Pass through the changelog timezone to the generated commit metadata.
+
+  Documentation:
+  * dgit-sponsorship(7): Mention git-deborig(1) alongside git-archive(1)
+    [Sean Whitton].
+
+  Test suite:
+  * Fix i18n-messages test to explictly demand "locales", and set locale.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 30 Oct 2023 02:21:52 +0000
+
+dgit (11.3) unstable; urgency=medium
+
+  * Prevent pushing older versions than is in the archive.
+    Closes: #1050711.  [Reports from Helmut Grohne and Phil Hands]
+  * Detect tar-ignore in d/s/options and bail early if appropriate.
+    Closes: #1050709.  [Report from Helmut Grohne]
+  * dgit(1): --overwrite: Add cross reference to --split-view.
+    Apropos ##1050713.  [Report from Helmut Grohne]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 03 Sep 2023 00:43:36 +0100
+
+dgit (11.2) unstable; urgency=high
+
+  * Use the old /updates security map only for buster.  Fixes fetching from
+    suites ,-security after buster.  [Matthew Vernon]  Closes: #1050179.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 22 Aug 2023 19:25:55 +0100
+
+dgit (11.1) unstable; urgency=medium
+
+  * dgit(1): Adjust tbl formatting to avoid warning.
+    [Report and suggestions from Branden Robinson]  Closes: #1041317.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 20 Jul 2023 00:32:36 +0100
+
+dgit (11.0) unstable; urgency=medium
+
+  Bugfix with compatibility implications:
+  * Pass --no-source-only-changes to sbuild (when building binaries).
+    Fixes operation with SOURCE_ONLY_CHANGES locally overridden.
+    (Incompatible with sbuild <0.78; to work around, say
+    dgit --sbuild!:--no-source-only-changes.).
+    [Report from Sean Whitton]  Closes: #904969.
+
+  Documentation:
+  * dgit-maint-{merge,rebase}(7): Cross-reference to gitrevisions(7).
+    [Sean Whitton, Ian Jackson]  Closes: #959760.
+
+  Removal:
+  * Abolish dgit-badcommit-fixup (the remedial script for #849041).
+    If ancient repositories are found which need fixing, install
+    dgit.deb 10.7 or earlier (eg from Debian bookworm and earlier).
+
+  Testing;
+  * Tests: work around git changes in 2.40 relating to commit verification.
+    Skipping tests involving now-uncreatable objects.  Closes: #1033503.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 15 Jun 2023 00:53:22 +0100
+
+dgit (10.7) unstable; urgency=medium
+
+  * dgit(1), dgit-maint-merge(7): Copy-edit changes since dgit 9.16.
+  * dgit, dgit-maint-merge(7): Merge suggested README.source text into
+    --quilt=single's generated patch header.
+    We now have to say "a workflow similar to ... dgit-maint-merge(7)" but
+    this is worth it for the simplification to the workflow.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Wed, 22 Feb 2023 15:13:06 -0700
+
+dgit (10.6) unstable; urgency=medium
+
+  Bugfix for handling some source packages:
+  * dgit: dsc import: Launder the series file before feeding it to gbp,
+    (in absurd git-apply mode) in case it contains strange things.
+    Closes: #1030093.  [Report from Peter Green]
+
+  Minor improvements to git-debrebase:
+  * git-debrebase(1): Add imprecation to call conclude or prepush, at top
+  * git-debrebase(1): Remove launder-v0 from documentation
+  * git-debrebase status: Print upstream commitid
+
+  Supporting chnages:
+  * dgit: Fix confusing appending of gbp-pq-output in innards.
+    (Conceivably this might fix wrong messages in very unusual situations.)
+  * dgit: Fix a call to die to be confess, if an unexpected copy fails.
+  * tests: Bail on seeing "internal-only" commits, which should be invisible.
+  * tests: Test laundering of a deranged series file (with a form feed).
+  * dgit-ssh-dispatch: Apply perllib_local to policy hook, fixing a test
+    suite bug where the wrong Dgit.pm might be used.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 04 Feb 2023 16:56:30 +0000
+
+dgit (10.5) unstable; urgency=medium
+
+  * [INTL:nl] Dutch translation for the dgit package.
+    [Frans Spiesschaert]  Closes:#1029682.
+  * dgit: Add TODO about inappropriate translation of Subject
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 26 Jan 2023 14:41:05 +0000
+
+dgit (10.4) unstable; urgency=medium
+
+  * Tainted object handling: Require policy-client-query to be supported
+    when talking to the Debian server, so this check is now properly
+    implemented rather than best-effort.  Closes: #944855, #1027186.
+    [Completes work prompted by report from Felipe Sateler.]
+  * git-debrebase(1): Be less scary about --experimental-merge-resolution.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 29 Dec 2022 11:51:50 +0000
+
+dgit (10.3) unstable; urgency=medium
+
+  dgit useability improvements:
+  * Silently tolerate mentions of debian/ in debian/source/include-binaries.
+    Closes:#1026918.  [Report from Simon McVittie]
+  * Scan for duplicated orig tarballs with different names,
+    avoiding strange dpkg-source errors mentioning format 2.0.
+    Closes:#993769.  [Report from Philip Hands]
+  * Rename auto quilt mode to try-linear (retaining compat alias),
+    to clarify that it won't automatically detect branch format.
+    Closes:#935762.  [Report from David Bremner]
+  * dgit(1): Clarify the non-split-brain --quilt options, explicitly
+    stating that they expect a patched-applied (dgit view) branch.
+
+  Tainted object handling (relevant to Debian NEW):
+  * dgit can now usually discover when --deliberately-* will be needed,
+    before making signatures and attempting the actual push.
+    Thus, missing a --deliberately no longer burns a version number.
+  * This is #944855.  However, it depends new infrastructure,
+    which is (in this version) only queried on a best-effort basis:
+  * New protocol transaction (over ssh) with dgit repos server,
+    to allow client to make a policy enquiry, and specifically to
+    enquire about tainted objects.
+  * More of the relevant error messages are now translatable via gettext.
+
+  Supporting changes:
+  * Modest refactoring to support the new functionality.
+  * Tests for new functionality, and improved tests in changed areas.
+  * tests: sbuild-gitish: Pass -v to sbuild for better debuggability.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 29 Dec 2022 00:51:29 +0000
+
+dgit (10.2) unstable; urgency=medium
+
+  Command line change - dgit rpush vs rpush-source vs rpush-built:
+  * Introduce "dgit rpush-source", a new feature.  
+    Closes:#974012.  [Request from Wookey]
+  * Introduce "dgit rpush-built", meaning what "dgit rpush" does now.
+  * Make "dgit rpush" a configurable alias, which by default warns about
+    future incompatibility and then runs "dgit rpush-built".
+    (This was done for "dgit push" in dgit 10.0.)
+
+  Bugfixes to dgit:
+  * Be more conservative about when to run "git-debrebase make-patches".
+    Closes:#1025451.  [Report from Sean Whitton]
+  * Cope with packages using "3.0 (quilt)" "include-binaries" feature.
+    Closes:#1024233.  [Report from Peter Green]
+  * Cope with certain packages where dpkg-source guesses wrong about
+    patch application status.  (Perms-only patches may be implicated?)
+    Closes:#1025694.  [Report from Matthew Vernon]
+
+  Minor improvements:
+  * dgit(1): Promote push-source even more, rather than push-built.
+  * git-debrebase --noop-ok: support --no-noop-ok.
+  * Fix a typo "build" for "build" in the changelog entry for 10.1.
+
+  Debugging fixes and internal changes:
+  * dgit: Fix a direct use of chdir, should be changedir
+  * git-debrebase --noop-ok: use default destination
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 12 Dec 2022 01:15:55 +0000
+
+dgit (10.1) unstable; urgency=medium
+
+  Bugfixes to dgit:
+  * dgit push-built: Populate the split brain cache if necessary
+    Closes:#1019454.  [Report from Simon McVittie]
+
+  Bugfixes to git-debrebase [reports from David Bremner]:
+  * git-debrebase: Fix "stripeoch" bug in convert-from-dgit-view.
+  * git-debrebase: Fix handling of tag during convert-from-dgit-view.
+  * git-debrebase: convert-from-dgit-view: Bail if output is wrong
+    eg due to lack of appropriate d/patches.
+
+  Documentation and messages:
+  * dgit: Soften message about source-only uploads to NEW.
+    [Report from Simon McVittie]  Improves #983056 a bit.
+  * dgit(1): Be more encouraging about --new.  Closes:#941323.
+  * dgit(1): Remove obsolete documentation of dgit-tag-format
+    [Remark from Philip Hands in #1023468]
+  * dgit-maint-debrebase(7): add --pretty example for generating
+    hash tags for upstream versions.  [Philip Hands]
+  * git-debrebase: conversion: bail a little earlier on snags.
+
+  Infrastructure (dgit-repos, server side):
+  * get-dm-txt: Handle abolition of archive-query-tls-curl-ca-args
+    (fixes incompatibility with deployed production configuration).
+
+  Packaging:
+  * New elements to test cases to test some of the fixes.
+  * changelog: Fix misindented line in entry for 9.11.
+  * changelog: Retrospectively xref to #950612 in entry for 9.11.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 11 Nov 2022 23:53:28 +0000
+
+dgit (10.0) unstable; urgency=medium
+
+  Major command line change - dgit push vs push-built:
+  * Introduce "dgit push-built", meaning what "dgit push" does now.
+  * Make "dgit push" a configurable alias, which by default warns about
+    future incompatibility and then runs "dgit push-built".  See dgit(1).
+  * Docs: generally recommend "push-source" rather than "push".
+    [Report from Osamu Aoki]  Closes:#992606.
+
+  New feature, and change to recommended usage:
+  * Provide --quilt=single, and no longer recommend single-debian-patch
+    anywhere (since it can go badly wrong).  Closes:#1018984.
+
+  Handling of unusual kinds of change to upstream files, during quilt fixup:
+  * Don't use dpkg-source --commit, but git diff.
+  * Handle exectutability changes.  Closes:#995056.  [Report from Peter Green]
+  * Reject all changes to symlinks (including symlink creation).
+  * With dpkg single-debian-patch, pass --include-removal to dpkg-source -b.
+  * Now we can make any diff that dpkg-source can cope with.  Closes:#1018143.
+
+  Changes related to --dry-run and --damp-run:
+  * dgit(1): Demote, and add caveats describing their behaviours.
+    Closes:#973896.  [Report from Wookey]
+  * dry run: Fix a handful of bugs (and improve a message).
+
+  Other:
+  * dgit: Pass require_valid_signature to Dpkg::Source::Package
+    in the correct manner.  Closes: #964286.  [Guillem Jover]
+
+  Internal:
+  * Refactorings and commentary, to support the other changes.
+  * Consequential updates to tests.
+  * More comprehensive testing of unusual upstream changes.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 04 Sep 2022 13:43:34 +0100
+
+dgit (9.16) unstable; urgency=medium
+
+  Compatibility with git-buildpackage gbp pq 0.9.26 (Closes:#1005873):
+  * dgit: Move .pc aside while running gbp pq import
+  * git-debrebase: convert-from-dgit-view: Disable ignore-new where needed
+
+  Other changes:
+  * Fix typo in changelog for 9.14, noting that we closed #987304.
+  * playtrees (for dgit and git-debrebase): Provide a gbp.conf.
+  * tests: gdr: Provide a way to pass --diagnose.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 28 May 2022 22:49:53 +0100
+
+dgit (9.15) unstable; urgency=medium
+
+  * dgit: pseudomerge_version_check: Check for unfinalised changelog entry.
+  * tests: Set FILTER_BRANCH_SQUELCH_WARNING=1
+  * tests: Use t-debchange in some places instead of dch
+  * tests: Update all using tests/update-db-compat. Closes: #1002927.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 02 Jan 2022 12:20:23 +0000
+
+dgit (9.14) unstable; urgency=medium
+
+  Bugfixes:
+  * Tolerate git config init.defaultBranch.  Closes:#972098.
+    Reports from Didier 'OdyX' Raboud, Osamu Aoki.
+    Diagnosis by Stig Sandbeck Mathisen.
+  * dgit: Tolerate making quilt patches creating +x files.
+    Closes:#949675.  Report from peter green.
+  * dgit: Avoid use of GZIP environment variable.
+    Closes: #975624.  Report from Stéphane Glondu.
+  * Tolerate git config diff.noprefix.
+    Closes:#973881; report from Didier 'OdyX' Raboud.
+
+  Documentation and diagnostics:
+  * Clarify git-debrabase --anchor, -fanchor-treated.
+    Closes:#977426.  Report from Wookey <wookey@debian.org>.
+  * dgit: Better message for dirty trees.  Closes:#930930.
+    Report and suggestions from Sean Whitton.
+
+  git-debpush, tag2upload:
+  * Add missing dependency.  Closes:#940589; report from Andrej Shadura.
+  * Fix version unmangling.  Closes:#987304; report from Wolfgang Silbermayr.
+
+  Tests:
+  * Introduce t-debchange and set DEBEMAIL.
+  * Add init.defaultBranch to two test cases and diff.noprefix to one.
+  * Test creation of new symlink is treated as unrepresentable.
+  * Increase the nproc -> make -j factor.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 08 Sep 2021 01:30:53 +0100
+
+dgit (9.13) unstable; urgency=medium
+
+  * gitattributes defuse: work even if .git/info/attributes missing
+    (Closes: #981344)
+  * dgit-maint-*(7): Advice for git-debpush users.
+    Closes:#932520.  [Sean Whitton]
+  * dgit.1: drop remark about sbuild not building arch-independent.
+    Closes:#952442.  [Helmut Grohne]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 12 Feb 2021 12:48:15 +0000
+
+dgit (9.12) unstable; urgency=medium
+
+  Bugfixes:
+  * dgit-mirror-ssh-wrap: Cope with yet another new rsync rune.
+    Closes:#968635. [Sergio Durigan Junior]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 19 Aug 2020 17:25:45 +0100
+
+dgit (9.11) unstable; urgency=medium
+
+  Bugfixes:
+  * git-debrebase, git-debpush: fail when looking for upstream tag if
+    there is more than one candidate.  Closes:#961682.  [Sean Whitton]
+  * git-debrebase: Fix error message for wrong use of -i
+  * git-debrebase: new-upstream: Do not treat late options as version
+
+  Documentation:
+  * dgit-maint-debrebase(7): Drop some bad advice about the upstream/ tag
+    case.  Closes:#961683.  [Sean Whitton]
+  * git-debrebase(1): Fix new-upstream -i docs.  Closes:#950612.
+
+  dgit-infrastructure:
+  * dgit-mirror-ssh-wrap: Cope with new rsync rune.  Closes:#963489.
+  * dgit-mirror-ssh-wrap: Clarify the error message 
+
+  Test suite:
+  * Cope with buster & eatmydata (ie, work around #963508)
+  * Provide navigation banner in log when exiting nonzero
+  * Print pwd in failure trap to help with diagnosis
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 22 Jun 2020 19:09:17 +0100
+
+dgit (9.10) unstable; urgency=medium
+
+  dgit bugfix:
+  * Work around gbp metadata handling bug which can prevent import
+    of some anomalous source packages.  Closes:#950326.
+    Report from Peter Green.
+
+  git-debpush bugfix:
+  * avoid a pipefail problem.  Closes:#940588.  [Sean Whitton]
+
+  Documentation:
+  * Terminology: Change "rewind" to "rewrite" where appropriate
+  * dgit(1): Cover more cases of --overwrite and --deliberately
+    Closes:#928473.
+  * dgit(1): Do not talk about `intermediate' uploads.
+  * d-m-{merge,debrebase}(7): Use an 'upstream/' tag prefix in
+    gbp.conf; set `merge' in gbp.conf; import tarball before
+    committing gbp.conf.  Closes:#932954.  [Sean Whitton]
+
+  i18n:
+  * Updated nl.po file.  Closes:#945356.  [Frans Spiesschaert]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 03 Feb 2020 08:41:10 +0000
+
+dgit (9.9) unstable; urgency=medium
+
+  Documentation:
+  * dgit-maint-{merge,debrebase}(7): Suggest a better rune.
+    (`git fetch --tags upstream')  Closes:#939679.  [Sean Whitton]
+  * git-debpush(1) minor improvements.  Closes:#935084.  [Sean Whitton]
+  * dgit(1): Fix a typo (found by lintian)
+  * dgit-maint-bpo(7): Mention occasional need for --new.  Closes:#935443.
+  * git-debrebase: Extend extended description for this .deb.
+
+  Infrastructure:
+  * New script dgit-mirror-ssh-wrap suitable for use as restricted
+    command on repos mirror target hosts, and corresponding test.
+
+  Packaging niggles:
+  * control: Add missing dependency on liburl-perl (dgit and tests)
+  * control: Drop redundant Priority field for dgit-infrastruture
+  * control: update Vcs-Git to end in .git
+  * lintian: Override some checks
+  * control: Bump Standards-Version to 4.4.0.0.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 14 Sep 2019 21:34:13 +0100
+
+dgit (9.8) unstable; urgency=medium
+
+  dgit, important bugfixes for bugs introduced in 9.6:
+  * Once again cope with archive skew.  Closes:#935874.
+    [Initial report from Colin Watson]
+  * Follow http[s] redirects again.  Closes:#939564.
+
+  dgit, useful new behaviours and fixes:
+  * Use distro-info-data to resolve unknown suites.  Closes:#931212.
+    [Suggestion from Simon McVittie]
+  * Try to warn about misplacement of dgit options.  Closes:#934807.
+    [Useability report from Félix Sipma]
+  * Fail early when the archive/ tag already exists, ie when version
+    needs to be not reused.  Closes:#935802.
+    [Useability report from IOhannes m zmölnig]
+  * Do not mistakely reject .asc and .sig files with push-source -C.
+    Closes:#939280.  [Report from Simon McVittie]
+
+  docs:
+  * dgit-maint-{merge,debrebase}(7): Suggest git fetch --all --tags
+    as it handles tags better.  [Sean Whitton]  Closes:#939504.
+  * git-debrebase(5): Tiny typo fix.
+  * dgit(1): Some semantic linefeeds (no change to rendered output)
+
+  Supporting changes:
+  * test suite: New test for http mirror and archive skew
+  * test suite: Test already-tagged check
+  * test suite: Add --force-reusing-version to many tests as now needed
+  * Dgit: Minor refactoring of a regexp.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 06 Sep 2019 23:42:15 +0100
+
+dgit (9.7) unstable; urgency=medium
+
+  dgit general bugfixes:
+  * Correctly test for presence of git repo on dgit git server.
+    Fixes behaviour following mixed dgit/non-dgit uploads.  Closes:#934126.
+    (Was badly broken by http fetching rework in dgit 9.6.)
+  * Fix use on NFS, by closing a file which is going to be deleted.
+    [Report and fix from Stéphane Glondu]  Closes:#933827.
+
+  dgit vcs-git bugfixes:
+  * Strip [<path>] (used eg by Debian Haskell Team).  Closes:#932699.
+  * update-vcs-git: Cope if url is unchanged.
+  * update-vcs-git: Strip -b (as it always should have done).
+
+  Test suite:
+  * New facilities for http testing, including mock webservers.
+  * New test cases for http, and for bugs fixed in this version.
+  * Switch to using http git check in three existing tests.
+  * Improve debian/tests/control generator.
+  * Limited refactoring to support other changes.
+
+  Other minor changes:
+  * dgit: Slightly more debugging for check_for_git with http[s]
+  * changelog: Fix a typo in the entry for 9.6.
+  * i18n (messages) updated, following message changes.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 11 Aug 2019 01:11:01 +0100
+
+dgit (9.6) unstable; urgency=medium
+
+  * git-playtree-setup had a spurious set -x so many programs spewed
+    debugging output.  This is now fixed.  Closes:#932959.
+
+  dgit:
+  * Drop support for configuring old, not currently enabled, methods
+    of TLS key/cert pinning.  We are going to revisit this soon.
+  * Provide a --for-push option (useful in for certain special users).
+  * Reduce variety in HTTP clients we use.  Specifically, use WWW::Curl
+    for accessing (i) the ftpmaster API, (ii) the http dgit git server
+    mirror (iii) downloading the .dsc.
+
+  Administrivia:
+  * Add missing Closes of #932476 to changelog entry for 9.5
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 25 Jul 2019 13:12:08 +0100
+
+dgit (9.5) unstable; urgency=medium
+
+  git-debpush [Sean Whitton]:
+  * Support ignoring individual checks with --force=check.  Closes:#932459.
+  * Check upstream source is identical in the upstream tag.  Closes:#932476.
+  * Check that patches are (un)applicable.  Closes:#932477.
+  * Check for an unstitched git-debrebase branch.  Closes:#932612.
+  * Check for explicitly pushing detached HEAD.
+
+  dgit clone [Ian Jackson]:
+  * No longer create an "origin" remote.  Closes:#932694.
+
+  Documentation:
+  * dgit-maint-bpo(7): new manpage for maintainers of official Debian
+    backports.  Closes:#857490.  [Sean Whitton]
+  * git-debrebase(1): make this manpage a less intimidating entry point.
+    Closes:#926656.
+    [Sean Whitton & Ian Jackson; prompted by feedback from Sam Hartman]
+
+  Miscellaneous:
+  * Correct the description of --force in git-debpush(1) [Sean Whitton].
+  * git-debrebase(*): fix some crossreferences [Sean Whitton].
+    Closes:#932536.
+  * Break out git-playtree-setup and rewrite in shell. [Ian Jackson]
+  * Fix organisation copyright attribution for Matthew Vernon's
+    contributions.  Closes:#932630.
+  * HACKING: new document for helping people work on the code. [Ian Jackson]
+  * Update Vcs-Git etc. to point to salsa.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Mon, 22 Jul 2019 21:38:19 +0100
+
+dgit (9.4) unstable; urgency=medium
+
+  dgit:
+  * Support the Ubuntu Cloud Archive [Matthew Vernon]. Closes:#932322.
+
+  test suite:
+  * tag-to-upload tests: Tolerate a changed git message.  Closes:#932475.
+
+  administrivia:
+  * debian/copyright: Add some missing credtis
+  * Update copyright notices in many files
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 20 Jul 2019 16:26:32 +0100
+
+dgit (9.3) unstable; urgency=medium
+
+  dgit and git-debrebase bugfixes:
+  * No longer crash if .git/logs does not exist when we need it.
+  * Report the upstream tag, rather than commit id, in tags/commits,
+    if the user explicitly specifies refs/tags/...
+
+  tag-to-upload, git-debpush [Sean Whitton]:
+  * Several new checks designed to prevent broken uploads.
+    - Including: Check that upstream tag is ancestor of branch to be tagged.
+      Closes:#932096
+  * Cope with spaces in user-supplied upstream tag.
+
+  tag-to-upload, server side:
+  * Fix non-default quilt modes.  These were all previously broken.
+  * Arrange to report the upstream tag in dgit-generated commits/tags.
+
+  dgit archive query improvements [Matthew Vernon]:
+  * dgit(1): document the presence of the aptget method.  Closes:#932321.
+
+  minor supporting changes:
+  * New tests tagupl-baredebian and tagupl-gbp.
+  * Tiny addition to debugging output and test suite output.
+  * Test suite rearrangements.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 18 Jul 2019 03:10:25 +0100
+
+dgit (9.2) unstable; urgency=medium
+
+  * No change upload to force rebuild on buildd.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 09 Jul 2019 22:01:25 +0100
+
+dgit (9.1) unstable; urgency=medium
+
+  New tools for a "git-push-to-upload" workflow [Ian Jackson & Sean Whitton]:
+  * New script in a new binary package: git-debpush.
+    The new binary package is small, but
+    + git-debpush needs to be in src:dgit, because its test suite is the
+      dgit test suite; however,
+    + git-debpush is functionally and conceptually independent of dgit,
+      so should not go into bin:dgit; in particular
+    + git-debpush's dependencies are quite different to the other
+      binary packages.
+  * New dgit-infrastructure subcommand, tag2upload, to process tags made
+    by git-debpush.
+    Please see git-debpush(1) for a sketch of the workflow.
+
+  dgit:
+  * Allow the -p option to be used with various push modes.
+  * Include dgit tag metadata in maintainer view tags.
+    For consistency with, and use by, git-debpush.
+  * Include quilt metadata in the archive/ (dgit view) tag.
+  * rpush protocol: Version 6, which includes split brain information
+    for maintainer view tags.  And, actually use newer version
+    (was broken in 9.0, which would prefer to select 4 not 5).
+  * Add some missing blank lines to tag messages.
+  * Some other refactoring.
+
+  Other documentation:
+  * dgit(1): fix a reference in the description of --quilt=auto [Sean
+    Whitton].
+
+  Translations:
+  * Do not translate tag subject lines, because these are parsed by
+    dgit-repos-server.
+
+  Test suite:
+  * Test cases for new tools for "git-push-to-upload" workflow.
+  * drs-git-ext: honour DGIT_DRS_MODE.
+  * Provide a stunt sendmail and a stunt dgit.
+  * Unset CDPATH in case caller has it set.
+  * Some other refactoring.
+
+  Administrivia:
+  * Update d/copyright years to include 2019 [Sean Whitton].
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 07 Jul 2019 14:28:27 +0100
+
+dgit (9.0) unstable; urgency=medium
+
+  dgit - low-impact incompatible change:
+  * Drop support for, and testing of, dgit versions which use old tag name
+    (debian/V; now that is maintainer view and dgit is archive/debian/V).
+    The new tags came in in dgit 2.0 in October 2016.  No version of dgit
+    without them was in any Debian release.  We don't expect there are any
+    sites using old servers which do not support the new format, or anyone
+    using a dgit client older than 2.x who cannot upgrade.
+
+  git-debrebase fixes [Niko Tyni]:
+  * Fix `git-debrebase convert-from-dgit-view <upstream>', which
+    would crash due to an argument parser bug.  Closes:#930214.
+  * git-debrebase(1): typo fix.  Closes:#930215.
+
+  dgit - new capabilities:
+  * Support split view with native packages, and with all quilt modes.
+    Now we distinguish "split view" (meaning separate dgit branch) from
+    "splitting quilt modes" (eg --quilt-unapplied).
+    [Prompted in part by enquiries from Sam Hartman]  Closes:#926640.
+  * Support for bare debian/ directory (aka packaging-only) git branches
+    Ie, --quilt=baredebian[+tarball].  [Thanks for info from Shengjing
+    Zhu, and docs and UI contributions/review from Sean Whitton.]
+    Closes:#903392.  Closes:#931253.
+
+  dgit - bugfixes:
+  * Fix --dgit-view-save option alias, which never worked.
+    (--save-dgit-view worked, and still does, though.)
+  * i18n: Do not translate import commit messages.
+
+  dgit - other documentation improvements [Sean Whitton]:
+  * Expand on description of --include-dirty.  New text may help
+    user avoid unexpected file deletion.  Closes:#930922.
+  * dgit-maint-*(7): Suggest --name-status --diff-filter.  Closes:#930956.
+  * dgit-maint-*(7): Using untagged upstream commits.  Closes:#930964.
+
+  dgit - minor consequences of these other changes:
+  * Actually properly reject invalid quilt modes found in git config.
+    (Previously they might be accepted and then cause malfunctions.)
+  * Reject split brain quilt modes with single-debian-patch.
+    (Previously this would malfunction; now we reject it.)
+  * i18n: Add translator notes about ASCII art changes display.
+  * Drop "dgit view: changes are required..." message.
+  * Some other minor changes to quilt fixup error handling.
+  * Changes to debugging output related to quilt modes and split view.
+  * Introduce rpush protocol version 5.  Minimum version is now 4.
+  * Considerable internal rearrangement of quilt fixup code.
+  * Considerable test suite work including new tests.
+
+  dgit test suite:
+  * dgit-repos-policy-debian: Test taint removal.  Closes:#929249.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 02 Jul 2019 16:55:15 +0100
+
+dgit (8.6~) UNRELEASED; urgency=medium
+
+  * dgit: rpush: Work in splitting quilt modes, again.  Closes:#931213.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 02 Jul 2019 14:36:47 +0100
+
+dgit (8.5) unstable; urgency=medium
+
+  * Replace `confess $!' with `confess "$!"', to actually print errno
+    when crashing.  Closes:#929549.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 27 May 2019 00:20:58 +0100
+
+dgit (8.4) unstable; urgency=medium
+
+  Bugfixes:
+  * dgit: import-dsc: Handle relative symlinks correctly.
+    Closes:#913259.
+  * dgit: Do not misrecognise some initial packaging as
+    gdr-compatible.  Closes:#922446.  [Report from Sean Whitton]
+  * git-debrebase: convert-*: Fix two broken error messages.
+    Closes:#922462.  [Report from Didier 'OdyX' Raboud]
+
+  Documentation:
+  * [nl] translations updated.  Closes:#921088.  [Frans Spiesschaert]
+  * Many manpage typo fixes.  Closes:#918384.  [Paul Hardy]
+  * dgit(1): Write the leading dash of an option as '\-'.
+    Closes:#921965.  [Bjarni Ingi Gislason]
+
+  Test suite:
+  * dgit: import-dsc: New test for abs/rel dsc component links
+
+  Internal changes:
+  * dgit: cmd_import_dsc: comment on lack of is_orig_file check
+  * git-debrebase: resolve_upstream_version: Return $used too
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 01 Mar 2019 21:53:40 +0000
+
+dgit (8.3) unstable; urgency=medium
+
+  dgit - Behavioural changes with compatibility implications:
+  * Pass --no-source-only-changes to pbuilder and cowbuilder
+    Closes:#904862.  This option was only recently added to
+    pbuilder.  For compatibility with old pbuilder, say, eg
+    `dgit --pbuilder!:--no-source-only-changes'.
+  * With --clean=git etc, check the tree is clean even before building
+    source in dgit's private directory.  Specifically, with eg dgit sbuild
+    or dgit build-source.  dgit prior to 6.0 would always clean the tree.
+    dgit 6.0 to 8.1 would ignore untracked files completely, leading to
+    occasional lossage.  The pre-6.0 behaviour can be requested with
+    --clean=git,always etc. (aka -wga, -wgfa).  Closes:#914317.
+
+  dgit - New features, bugfixes and improved behaviours:
+  * Allow uppercase (ascii) letters in multi-orig components,
+    as is allowed by the spec in dpkg-source(1).  Closes:#916926.
+  * Honour --program!:option to suppress options passed by default.
+  * clone: Create destination directory before using network.
+  * Check early that build-products-dir is accessible.  Closes:#913648.
+  * Look for origs in `..' as well as build-products-dir, and
+    there are any, link them into the bpd.  Closes:#904878.
+  * Provide new --git[-ff],always clean mode (as discussed above).
+
+  i18n - new translations [Frans Spiesschaert]:
+  * nl, dgit-user(7).   Closes:#918253.
+  * nl, messages.   Closes:#917148.
+
+  Documentation:
+  * dgit(1): Fix documentation of .quilt-mode config.
+  * dgit(1): Fix a formatting typo (spurious .TP).  Closes:#917194.
+  * dgit-user(7): Fix formatting error in comment about multi-arch.
+  * dgit-maint-debrebase(7): handle DFSG-filtering for a new package.
+    [Sean Whitton]  Closes:#915973.
+
+  Error message improvements:
+  * dgit: When reporting no such package, say `source package'.
+  * dgit: Fix reference to -wdn/-wddn in a message.
+  * dgit: cleaning: Minorly improved handling of note about ignores.
+  * dgit-repos-policy-debian: Remove duplicated text from force
+    report message.  Closes:#913676.
+
+  i18n infrastructure:
+  * po/README: Fix reference to dgit-user_7.pot.
+  * po4a, pairwise-pocheck: Fix recognition of bare `<...>'.
+  * Update po and pot files.
+
+  Internal changes;
+  * dgit: Remove foolish uses of $b, which is very special in perl.
+  * Modest refactoring to support the other changes.
+  * test suite: pretend-pbuilder: Reject unknown options.
+  * Test suite: examplegit setup: Do not leave the tree dirty.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 07 Jan 2019 00:14:05 +0000
+
+dgit (8.1) unstable; urgency=medium
+
+  git-debrebase;
+  * convert-from-unapplied: Provide aa an alias for convert-from-gbp
+    and document its scope properly, etc.  Closes:#905433.
+  * dgit-maint-debrebase(7): discuss -fdiverged with convert-from-*,
+    and (prompted) dgit --overwrite.  Closes:#903377.  [Sean Whitton]
+
+  i18n support:
+  * Check pod translations for a common class of syntax error.
+    (using new machinery for pairwise checking of pod translations.)
+  * po4a: Add -LUTF-8 to the config.
+  * po4a/.gitignore: actually ignore right .po4a.LANG.cfg.
+
+  test suite:
+  * Run everything with LC_CTYPE=C.UTF-8.
+  * manpages-format: pass --warnings.
+  * NOTES.podchecker: Document why we're not using podchecker.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 08 Nov 2018 02:09:05 +0000
+
+dgit (8.0) unstable; urgency=medium
+
+  dgit - Behavioural change with compatibility implications:
+  * Check (with --clean=dpkg-source[-d], ie, by default) that rules
+    clean does not leave untracked files (ie, trip if it looks like
+    a `git add' may have been forgotten).  dgit will now fail in
+    some situations where previously it would have just carried on.
+  * Honour new clean modes --dpkg-source[-d],no-check aka -wdn / -wddn
+    which suppress this check.  (Whether the untracked files are
+    used or disregarded depends on --include-dirty.)
+  * Honour new .clean-mode-newer access config option, to allow git
+    configs to be compatible with both new and old dgits.
+    See relevant parts of dgit(1) for more information.
+
+  dgit - Improved behaviours:
+  * Better handling of cross-filesystem operations, including
+    build-products-dir on a different fs.  Closes:#910730.
+  * Change to git toplevel dir before starting.  Closes:#910724.
+  * Provide --clean=check,ignores aka -wci.
+  * Provide --clean=dpkg-source[-d],all-check aka -wda / -wdda.
+
+  dgit - Important bugfixes:
+  * Check that tree does not contain untracked files (depending on clean
+    mode) when building source using git branch rather than using working
+    tree.  In particular, honour --clean=check.  Closes:#910705.
+  * Also apply that new cleanliness check during build-source or
+    push-source etc. with --clean=dpkg-source; even though rules
+    clean was not run.  See above.  Again, -wdn / -wddn may be needed.
+  * dgit: Forbid source building with --include-dirty and non-.. bpd,
+    which can seriously malfunction.  Closes:#910725; see #910740.
+
+  dgit - Additional sanity checks:
+  * quilt linearisation: Stop at debian/source/format changes.
+  * quilt fixup: Cope if gdr analysis finds origin.  Closes:#910687.
+  * Add missing error check in single-debian-patch handling.
+  * Refuse to work if critical files have uncommitted changes.
+  * Reject all git config options containing newlines.
+  * Better error message for not in git tree.  (For git-debrebase too.)
+
+  dgit - Minor bugfixes:
+  * Fix spelling errors etc. in messages.
+  * Replace mention of alioth by salsa in a message.
+  * clean_tree: confess rather than die on unknown clean mode.
+  * Add missing \n to crash from git_cat_file.  (git-debrebase too.)
+
+  Documentation:
+  * dgit(1): Document that cleaning is sometimes not needed and
+    is therefore not done.
+  * README.md: Add this document for the benefit of Salsa.
+  * po/README: Mention -k10 threshold.
+  * po/README: Give a pointer to salsa; remind the translator to commit.
+  * dgit(1): Fix spelling errors.
+  * dgit(7): Fix spelling errors.
+  * dgit-sponsorship(7): Fix spelling error.
+
+  Consequential changes:
+  * Internal refactoring to support all these changes.
+  * Tests adjusted to correspond to, and somewhat test, these changes.
+  * Slight reorganisation to documentation of --clean=dpkg-source etc.
+
+  Build system:
+  * Makefile: Provide i18n-commit target.
+  * po/list-documents: Set translation threshold to 10%.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 13 Oct 2018 23:56:35 +0100
+
+dgit (7.0) unstable; urgency=medium
+
+  Bugfixes:
+  * dgit: Do not sometimes crash in quilt-fixup if git-debrebase
+    is not installed.  Closes:#910221.
+  * git-debrebase: new-upstream: Drop `sleep 2' (!)
+  * git-debrebase: anchor: Print the anchor, not the breakwater tip (!)
+  * Get rid of perl warning "Statement unlikely to be reached"
+    (introduced in 7.0~pre1).
+  * git-debrebase: merges: Make warnings of lossage less overblown
+
+  i18n (translation):
+  * Support message translation for git-debrebase.  (Re #904883.)
+  * Support document translation.  Closes:#904883.
+  * po: Rename `all-po' target to `pofiles'
+
+  Error message improvements (prompted by i18n work)
+  * Replaced `die' with `confess' in many unexpected syscall errors
+    and internal error cases.
+  * git-debrebase; Print a proper message for failure to opendir
+    the bpd and for failure to chdir to the toplevel.
+
+  Internal changes:
+  * Minor refactoring to support translation.
+  * i18n-diff-auditor: New script to support translation markup.
+
+  Packaging:
+  * Use dh_missing --fail-missing
+  * Add missing build-dependency on xgettext
+
+  Test suite:
+  * gdr-makepatches7: Fixes to dgit/git-debrebase interaction
+  * gdr-makepatches7: Test dgit with missing git-debrebase
+  * Test that the binary packages can be built
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 04 Oct 2018 20:33:12 +0100
+
+dgit (7.0~pre1) experimental; urgency=medium
+
+  * i18n: Support messgae translation for the program dgit.
+    (Working towards #904883.)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 02 Oct 2018 13:20:24 +0100
+
+dgit (6.12) unstable; urgency=medium
+
+  * test suite: t-check-only-bpd: Check $tmp/.. not .. .  Fixes bogus
+    failure in Ubuntu CI.  Thanks to Mattia Rizzolo for the report.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 28 Sep 2018 18:17:36 +0100
+
+dgit (6.11) unstable; urgency=medium
+
+  * dgit-maint-debrebase(7): move and improve the section
+    "Inspecting the history".  [Sean Whitton]
+  * Makefile: Adjust scope of dgit(7) pod rule.
+  * local-pod-man: developer script, obsoleteed by `make %.view': drop it.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 26 Aug 2018 14:59:32 +0100
+
+dgit (6.10) unstable; urgency=medium
+
+  git-debrebase bugfixes:
+  * Patches in subdirectories: fix malfunctions.  Closes:#907202,#907206.
+  * new-upstream changelog entry: Use debchange.  Closes:#905888.
+  * Empty patch queues: Fix some malfunctions and infelicities.
+  * convert-to-gbp: Actually base the result on the breakwater, not HEAD.
+
+  dgit bugfixes:
+  * *build*: Cope with new-style --build= specifications
+  * Pass --no-source to sbuild (always).  Closes:#904966.
+  * build: Squash $buildproductsdir.  Closes:#906786.
+
+  dgit improvements for git-debrebase compatibility:
+  * Do not try split brain git-debrebase make-patches.  Closes:#906908.
+  * Do not abandon quilt fixup at git-debrebase split commits.
+  * Check for git-debrebase with a history walker, not debrebase-last.
+    This can avoids using dpkg-source --commit.  Closes:#907208.
+
+  git-debrebase improvements:
+  * convert-from-*: snag on discarding comments in series.  Closes:#907198.
+  * forget-was-ever-debrebase: New subcommand.
+  * Make all commit message annotations have a COMMIT-TYPE.
+
+  git-debrebase documentation:
+  * dgit-maint-debrebase(7): Add runes for inspecting.  Closes:#907190.
+  * git-debrebase(5): Warn against renaming branch while unstitched
+  * git-debrebase(5): Document new understanding of debrebase-last
+
+  test suite behavioural changes for ad-hoc runs:
+  * run-all: Without --progressive, rm and recreate tests/tmp
+  * run-all: Honour DGIT_TESTS_TMPDIR
+  * run-all: Understand `:' specially
+
+  test suite:
+  * Tests for the bugfixes and improvements.
+  * lib-gdr: Be more defensive about unexpected states/args
+  * lib-gdr: Check that we made patches with git-debrebase
+  * Honour DGIT_TEST_RUN_PFX env var.
+  * Test dgit calling git-debrebase on new debianisation.
+  * gdr-new-upstream: Check changelog is exactly right.
+  * debchange: Widespread better handling of the time seen by dch.
+    Freeze time.  Work around faketime TZ bug (#907264).
+  * test-list-uptodate: Drop imports and dependencies
+  * git-debrebase: gdr-merge-conflicts: Call git merge --no-edit
+  * build-modes-*: Provide stunt dpkg-deb to pass -Znone, for speed.
+  * build-products-dir: Check nothing in ../
+  * Work if $tmp is on a different filesystem.
+  * Internal changes and refactoring to support other changes.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 26 Aug 2018 14:58:18 +0100
+
+dgit (6.9) unstable; urgency=medium
+
+  * dgit: do not crash on push of a new gdr package.  Closes:#906784.
+  * dgit: Remove unsubstituted $changesfile from message  Closes:906787.
+  * dgit-maint-debrebase(7): improve "Converting an existing package",
+    and refer to "ILLEGAL OPERATIONS" in git-debrebase(5).
+    Closes:#905573.  [ Sean Whitton ]
+  * test suite: Update debian/tests/control following dependency fix.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 21 Aug 2018 14:36:36 +0100
+
+dgit (6.8) unstable; urgency=medium
+
+  * test suite: Fix dependencies of new gdr-merge-conflicts test.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 20 Aug 2018 14:52:03 +0100
+
+dgit (6.7) unstable; urgency=medium
+
+  git-debrebase, bugfixes:
+  * make-patches: Do not bail if there aren't any.
+  * scrap: works properly when it does only rebase --abort.
+  * On rebase: always save ffq-prev even if we were both stitched and
+    laundered.  Closes:#905975.
+
+  git-debrebase, improvements:
+  * Speed: improve laundry performance by a factor of ~55:1,
+    and analysis performance by factor of ~4.2:1.  Closes:#905995.
+  * prepush: this is now a silent no-op if the branch is
+    unstitched.  This is more friendly.
+  * convert-from-*: Snag on patches in d/patches which are not in series,
+    because they will be deleted.  Closes:#904997.
+  * Highly experimental merge resolution support, enabled only with
+    special command line option.
+  * Lots of internal changes to support merge, and other work.
+  * convert-from-*: Check whether ffq-prev or debrebase-last indicate that
+    we are already in gdr format.
+  * convert-from-*: leave debrebase-last refs to hint to everyone that
+    this is now a gdr branch.
+
+  git-debrebase, improved messages:
+  * Improve ffq head recording message.
+  * Better (less copious by default) debug output.
+  * convert-from-gbp: Improve messages.  Closes:#906641.
+  * Provide hints for unprocessable commits, depending on the apparent
+    branch ffq state, including possible suggestion to use convert-from-*.
+    Closes:#905005.  Closes:#905279.
+
+  dgit, improved messages:
+  * Mention bad origs as possible cause of quilt fixup failure,
+    in both dgit(7) and in error messages.  No longer suggest
+    --quilt=smash or dpkg-source --commit in the error message.
+    Closes:906196.
+  * Do not suggest --quilt modes if quilt fixup "stopped at"
+    a commit made by git-debrebase.  Closes:#906197.
+  * Mention gitattributes as a potential problem in quilt linearisation
+    failure, when appropriate.  Closes:#906199.
+
+  dgit, documentation:
+  * dgit(1): Encourage --overwrite rather than --overwrite=version.
+  * Document that we do not suppress attributes which affect git-archive.
+    This is related to #906199.
+
+  test suite:
+  * test suite: Set DEBFULLNAME
+  * test suite: unset GIT_EDITOR, so it works if user has that set.
+
+  Packaging:
+  * changelog: Add close note for #905400 to changelog entry for 6.5.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 20 Aug 2018 02:30:06 +0100
+
+dgit (6.6) unstable; urgency=medium
+
+  * test suite: Fix gdr's calls to dgit when run formally in
+    autopkgtest.  (Affects gdr-import-dgitview.)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 05 Aug 2018 10:42:01 +0100
+
+dgit (6.5) unstable; urgency=medium
+
+  git-debrebase new features:
+  * git-debrebase: Provide new convert-from-dgit-view operation.
+    The output is, unavoidably, not very pretty.  Closes:#905322.
+  * git-debrebase: New subcommand `scrap'.  Closes:#905063.
+
+  git-debrebase error handling improvements:
+  * git-debrebase: Properly reject bare dgit dsc imports.  Closes:905400.
+  * git-debrebase: Improve some error message formatting.
+  * git-debrebase: Check for git-rebase in progress and abort most operations.
+
+  dgit improvements:
+  * dgit: Improve error message for unknown suite, to suggest -d.
+  * dgit: Rename --dgit-view-save to --save-dgit-view, leaving an alias.
+  * dgit: Provide print-unapplied-treeish subcommand.
+
+  Test suite changes:
+  * test suite: Add t-tstunt-parsechangelog to many gdr tests.
+  * test suite: editing a test script overrides DGIT_TESTS_PROGRESSIVE.
+  * test suite: gdr-import-dgitview: New test for dgit dsc imports.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 04 Aug 2018 17:53:57 +0100
+
+dgit (6.4) unstable; urgency=medium
+
+  * git-debrebase(1): Fix typo "unappled".  Closes:#905064.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 02 Aug 2018 08:24:32 +0100
+
+dgit (6.3) unstable; urgency=medium
+
+  * git-debrebase: breakwater: Fix error message for unprocessable
+    commits.  Closes:#905003.
+  * git-debrebase: new-upstream: Fix error message for new version
+    with bad syntax.
+  * git-debrebase test suite: Test messages about unprocessable commits.
+  * git-debrebase: new-upstream: Fix handling of epochs.
+  * git-debrebase: convert-from-gbp: Use same algorithm for finding
+    upstream commitish as new-upstream.  Closes:#905062.
+  * git-debrebase: Improve error messages for bad options.
+  * git-debrebase: Improve error message for convert-from-gbp
+    upstream discrepancy.  Closes:#905078.
+  * git-debrebase(5): Add ILLEGAL OPERATIONS section.  (Re#905004.)
+  * git-debrebase(1): Warn against plain git rebase.  (Re#905004.)
+  * dgit-maint-debrebase(7): Warn more against plain git rebase.
+    Closes:#905004.
+  * git-debrebase: Implement --help, providing a summary.
+    Closes:#904990.
+
+ -- Ian Jackson <ian@zealot.relativity.greenend.org.uk>  Thu, 02 Aug 2018 03:45:40 +0100
+
+dgit (6.2) unstable; urgency=medium
+
+  * dgit(1): Improve and correct --build-products-dir description.
+  * dgit: Minor code cleanup.
+  * dgit build: Warn if --build-products-dir is not `..'.  Closes:#904859.
+  * test suite: Test dgit import-dsc --build-products-dir.
+
+  [Sean Whitton]
+  * manpages: alioth->salsa
+  * manpages: add references to pbuilder and cowbuilder
+  * dgit-maint-gbp(7): discuss dgit.default.build-products-dir
+  * dgit-maint-gbp(7): update references to --*-dirty
+  * dgit-sponsorship(7): add references to push-source
+  * dgit-maint-debrebase(7): fix command to just launder
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 29 Jul 2018 12:57:26 +0100
+
+dgit (6.1) unstable; urgency=medium
+
+  New feature:
+  * 'pbuilder' and 'cowbuilder' subcommands (Closes: #844125).
+    - Suggest sbuild | pbuilder | cowbuilder.
+
+  Minor fixes:
+  * Fix an error message to refer to the build products dir instead of
+    just the parent directory.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Sat, 28 Jul 2018 20:14:23 +0800
+
+dgit (6.0) unstable; urgency=medium
+
+  New features [Sean Whitton]:
+  * Introduce dgit.default.build-products-dir git configuration key.
+    Closes:#857316.
+  * Die earlier, and with a more helpful message, if the user tries to
+    include dirty changes when building a source package in split brain
+    mode.
+
+  dgit behavioural changes:
+  * dgit: Always build the source package ourselves, rather than
+    sometimes leaving that to the builder command.  dgit will now
+    usually generate *_multi.changes rather than *_$arch.changes.
+  * dgit: Build source packages in a private directory, except when
+    the user passes --include-dirty [Sean Whitton].
+    - dgit push-source no longer cleans the tree [Sean Whitton].
+  * dgit: Rename --ignore-dirty to --include-dirty (leaving the old
+    name supported as a deprecated alias).
+
+  Test suite improvements:
+  * test suite: unset VISUAL, which interferes.  Closes:#904308.
+  * Honour DGIT_SCHROOT_CHROOT to set the schroot to use for the sbuild
+    tests.
+  * Support tests/run-all --progressive.
+  * Drop now-obsolete *-asplit tests.
+
+  Other improvements:
+  * apt-get method: when apt does not update release files,
+    unconditionally print hint about noatime.  Closes:#851873.
+  * messages: Be a lot more friendly about NEW in particular,
+    and also add a couple of `please's.  Closes:#904448.
+  * Make --build-products-dir (and the new config key) actually work.
+    Closes:#863582.  [ Ian and Sean. ] 
+  * dgit: Many important internal rearrangemnts relating to source
+    package production and building.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 26 Jul 2018 14:43:47 +0100
+
+dgit (5.10) unstable; urgency=medium
+ 
+  * Merge the experimental branch.
+  * test suite: Drop a couple of useless test log output lines.
+  * infrastructure: Run git gc --auto before mirroring.  Closes:#841414.
+ 
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 14 Jul 2018 18:07:02 +0100
+ 
+dgit (5.9+exp4) experimental; urgency=medium
+
+  * test suite: Use  dch -r -D sid ''  not  dch -r sid.  Closes:#903441.
+  * test suite: Save a tarball of much of the working area of each test
+    in $AUTOPKGTEST_ARTIFACTS.
+  * Separate changelog entries for the following test attempts
+    in experimental have been elided:
+      dgit (5.9+exp3) experimental; urgency=medium
+      dgit (5.9+exp2) experimental; urgency=medium
+      dgit (5.9+exp1) experimental; urgency=medium
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 12 Jul 2018 13:45:07 +0100
+
+dgit (5.9) unstable; urgency=medium
+
+  * git-debrebase convert-from-gbp: Look for dgit-generated tags so we can
+    usually make the new branch ff of the dgit view.  Closes:#903132.
+  * git-debrebase convert-from-gbp: Check that the result will not
+    count as having diverged.  This will usually turn failures to make
+    the ff pseudomerge into -fdiverged.  Related to #903132.
+  * git-debrebase, Dgit.pm, git: some internal reorganisation to
+    support git-debrebase changes.
+  * dgit-downstream-dsc(7): New manpage.  Closes:#842643,#851194.
+  * git-debrebase(5): Document best gitk options.  Closes:#901927.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 12 Jul 2018 13:37:12 +0100
+
+dgit (5.8) unstable; urgency=medium
+
+  Bugfixes:
+  * dgit, git-debrebase: Properly make patches even if an awkward
+    .gitignore ignores the things in debian/patches.  Closes:#903130.
+  * git-debrebase status: Fix commit reporting.  Closes:903131.
+  * git-debrebase new-upstream: Add a -1 revision if the user
+    didn't supply one.  Closes:#903127.
+  * git-debrebase: Improve grammar if one blocking snag.
+  * dgit(1): Unscramble push[-source] descriptions.  Closes:#903116.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 08 Jul 2018 11:42:41 +0100
+
+dgit (5.7) unstable; urgency=medium
+
+  New feature:
+  * dgit checkout: new subcommand.  Closes:#878443.
+  * dgit: Check that entirely-new uploads to Debian are not
+    source-only-uploads, as those are REJECTed.  Closes:#801435.
+
+  Bugfixes:
+  * dgit(7): Mention git-debrebase and gbp pq alongside git-dpm,
+    in the comment about handling patch stacks.
+  * dgit update-vcs-git: Honour --package properly.
+  * test suite: Always pass LC_COLLATE=C to sort(1).  Closes:#903006.
+  * test suite: Fix trustingpolicy-replay & dput-ng.  Closes:#903007.
+  * test suite: Test dput-ng compatibility.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 05 Jul 2018 15:02:21 +0100
+
+dgit (5.6) unstable; urgency=medium
+
+  * Merge the experimental branch containing the fianl
+    version of the test suite gnupg workarounds.  Empirically,
+      - The tests now pass (most of the time, at least) in
+        current Debian unstable, whereas 5.5's fail utterly.
+      - There is still occasional lossage.  So when running tests
+        in a loop (eg to test ever commit), it is still good to set
+        DGIT_TEST_RETRY_COUNT=3 (say).
+
+  * test suite: Test that manpages format with only expected warnings.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 01 Jul 2018 00:41:20 +0100
+
+dgit (5.5+exp9) experimental; urgency=medium
+
+  * test suite: Explicitly start/stop the gnupg agent, around
+    each call to gnupg.  Apropos of #902316 (and #868550).
+
+  * Separate changelog entries for the following test attempts
+    in experimental have been elided:
+      dgit (5.5+exp8) experimental; urgency=medium
+      dgit (5.5+exp7) experimental; urgency=medium
+      dgit (5.5+exp6) experimental; urgency=medium
+      dgit (5.5+exp5) experimental; urgency=medium
+      dgit (5.5+exp4) experimental; urgency=medium
+      dgit (5.5+exp3) experimental; urgency=medium
+      dgit (5.5+exp2) experimental; urgency=medium
+      dgit (5.4+exp1) experimental; urgency=medium
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 30 Jun 2018 19:03:00 +0100
+
+dgit (5.5) unstable; urgency=medium
+
+  * Add missing comma in debian/control.  Closes:#902578.
+  * dgit(1): Fix a wrong reference to \fp, which should be \fP.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 28 Jun 2018 13:25:21 +0100
+
+dgit (5.4) unstable; urgency=medium
+
+  Improvements:
+  * dgit(1): Better description of --overwrite.  Somewhat
+    apropos of discussion in #902534.
+
+  Bugfixes:
+  * test suite: gdr-viagit, gdr-newupstream: Do not spuriously
+    fail if gnupg not serendipitously installed.  Closes:#902559.
+  * Fix bug ref to #865444 in previous changelog entry.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 27 Jun 2018 23:13:42 +0100
+
+dgit (5.3) unstable; urgency=medium
+
+  Bugfixes:
+  * dgit: Do not introduce duplicate origs in .changes files,
+    eg if the .changes already has that orig.  Closes:#869146.
+  * Honour GIT_REFLOG_ACTION everywhere.  Closes:#901935.
+  * git-debrebase new-upstream: Provide better reflog entries
+    by setting GIT_REFLOG_ACTION.  Closes:#901925.
+
+  Improvements:
+  * Better message formatting when --overwrite may be needed,
+    and a note about first dgit push in dgit(1).  Closes:891031.
+  * dgit(7): Add discussion of quilt fixup error messages,
+    and add cross-references to dgit(1) and the actual error.
+    Somewhat apropos of #865444.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 27 Jun 2018 14:00:31 +0100
+
+dgit (5.2) unstable; urgency=medium
+
+  dgit bugfixes:
+  * When all Debian changes vanish with single-debian-patch,
+    do not fail to commit the patch queue removal.  Closes:#877036.
+  * When build fails because the network is offline, mention
+    that this is because --since-version was not specified.
+    Closes:#883340.
+  * When quilt fixup fails because of discrepancies, print a
+    git diff rune which will show them.  Closes:#865446.
+  * When fetch or push wants git fetch (other than in a situation where it
+    happes to be a noop) but --dry-run was specified, fail with an
+    explanation, rather than looping with a false coplaint about git
+    fetch.  Closes:#871317.
+  * --overwrite now no longer crashes if there is nothing to overwrite
+    (eg, when used with --new).  Instead, it is simply ignored, as it is
+    ignored in situations where the push is fast forward.  Closes:#863576.
+
+  dgit/git-debrebase interop bugfixes:
+  * git-debrebase interop: Add a missing debugcmd debugging print.
+  * git-debrebase interop: Actually tolerate git-debrebase make-patches
+    exiting with status 7.
+
+  dgit vcs-git handling improvements:
+  * Provide `update-vcs-git' subcommand, for creating and adjusting the
+    vcs-git remote url.  Useful for transition from alioth to salsa.
+    Closes:#902006.
+  * Print a warning to stderr on `dgit fetch sid', if your vcs-git
+    remote url disagrees with what's in sid's .dsc.
+
+  documentation:
+  * dgit(1): Mention under `dgit build' that it uses the network.
+  * dgit(1): Clarify that --overwrite does nothing if not needed.
+    Closes:#863578.
+  * dgit-user(7): Recommend sbuild-debian-developer-setup.
+    [ Sean Whitton. ]  Closes:895779.
+
+  test suite:
+  * Use nproc(1) rather than Sys::CPU.  This is more portable and does not
+    depend on libsys-cpu-perl being installed.  Closes:888496.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 24 Jun 2018 23:33:28 +0100
+
+dgit (5.1) unstable; urgency=medium
+
+  dgit gitattributes handling:
+  * Squash the working-tree-encoding attribute too.
+  * Update an existing `dgit-defuse-attrs' macro in .git/info/attributes.
+  * Test the working-tree-encoding attribute squashing properly.
+    Closes:#901900.
+
+  git-debrebase fixes:
+  * new-upstream: fix (this time for sure) ff check handling
+    of multi-piece upstreams.
+  * Suppress gbp pq export output, except in case of error.
+    Closes:#901809.
+  * Manpages: Fix typos and etc.
+  * Fix a typo in the package description.
+
+  Test suite:
+  * Triger ci.debian.net autopkgtests on: gnupg diffutils patch.
+    (A dummy test is used to add to Testsuite-Triggers.)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 20 Jun 2018 23:20:57 +0100
+
+dgit (5.0) unstable; urgency=low
+
+  Major new facility:
+  * git-debrebase, a new git workflow tool, in its own package.
+  * dgit will now, when appropriate, check if it should call
+    git-debrebase.
+
+  [ Thanks to Sean Whitton for much useful input, and for
+     dgit-maint-debrebase(7). ]
+
+  dgit bugfixes:
+  * Fix the exit status of programs in dgit.deb, to avoid the Perl
+    misfeature which sometimes copies $! to the exit status.
+  * When checking that the tree is clean, check the git index too.
+  * In quilt_fixup_multipatch, work around git checkout paths
+    not deleting files.  (Hypothetical bug AFAIAA.)
+  * Respect --quilt=nofix even if single-debian-patch.
+
+  dgit minor fixes:
+  * "confess" when we die due to a warning, rather than symply dieing.
+
+  Internal changes:
+  * Move $playground global to dgit.
+  * Break git_get_symref and $extra_orig_namepart_re out into Dgit.pm.
+  * Changes to support git-debrebase.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 18 Jun 2018 00:29:44 +0100
+
+dgit (4.4) unstable; urgency=high
+
+  Test suite bugfix:
+  * Use full key hash rather than short keyid.  Closes:#896653.
+    [ report: Paul Gevers; fix: Chris Lamb ]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 23 Apr 2018 13:18:51 +0100
+
+dgit (4.3) unstable; urgency=high
+
+  Documentation improvements:
+  * dgit(7): Discuss file executability.  Closes:#886444.
+  * dgit(7): Discuss git-unrepresentable properties of source trees.
+  * dgit-maint-merge(7): Don't suggest using debian/source/patch-header
+    for 1.0 source format.  Closes:#887850.  [Sean Whitton]
+
+  Bugfixes:
+  * dgit archive-api-query: Avoid crashing due to lack of $isuite.
+    This breaks the infrastructure.  Closes:#886592.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 25 Jan 2018 00:33:56 +0000
+
+dgit (4.2) unstable; urgency=low
+
+  * Upload dgit 4.x series to unstable.
+
+  New features [Sean Whitton]:
+  * New 'push-source' subcommand for source-only uploads.  Closes:#848931
+  * When dgit builds a source package, such as in the 'build-source'
+    subcommand, it now bypasses dpkg-buildpackage and invokes dpkg-source
+    directly.  This avoids a _source.buildinfo file in the .changes, which
+    doesn't make sense when using dgit.  See
+    <https://lists.debian.org/debian-dpkg/2017/06/msg00005.html>.
+
+  Documentation improvements:
+  * dgit(1): Add a bit more rationale (polemic, even).  Closes:#874221.
+  * Recommend mk-build-deps rather than apt-get build-dep.
+    Suggestion from Nikolaus Rath.  Closes:#863361.
+  * dgit-maint-merge(7): many updates.  [Sean Whitton]
+    Closes:#864873,#878433.
+  * dgit-*(7): Mention first upload trick.  [Andrew Shadura,
+    Sean Whitton]  Closes:#856402.
+
+  Minor fixes:
+  * When source discrepancy involves file mode changes, report them
+    specially.  Closes:#886442.
+  * In split brain mode, with unexpected diffs, print dgit view
+    commitid in suggested diff rune.  (HEAD is wrong.)  Closes:#886443.
+  * Fix message about missing quilt cache entry to refer to
+    HEAD rather than tree, since dgit needs a commit.  Closes:#884646.
+  * Fix grammar error in 4.1 changelog entry. [Sean Whitton]
+  * Remove some whitespace "errors". [Sean Whitton]
+
+  Packaging:
+  * Remove dependency alternative on realpath (package last existed in
+    Debian wheezy).  Closes:#877552.
+
+  Test suite:
+  * dpkgsourceignores-docs: Correct restriction (so autopkgtest
+    won't try to run it).
+  * Additional workarounds for gnupg races (#868550) including
+    retrying each individual test once, and more sophisticated
+    wrapper for gpg (with locking and, sometimes saves stdin).
+  * oldnewtagalt: Fix regression when running outside git tree,
+    introduced in 4.1.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 07 Jan 2018 21:45:29 +0000
+
+dgit (3.13) unstable; urgency=high
+
+  Important bugfixes to dgit:
+  * Add missing `use' for Dpkg::Compression et al.
+    Thanks to report from Didier 'OdyX' Raboud.  (Closes:#879526.)
+
+  Test suite:
+  * Add missing `chiark-utils-bin' to Test-Depends.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 22 Oct 2017 17:51:12 +0100
+
+dgit (4.1) experimental; urgency=medium
+
+  Important improvements to dgit:
+  * Support for `git worktree' worktrees.  There may still be
+    bugs; the tests for this are not very comprehensive.  And
+    worktrees on different filesystems may not work; that's a
+    matter for the future.  Closes:#868515.
+  * Change the dpkg-source -i argument to exclude exactly the right
+    set of things.  (Sadly this is not a simple rune.)
+
+  Other improvements to dgit:
+  * New print-dpkg-source-ignores option to print the big rune
+    you need to pass to dpkg-source to make it work exactly right.
+  * Properly shell-quote the --git-builder argument to gbp.
+
+  Documentation:
+  * dgit-user(7): Provide information about how to use sbuild.
+    Quite ugly due to #868527.  Closes:#868526.
+  * dgit-user(7): Fixed example rune to use curl (which prints
+    to stdout, as the rune expects).  [reported by Simon Tatham]
+
+  Minor improvements:
+  * Do not leave many clog-* files in .git/dgit.
+
+  Internal changes:
+  * using-these: New script to help with ad-hoc-testing.
+  * Refactoring in preparation for push-source [Sean Whitton].
+
+  Test suite:
+  * sbuild-gitish: New test case to check running sbuild from git
+  * Work around gnupg agent connection races by having our stunt
+    gpg wrapper simply try running gpg again, once, if it exits 2.
+    This does not fully suppress the bug but it does significantly reduce
+    the probability.
+  * Other tests for new features.
+  * Various refactoring.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 14 Aug 2017 09:31:03 +0100
+
+dgit (4.0) experimental; urgency=low
+
+  * dgit: --deliberately-not-fast-forward works properly in
+    split view quilt modes (suppressing the pseudomerge).
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 12 Feb 2017 22:22:31 +0000
+
+dgit (3.12) unstable; urgency=high
+
+  Important bugfixes to dgit:
+  * Pass --no-renames to git diff-tree -z, avoiding potential trouble.
+  * Defend against commit subject lines which would generate patches which
+    look like series files, etc.  Involves adding .patch to all generated
+    patch filenames.
+  * dgit import: Defend against broken symlinks in ..
+  * dgit import: Right error message for missing files in ..
+  * dgit import: Avoid making broken symlinks in ..
+  * quilt fixup: Tolerate deletion of executable files.
+  * quilt fixup: Tolerate symlink creation (make patches).  Closes:#857382.
+
+  Important bugfixes to other components:
+  * dgit-repos-server: Do not reject commits with no author/committer
+    email address (but still insist on date, and hence on the actual
+    committer and author commit header fields).  Peter Green reports that
+    eg 66c65d90db100435 in upstream linux.git is such a commit (and is
+    accepted by github).  Closes:#863353.
+
+  Test suite:
+  * t-report-fail: print $PWD as part of failure message.
+  * import-dsc: Test missing files, particularly in ..
+  * run git gc on tests/worktrees/example_1.0.tar.
+  * quilt fixup: Check we can delete files with funny modes
+  * quilt fixup: Check that funny changes are represented properly
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 16 Jul 2017 21:36:24 +0100
+
+dgit (3.11~deb9u1) stretch; urgency=high
+
+  * Rebuild and upload to stretch.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 11 Jul 2017 09:28:15 +0100
+
+dgit (3.11) unstable; urgency=high
+
+  Important bugfixes to dgit:
+  * Fix rpush+buildinfo: Transfer buildinfos for signing.  Closes:#867693.
+  * Cope if the archive server sends an HTTP redirect,
+    by passing -L to curl.  Closes:#867185,#867309.
+  * Cope with newer git which hates --local outside a tree.  Closes:#865863.
+  * rpush: Honour local git config from build host working tree.
+  * Tolerate compressor terminating with SIGPIPE.  Closes:#857694.
+  * Honour more pre-tree git config options in our private trees sharing
+    the user's object store.  In particular, core.sharedRepository.
+    Prompted by #867603.
+  * Clone multisuite works even without --no-rm-on-error.  Closes:#867434.
+  * Work if "git init" does not create $GIT/info.  Closes:#858054.
+  * Actually understand foo,-security (!)  Closes:#867189.
+
+  Important bugfixes to other components:
+  * dgit-badcommit-fixup: Honour core.sharedRepository.   Closes:#867603.
+  * infrastructure: Cope with new git-receive-pack which has
+    quarantine feature: ie, work around #867702.
+
+  Test suite:
+  * Cope with git restricting ext:: protocols.
+  * multisuite: Test clone without --rm-on-error.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 08 Jul 2017 22:40:15 +0100
+
+dgit (3.10) unstable; urgency=medium
+
+  Bugfixes:
+  * dgit: Copy several user.* settings from main tree git local config
+    to dgit private workarea.  Closes:#853085.
+  * dgit: Strip initial newline from Changes line from dpkg-parsechangelog
+    so as to avoid blank line in commit messages.  Closes:#853093.
+  * dgit: Do not fail when run with detached HEAD.  Closes:#853022.
+  * dgit: Be much better about commas in maintainer changelog names.
+    Closes:#852661.
+
+  Test suite:
+  * quilt-useremail: New test for user config copying (#853085).
+  * lib-import-chk: Test that commits have smae authorship as appears in
+    the changelog.  (Or, at least, the same authorship set.)
+  * import-maintmangle: New test for changelog Maintainer mangling.
+
+  Documentation:
+  * Fix typos.  Closes:#853125.  [Nicholas D Steeves]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 06 Feb 2017 17:49:39 +0000
+
+dgit (3.9) unstable; urgency=medium
+
+  Improvements:
+  * dgit --overwrite: Check that the overwritten version's changelog entry
+    is not UNRELEASED.  This could easily happen if this release was being
+    made from a git branch which predates the previous package upload.
+
+  Documentation:
+  * dgit-maint-merge(7): Get git clone url right.  Closes:#852609.
+  * dgit-maint-merge(7): Quote sample clone commands.  Closes:#852615.
+
+  Test suite:
+  * overwrite-chkclog: test UNRELEASED handling.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 25 Jan 2017 16:21:53 +0000
+
+dgit (3.8) unstable; urgency=medium
+
+  Bugfixes:
+  * Make dgit-setup-* work in default distro.
+
+  Test suite:
+  * defdistro-setup: Test that setup-* functions distro selection works.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 23 Jan 2017 16:21:30 +0000
+
+dgit (3.7) unstable; urgency=medium
+
+  Bugfixes:
+  * Fix clone-dgit-repos-server and print-dgit-repos-server-print-url.
+    Closes:#851906.
+
+  Documentation:
+  * dgit-maint-merge(7): Explain when workflow is unsuitable
+    (Closes:#852090) and improve the patch-header (Closes:#851897.)
+
+  Internal changes:
+  * New %.view target: `make dgit-maint-merge.7.view' runs `man -l ...'
+
+  Test suite:
+  * defdistro-dsd-clone-drs: New test which would have detected
+    #851906 (and hopefully #850521).
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 22 Jan 2017 17:30:24 +0000
+
+dgit (3.6) unstable; urgency=medium
+
+  Bugfixes:
+  * Actually use the url from a Dgit .dsc field naming an unknown distro.
+    Closes:#851728.
+  * Add dummy implementation of file_in_archive_aptget copied from
+    file_in_archive_dummycat.  Re:#851697.   [ Peter Green ]
+
+  Minor improvements:
+  * Use `confess' to print a stack trace in a couple of internal error
+    rcases.
+
+  Infrastructure:
+  * Properly honour NOCOMMITCHECK policy hook exit status.
+    Closes:#851800.
+  * Do not reject commits with no author/committer name (but still insist
+    on email address and date).  Peter Green reports that eg
+    71e128629ec786f3 in upstream xen.git is such a commit (and is accepted
+    by github).  Closes:#851716.
+
+  Test suite:
+  * downstream-gitless: Test import of .dsc from unknown distro.
+  * downstream-gitless: Test import of .dsc with unsafe url.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 19 Jan 2017 01:15:03 +0000
+
+dgit (3.5) unstable; urgency=medium
+
+  Bugfixes:
+  * gitattributes: Defuse gitattributes in private working area even if we
+    don't do it in the user's tree (because of user configuration).
+  * gitattributes: When cloning, do not print spurious warning about
+    actually-defused gitattributes.  Closes:#851624.
+  * gitattributes: Improve comment left in .git/info/attributes.
+
+  Test suite:
+  * gitattributes: Many improvements to test case.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 17 Jan 2017 22:36:01 +0000
+
+dgit (3.4) unstable; urgency=low
+
+  Test suite:
+  * drs-push-rejects: Set origin's url to an ad-hoc expression
+    which produces the right ext:: rune, as dgit would.
+    Closes:#851580.
+  * Replace references to /home/ian in various worktrees with
+    references to /nonexistent, to catch inadvertant accesses.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 16 Jan 2017 17:27:35 +0000
+
+dgit (3.3) unstable; urgency=medium
+
+  Behavioural changes to work around gitattributes file transformations:
+  * Suppress file-transforming gitattributes in private work areas.
+  * Configure suppression in user's trees in dgit clone and setup-new-tree.
+  * Provide dgit setup-gitattributes to do this explicitly.
+  * Documentation.
+
+  Bugfixes:
+  * dgit: Remove a leftover debugging print.
+  * dgit: Set default dsc import distro when there is no Dgit field.
+  * dgit: Set default dsc import distro when suppressing Dgit field.
+  * dgit: Option parsing: Fix undefined $suite in some import-dsc.
+    Closes:#851213.
+
+  Packaging:
+  * Remove redundant use of List::Util qw(any).  Closes:#851280.
+  * Remove redundant Recommends on libtext-iconv-perl.
+
+  Test suite:
+  * Move default dsc distro config setting to lib.  We need this
+    for the .dscs we have in tests/pkg-srcs/.
+  * defdistro-import-dsc: Drop this test.
+  * protocol-compat: check that we use the right distro
+    information when importing.
+  * Internal change: fix handling of nonempty distro=
+  * gitattributes: New test for .gitattributes handling.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 16 Jan 2017 10:03:08 +0000
+
+dgit (3.2) unstable; urgency=medium
+
+  Bugfixes:
+  * dgit: Do not execute END blocks in children.  So far symptoms of this
+    bug seem to be limited to duplicated error messages but I have not
+    done a thorough analysis.  Closes:#850052.
+  * dgit-infrastructure: dgit-repos-policy-debian: Remirror a package when
+    it becomes public (ie, make the repo available much more promptly when
+    the package passes NEW).  Closes:#849789.
+  * dgit: Fix a warning message about ref (mainly, tag) updates.
+
+  Documentation:
+  * dgit-maint-merge(7): Use git-deborig(1).
+    [Sean Whitton]  Closes:#850953.
+  * dgit-user(7): Fix some typos.
+
+  Internals:
+  * Fix a typo in a comment.
+
+  Test suite:
+  * infra: mirroring and policy hooks: Improve some debugging output.
+  * infra: mirror-private: test that package becomes public.  (#849789)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 12 Jan 2017 02:11:34 +0000
+
+dgit (3.1) unstable; urgency=medium
+
+  Bugfixes:
+  * dgit import-dsc: Do not crash with undefined $isuite.  Closes:#850781.
+  * dgit build: Do not sometimes crash with undefined $isuite.
+  * dgit: Do not nedlessly re-fetch the rewrite map.
+  * dgit: After downloading .debian.* files, save them in `..', too
+    (ie do this not just for .origs).
+  * dgit: When fetching, refetch files with hash mismatches (and save them
+    as `...,fetch'), so we can distinguish them from any built locally.
+    Closes:#850824.
+
+  Test suite:
+  * Add test for import-dsc with default distro.  (Detects #850781.)
+
+  Administrivia:
+  * Fix a dgit 3.0 changelog bullet referring to refs/dgit-fetch/DISTRO.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 10 Jan 2017 17:50:27 +0000
+
+dgit (3.0) unstable; urgency=medium
+
+  Protocol change:
+  * Dgit: field now records the nominal distro name, and a hint
+    for a tag and url where the git objects (including any rewrite
+    map) can be fetched.
+  * Use this information, where provided.  Closes:#850431.
+
+  Bugfixes:
+  * dgit config handling: Honour command-line and context-provided
+    suite and distro more reliably and consistently.
+  * Parsing of extended Dgit fields by import-dsc was broken;
+    and is now fixed even for more-extended ones.
+  * dgit clone-dgit-repos-server uses readonly access.
+    Closes:#850521.
+  * fetch and pull ignore the changelog suite when it is UNRELEASED.
+    Closes:#848646.
+  * dgit-badcommit-fixup: Do not investigate symrefs.  Closes:#850547.
+
+  Minor new feature:
+  * distro alias facility in config space.  (Primarily for testing.)
+  * Undocumented --config-lookup-explode= feature.  (For testing.)
+  * Provide `dgit print-dgit-repos-server-source-url'.  Re:#850521.
+  * Honour dgit-distro.*.default-suite and dgit.default.default-suite.
+
+  Other improvements:
+  * Improve debugging output a bit.
+  * Use refs/dgit-fetch/DISTRO rather than refs/dgit-fetch/SUITE,
+    which leads to less duplication and so less clutter.
+  * Enforce a reasonable syntax for nominal distro names.
+  * When generating orig+debian/patches view, copy debian/ from
+    HEAD.  This makes less noise in diffs.  Closes:#850095.
+
+  Docuentation [Sean Whitton and Ian Jackson]:
+  * dgit-sponsorship(7): Use --no-dep14tag.  Closes:#849105.
+  * dgit-maint-merge(7): Use debian/source/patch-header.  Closes:849120.
+  * dgit(7): Updated `trouble' section to suggest having dpkg-source
+    delete the autotools output (with a patch if necessary).
+  * dgit(1): Several minor updates and fixes.  Closes:#850519.
+
+  Test suite:
+  * Internal improvements.
+  * badcommit-rewrite: Fix operation using installed version of fixup.
+  * Arrange to pass --debug-quick-random to gpg-agent.
+  * Strip block count out of find -ls output - it is unstable!
+  * gbp-orig: Add a missing -m, without which git would run an
+    editor if stdout was a tty (!)
+  * Add t-stunt-parsechangelog to a few tests which were missing it.
+  * Tests for the new protocol feature.
+  * Fail tests if we look up any configuration relating to Debian.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 09 Jan 2017 16:43:10 +0000
+
+dgit (2.16.2) unstable; urgency=low
+
+  dgit-badcommit-fixup: 
+  * Fix crash when running for 2nd time in bare repo.
+  * In --check mode, exit with status 2 if things are not fine.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 07 Jan 2017 13:31:50 +0000
+
+dgit (2.16.1) UNRELEASED; urgency=low
+
+  * dgit-badcommit-fixup: New mode --check which is readonly.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 07 Jan 2017 13:04:49 +0000
+
+dgit (2.16) unstable; urgency=low
+
+  Dealing with fallout from #849041:
+  * Provide dgit-badcommit-fixup history-rewriting script.
+  * New rewrite map feature, which allows dgit git server to adjust
+    clients' interpretation of Dgit fields, so that history-rewriting is
+    effective.  (Feature is only partially implemented right now -
+    enough to dig current Debian users out of the hole.)  Re:#850431.
+
+  Test suite:
+  * New test case for history-rewriting.
+  * Change `local foo=$(bar)' idiom to `local foo; foo=$(bar)' since
+    the former does not trip set -e even if bar fails :-(. 
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 06 Jan 2017 20:46:30 +0000
+
+dgit (2.15) UNRELEASED; urgency=high
+
+  Infastructure:
+  * Prevent introduction of new commits which lack `committer'
+    information.  Ie, prevent the reception of new commits afflicted by
+    #849041.  Existing commits are tolerated.
+
+  Test suite:
+  * Be much stricter about messages from git-fsck.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 05 Jan 2017 18:20:23 +0000
+
+dgit (2.14) unstable; urgency=critical
+
+  CRITICAL BUGFIX:
+  * Do not generate bogus commits with --overwrite or import-dsc.
+    Closes:#849041.
+
+  Test suite:
+  * Run a lot of git-fsck.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 04 Jan 2017 22:52:55 +0000
+
+dgit (2.13) unstable; urgency=high
+
+  Changed behaviour:
+  * quilt fixup: Permit creation of patches which delete files, by psssing
+    --include-removal to dpkg-source, and tolerating it when we do our
+    quilt fixup analysis.  dpkg-source has supported this since at least
+    stretch.  Closes:#848901.
+
+  Error messages:
+  * Improve "cannot represent change" message: print the git old and new
+    modes too.
+
+  Bugfix:
+  * Import: Switch back to unpa branch on patch import iterations.
+    In particular, do not fail utterly if dpkg-source and gbp disagree.
+    Closes:#848843.
+
+  Documentation [Sean Whitton]:
+  * dgit-maint-gbp(7): Remove reference to closed bug.  Closes:#848725.
+  * dgit-sponsorship(7): Update in light of fixed #844129.  Closes:#848789.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 21 Dec 2016 01:32:41 +0000
+
+dgit (2.12) unstable; urgency=high
+
+  Changed behaviours:
+  * By default, generate a DEP-14 tag as well as a dgit archive/*
+    tag, even in non-split-view quilt modes.  Closes:#844129.
+  * Version tags mangling: Protect dots, as per proposed update to DEP-14.
+
+  Documentation:
+  * dgit-maint-merge(7): Explain how to change to this workflow
+    from an existing git workflow.  [Sean Whitton]  Closes:#847807.
+  * dgit-maint-native(7): Clarify that we mean native source format.
+    [Phil Hands]  Closes:#847987.
+
+  Error messages:
+  * Slightly better message when .dsc not found.  Apropos of #844128.
+  * Give better advice if .dsc/.changes signing fails: if no changes
+    are needed to the package, user may indeed just debsign and dput.
+    Closes:#844131.
+  * Produce better error reporting when absurd git wrapper fails
+    on a patch during .dsc import.  Apropos of #848391.
+
+  Bugfixes:
+  * If we cannot hardlink origs into our extraction area, use symlinks
+    instead.  Closes:#844570.
+  * Suppress some leftover debugging output from import-dsc.
+    Closes:#847658.
+  * Do not fail when cloning a package containing dangling symlinks.
+    Closes:#848512.
+  * Do not fail to import a .dsc containing patches which patch files
+    multiple times, due to #848611.  Closes:#848391.
+  * Do not fail to import a .dsc containing patches to .git/ (!)
+  * infra: dgit-repos-policy-debian which broke due to recent git setting
+    GIT_ALTERNATE_OBJECT_DIRECTORIES in the pre-receive-hook.
+    (fixes test suite regression in stretch).
+
+  Test suite:
+  * Provide and use stunt lintian and debuild, to avoid lintian
+    complaining about our stupid test packages.
+    (fixes test suite regression in stretch).
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 19 Dec 2016 17:35:18 +0000
+
+dgit (2.11) unstable; urgency=medium
+
+  Documentation:
+  * dgit-user(7): Better explanation of combined suites (comma syntax).
+    Thanks to Sean Whitton for review and suggestions.
+  * dgit(1), dgit(7): Better reference docs for combined suites.
+  * dgit(1): Improve formatting of rpush section.
+
+  Test suite:
+  * Replace make in Test-Depends with build-essential.  Most of the tests
+    do in fact run dpkg-buildpackage which bombs out if build-essential is
+    missing.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 08 Nov 2016 22:41:29 +0000
+
+dgit (2.10) unstable; urgency=medium
+
+  New features:
+  * Support the Debian *-security suites.
+  * New comma-separated multiple-suite merging facility (readonly),
+    so that users can easily track "jessie, or jessie-security".
+  * dgit-user(7): Suggest `dgit clone P jessie,-security'.
+
+  Bugfixes:
+  * Cope when an orig tarball is a tarbomb.  Ie, if it contains
+    other than one single directory toplevel.  Closes:#843422.
+  * Actually honour the branch name, if we are on dgit branch, to specify
+    the suite, as documented in the manpage.
+  * When cloning a distro which has no git server, correctly leave
+    the user on the local dgit branch, not on `master'.
+  * Fix an unconditional print that was supposed to be a printdebug:
+      origs <blah>.orig.tar.gz f.same=1 #f._differ=-1
+  * Print a slightly better message if .git found in orig tarball(s).
+
+  Test suite:
+  * Test suite: Add fakeroot and make to Test-Depends.  These aren't
+    necessarily pulled in by anything else.  (dpkg-dev Recommends
+    build-essential.  But we don't actually need build-essential.)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 08 Nov 2016 01:08:51 +0000
+
+dgit (2.9) unstable; urgency=medium
+
+  New features:
+  * During push, automatically calculate which .origs are required,
+    so user never needs [--ch:]-sa or [--ch:]-sd.  Closes:#829116.
+  * New import-dsc feature.
+  * New option --dgit-view-save= for split view quilt modes.
+    In particular, means that the output of a split view quilt-fixup
+    is left somewhere useful.
+  * dgit clone: Set timestamps in cloned tree to a single unified time.
+    This makes it less likely that the user will trip over any
+    timestamp-dependent FTBFS bugs (eg #842452).
+  * Support dgit --delayed= push (with a warning in the manpage
+    about possible skew).
+  * dgit gbp-build will arrange to let gbp buildpackage generate
+    .orig tarballs if it seems applicable.  Closes:#841094.
+
+  Documentation improvements:
+  * dgit-*(7).  Many new tutorial manpages, several written and many
+    improved by Sean Whitton.
+  * dgit(7): Substantial updates, including documenting split view.
+  * dgit(1): Better cross-references.
+  * dgit(1): Remove obsolete workflow information.
+  * dgit(1): Improved BUGS section.
+  * Fix changelog entry for SIGPIPE to correctly mention
+    Closes:#841090.
+
+  Bugfixes:
+  * Split brain mode: Fix --new.  Closes:#842577.
+  * Properly look for .origs etc. in .., fetching them less often.
+    Closes:#842386.
+  * Reject `dgit pull' in split view quilt modes, to avoid
+    creating unfortunate wreckage on non-dgit-view branches.
+    Closes:#842608.
+  * Cope when cloning suite which doesn't receive uploads,
+    like testing.  Closes:#842621.
+  * Properly fetch all archive dgit view tags, as we intended.
+  * Actually provide a -p (--package=) option (!)
+
+  Test suite fixes:
+  * Test suite: Explicitly configure user.name and user.email, so
+    that tests work when environment doesn't have defaults.
+    Closes:#842279 (I hope).
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 31 Oct 2016 12:47:18 +0000
+
+dgit (2.8) unstable; urgency=medium
+
+  * When in split build mode for `gbp-build' or `build', run
+    mergechanges as is required.  Closes:#841990.
+  * Test suite: build-mode-*: Check that right .changes comes out
+    (detects #841990).
+  * Defend against debian/patches/series being an unusual object, in case
+    dpkg-source doesn't, in absurd git-apply fallback.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 25 Oct 2016 17:29:23 +0100
+
+dgit (2.7) unstable; urgency=medium
+
+  Absurd bugfix for serious bug:
+  * Work around `git-apply' problems (eg #841865, #829067) exposed by
+    `gbp pq import' (#841866) by sometimes falling back to an emulation of
+    git-apply in terms of dpkg-source --before-build.  Closes:#841867.
+
+  Minor changes:
+  * dgit(1): Reorder the options, moving more important ones earlier.
+  * dgit(1): Some more info about --deliberately.
+  * Provide various --force-something options.  Please don't use them.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 24 Oct 2016 02:37:28 +0100
+
+dgit (2.6) unstable; urgency=medium
+
+  Fixes to HTTP handling:
+  * Check for non-2xx HTTP status codes from ftpmaster api server.
+  * Always honour --curl= and --curl:.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 23 Oct 2016 14:57:22 +0100
+
+dgit (2.5) unstable; urgency=low
+
+  Substantive changes:
+  * Do not crash in split brain quilt modes when the two brains are
+    actually identical.  (Eg --quilt=gbp with no patches.)  Closes:#841770.
+  * Switch to new archive/ tag format by default, even in
+    non-split-brain mode.
+  * Provide --gbp and --dpm as aliases for --quilt=gbp and --quilt=dpm.
+
+  Documentation:
+  * dgit-maint-merge(7): New tutorial manpage from Sean Whitton.
+
+  Test suite:
+  * Introduce setup/gnupg, to help work around gnupg2 bug #841143
+    and improve performance by amortising gnupg migration cost.
+  * Various bugfixes.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 23 Oct 2016 13:20:23 +0100
+
+dgit (2.4) unstable; urgency=low
+
+  Bugfixes:
+  * split brain cache: Fix a wrong implicit reference to $_.
+    Closes:#841383.
+  * split brain cache: Make sure to write reflog entries for cache updates
+    even if the eventual tree (and therefore commit) is the same.
+    Otherwise, after updating dgit, the cache might have the right answer
+    but not be refreshed even by a build.
+  * dgit gbp-build: No longer invent a --git-debian-branch option.
+    Usually the user is a maintainer using split brain, and we should rely
+    on their own gbp configuration to specify the right check.
+    Closes:#841100.
+
+  Minor docs fix:
+  * dgit(1): Document which --ch: options are a good idea.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 20 Oct 2016 16:31:54 +0100
+
+dgit (2.3) unstable; urgency=low
+
+  * With --overwrite, do not check all sorts of tags (which may
+    not exist, or might contain wrong things).  Closes:#841101.
+  * When generating pseudomerge in quilt split brain mode due to
+    --overwrite, actually include the version number in the commit
+    message.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 18 Oct 2016 01:58:05 +0100
+
+dgit (2.2) unstable; urgency=low
+
+  * Fix config relating to Debian to actually make split brain mode
+    work.  Closes:#841085.
+  * Detect SIGPIPE (and SIGCHLD) being blocked or ignored.
+    Closes:#841090.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 17 Oct 2016 17:31:18 +0100
+
+dgit (2.1) unstable; urgency=low
+
+  * Do not crash due in clone to failure to handle dpkg-parsechangelog
+    SIGPIPE.  Closes:#840989.  Avoids:
+       dgit: failed command: dpkg-parsechangelog --format rfc822 --all
+       dgit: subprocess died due to fatal signal PIPE
+  * git- prefixes: Fix some occurrences of `git-foo' in infrastructure,
+    messages, and test suite.  Filter out .../git-core from PATH in
+    test suite so that we catch future occurrences.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 16 Oct 2016 19:05:14 +0100
+
+dgit (2.0) unstable; urgency=low
+
+  Incompatible change:
+  * dgit sbuild: does not pass -A to sbuild.  Consequently the default
+    build is now simply sbuild's default.  With older sbuilds it was
+    possible to override dgit's -A by passing another option.  But this
+    has been changed recently and now this default setting is very awkward
+    to change for the dgit user.
+  * dgit gbp-build: Make --quilt=gbp the default.  (See below.)
+  * New tag format (for dgit view) archive/debian/VERSION.
+
+  Major new feature:
+  * --quilt=gbp, --quilt=dpm, --quilt=unpacked: Introduce facility for
+    split view (dgit/mainiainer view), to improve compatibility with some
+    workflow tools.
+
+  New checks and improved behaviours in dgit:
+  * When running dpkg-buildpackage, cope if user specified -g or -G.
+  * dgit sbuild: check that the set of .changes files found is as we
+    expect, before calling mergechanges.  Re:#800060.
+  * dgit sbuild: Rename the used-up .changes files to `.inmulti' to
+    avoid accidental use of the wrong one (by software, or by users).
+  * dgit sbuild: Check that the binary .changes file doesn't contain a
+    .dsc.
+  * Introduce --rm-old-changes to delete previous builds' changes files.
+  * Remove any pre-existing _source.changes file before building source,
+    as a safety check.
+  * No longer tolerate a multitude of .changes files when doing push.
+    Instead, insist on a single one.  Closes:#800110.
+  * dgit sbuild no longer deletes extranious .changes files; instead
+    we rely on --rm-old-changes, or failing that, fail early.
+  * When doing quilt linearisation, treat upstream .gitignores not
+    in the toplevel the same way we treat ones in the toplevel.
+  * When automatically generating quilt patch, honour GIT_COMMITTER_DATE
+    for filename creation (makes filename deterministic in test suite).
+  * New --overwrite option, replaces need to for user to use
+    git merge -s ours.  Closes:#838718.
+  * When generating quilt patches from git commits, make patches that
+    look quite like git-format-patch output (rather than strange things
+    based on an obselete interpretation of DEP-3).
+  * When generating quilt patches from git commits, honour (and strip)
+    any Gbp-Pq headers (that we understand).
+  * Several dgit-generated commits now have slightly better annotations
+    from dgit about what it was doing.
+  * Before committing to push, check that .dsc and .changes correspond.
+    Closes:#800060.
+  * Better error message if non-split-brain patch stack no longer
+    applies (due to new upstream version, or user messing with it).
+    Closes:#833025.
+  * Better error message if HEAD contains changes unrepresentable
+    by `3.0 (quilt)'.  Closes:#834618.
+  * Much better error message when HEAD and .dsc do not match.
+    Closes:#809516.
+
+  Infrastructure:
+  * dgit-repos-policy-debian: Better error handling.
+  * dgit-repos-policy-debian.: fix git-cat-file-handling with multiple
+    taints in db (!).
+  * dgit-infrastructure has, and uses, its own copies of the perl modules.
+    This avoids introducing a versioned dependency between dgit and
+    dgit-infrastructure (and also makes it easier to test cross-version
+    compatibility).
+
+  Documentation:
+  * Document the dgit-distro.DISTRO.quilt-mode config setting.
+  * Clarify the --clean= options' documentation.  Closes:#800054.
+  * Discourage use of the --PROGRAM:OPTION escape hatch.  (Apropos
+    of various bug reports including #800060 and #833025.)
+  * Document the expected form of HEAD for each --quilt= mode.
+
+  Bugfixes:
+  * When cleaning up after failed clone, stat the to-be-cleaned-up
+    directory before running rmtree on it.  Closes:#796773.
+  * Do not call "warn" on failure of cleanup handler in END block
+    (since warn has been made fatal and aborts the cleanup chain).
+  * Print better error message (with `fail' rather than `die') if
+    `dgit clone' cannot create the destination directory.
+  * Properly substitute $changesfile in one of the `You can retry'
+    messages.  Closes:#800078.
+  * Pass --ch:* and -v options to dpkg-buildpackage when building
+    source.  Fixes bad Perl poetry syntax.  Closes:#829121.
+  * When synthesing a commit from a .dsc from the archive, stop
+    internal git reset from printing a confusing message about HEAD.
+  * Turn off git gc in the private working areas.
+  * Do not fail to do some important quilt processing in some
+    --quilt modes.
+  * Fix two calls to chdir without proper error checking.
+  * Fix a couple of bugs in error reporting.
+  * Fix several bugs in .orig detection/recognition.
+  * Tidy up refs/dgit-fetch/ after dgit fetch (if successful).
+  * Fix handling of in-archive copies.
+  * Don't break if user has push.followTags=true.  Closes:#827878.
+  * Arrange for the special dgit remote to be skipped by git fetch --all
+    etc.  And no longer configure a fetch spec, since it won't work
+    anyway.  Closes:#827892.
+  * Allow local git config options to override user-global ones,
+    as is proper.  Closes:#835858.
+  * When generating patch filenames from titles, first transliterate
+    them (lossily) to ascii.  Closes:#834807.
+
+  Test suite:
+  * When sbuild fails, do not crash due to sed not finding the log
+    file.  Instead, simply tolerate the absence of the log file.
+  * Put --no-arch-all in build-modes-sbuild act, not only its real_act.
+    Cosmetic change only.
+  * Set GIT_COMMITTER_DATE and GIT_AUTHOR_DATE and increment them
+    explicitly in drs-push-rejects test.  This avoids date dependencies
+    which can cause that test to fail on fast computers.
+  * Remove some spurios .debs from the example_1.0.tar.
+  * Increase sqlite_busy_timeout in debpolicy-dbretry, because old
+    zealot is very slow and we need to give the other processes time
+    to rollback and release the lock.
+  * Test quilt single-debian-patch.
+  * Provide `tartree-edit gitfetchinfo' etc. to help with comparing
+    different test case git working tree tarballs.
+  * Test dgit-repos-policy-debian with multiple (identical, as it happens)
+    existing taints.
+  * Provide better log output for certain failures.
+  * Many new tests (especially for new functionality).
+  * Add missing debhelper (>=8) to test suite's global Depends.
+  * tstunt arrangements: Fix mishandling of PERLLIB, etc.
+  * tstunt-parsechangelog: Produce Timestamp field (like official one
+    does, now).
+  * Do not fail when git requires --allow-unrelated-histories.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 16 Oct 2016 12:12:50 +0100
+
+dgit (1.4) unstable; urgency=high
+
+  Bugfixes:
+  * Unbreak --dry-run (`exiting subroutine via next', broken in
+    ac221d67, bug released in 0.22).
+  * When running git-add in commit-quilty-patch, properly escape
+    filenames (which git-add treats as glob patterns).
+  * When running git-add in commit-quilty-patch, use -f and sometimes -A,
+    so as to avoid being broken by any .gitignore, etc.
+  * When quilt linearisation fails, print the right information in
+    the error message.  (This has been broken forever.)
+  * Cope properly with `3.0 (quilt)' with single-debian-patch.
+    Closes:#796016.  (Still does not work with wheezy's dpkg-source, so
+    no test case yet.)
+  * With dgit sbuild, pass our -d before the user's arguments, so that
+    the user can override it.  Closes:#796019.
+
+  New checks and improved behaviours:
+  * Detect and reject git trees containing debian/source/local-options
+    or debian/source/local-patch-header.
+  * In --dry-run mode, _do_ actually run dpkg-source --commit so that we
+    actually do construct the quilt fixup commit; instead, honour
+    --dry-run by avoiding pulling it back to your HEAD.
+  * quilt-fixup checks that the git tree is clean, as for build-prep.
+
+  Documentation:
+  * In dgit(7), discuss binaries and documentation present in upstream but
+    removed by rules clean.
+
+  Test suite:
+  * Run quilt-fixup with -wgf in distropatches-reject,
+    so that we don't need build-depends.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 22 Aug 2015 15:31:02 +0100
+
+dgit (1.3) unstable; urgency=high
+
+  Important bugfixes:
+  * In option parser test `@ARGV' not `length @ARGV'.  Closes:#795710.
+  * Properly quote package name when constructing regexp in
+    complete_file_from_dsc.  Closes:#795736.  Also, grep the code for
+    likely similar problems elsewhere and improve a (harmless) instance in
+    dgit-repos-server.
+
+  Other improvements:
+  * If a .orig in .. is a symlink, hardlink the link target into our
+    private unpack directory, rather than the link itself (since latter
+    won't work if the symlink is relative).  Closes:#795665.
+  * Test suite: Fix t-restriction-x-dgit-schroot-build in non-adt mode.
+  * Infrastructure: Improve an error message in dgit-repos-policy-debian.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 16 Aug 2015 17:51:02 +0100
+
+dgit (1.2) unstable; urgency=high
+
+  Improvements:
+  * Honour *.clean-mode configuration setting for --clean= mode.
+  * No longer require option values to be cuddled: support `--opt val' and
+    `-o val'.  Closes:#763332.
+
+  Manpages:
+  * Fix typos.
+  * Document that tags are in DEP-14 format, and that they
+    are used for authenticating pushes.
+  * Correct cross-reference to point to browse.d.d.o.
+  * Move dgit.default.* to main CONFIGURATION section.
+
+  Administrivia:
+  * Add missing close of #793060 to changelog for version 1.1.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 14 Aug 2015 18:27:20 +0100
+
+dgit (1.1) unstable; urgency=medium
+
+  Bugfixes:
+  * When source package contains things called .git (even files, and even
+    in subdirectories), remove them.  Closes:#793671.
+  * Work around curl -sS -I printing `HTTP/1.0 200 Connection established'
+    before the actual header, so dgit works with https_proxy set (!)
+  * --new is needed for read access to packages in NEW, too.  Document
+    this, and make it work properly.
+  * Work around #793471 (madness with $SIG{__WARN__} and Perl's system
+    builtin): move $SIG{} setting into setup_sigwarn in Dgit.pm, and
+    check getppid.
+  * When invoking git-buildpackage via dgit gbp-build, consider our
+    command line arguments when massaging the dpkg-buildpackage arguments,
+    so that we don't end up giving dpkg-buildpackage contradictory
+    instructions.
+  * Cope with new git-buildpackage which provides gbp, rather than the
+    eponymous command, on PATH.
+
+  Configurability:
+  * Honour dgit-distros.DISTRO.cmd-CMD and .opts-CMD.  Closes:#793427.
+  * Make configuration able to prevent dpkg-mergechangelogs setup.
+  * Provide dgit setup-new-tree (like dpkg-setup-mergechangelogs
+    but only does it if not disabled in config).
+  * Set up git user.email and user.name from distro access config
+    or DEBEMAIL/DEBFULLNAME.  Closes:#793410.
+  * When key to use not specified any other way, use the debian/changelog
+    trailer line.  Closes:#793423.
+  * Honour --git= (mostly).
+
+  Documentation:
+  * Fix some manpage typos.  [ Richard Hartmann ]
+  * Manpage said that --clean=check was -wn but that is --clean=none;
+    correctly document that --clean=check is actually -wc.
+  * Document that up to -DDDD (not just -DD) is meaningfully different.
+  * Document that -cname=value applies only for this run.
+  * Improve manpage comment about defining a new distro.
+  * Document that --quilt=linear is the default for Debian.
+  * Fix a formatting problem in --build-products-dir= doc.
+  * In manpage, do not seem to imply that NMU should be of only one
+    new commit.
+  * Qualify to Debian the manpage comment about how to do NMU.
+  * In discussion on how to start using dgit when already using git, do
+    not imply/assume that existing git history will have identical trees
+    to dgit history.
+  * Remove stray sentence in config section of manpage.
+  * Manpage: Clarify wording of readonly config.
+  * Manpage: Better cross-references for -k and keyid.
+  * dgit(7): No longer say that dgit-repos lives on Alioth.
+
+  Improvements:
+  * Introduce more sophisticated protocol negotiation for rpush.
+  * Do not quote `:' in shellquote.
+  * Print a supplementary message when push fails, giving advice to
+    the user about how to retry.  Closes:#793144.
+  * Slurp in entire git config, for better performance.
+  * Rename `git-build' operation to `gbp-build' to make it clearer what
+    it's for.  Keep the old name as an alias.
+  * Show `dgit sbuild' in usage message.
+  * When we are using dpkg-buildpackage to clean before using it to also
+    do the build, let it do its cleaning thing as part of its run, rather
+    than running it twice.  When we are _not_ supposed to be using
+    dpkg-buildpackage to clean, but we are running it to do the build,
+    pass -nc.  Closes:#793060.
+  * Also suppress spurious runs of the clean target when building using
+    git-buildpackage.
+  * When exec fails, always print the program name in the error message.
+
+  Infrastructure:
+  * Infrastructure: Get mirroring right for fresh repos of existing
+    packages (!)
+
+  Packaging, cleanups, debugging and test suite:
+  * Fix Vcs-Git and Vcs-Browse to refer to chiark.  (The dgit-repos on
+    alioth aren't suitable right now because the master there can
+    currently only be updated with an actual upload, ie dgit push.)
+  * Make warnings fatal in dpkg-repos-admin-debian, dgit-ssh-dispatch
+    (using setup_sigwarn).
+  * tstunt/dpkg-parsechangelog: Make warnings fatal (directly).
+  * tstunt/dpkg-parsechangelog: Do not complain if PERLLIB is empty.
+  * Test suite: Honour DGIT_TEST_DEBUG=''.
+  * With -DDDD, print out all gitcfg references (copious!)
+  * Fix a debug message in the obsolete sshpsql archive access driver.
+  * Test suite: More automatic enumeration of tests.
+  * Test suite: Provide tests which check that all our various build
+    operations run the right targets as expected (ie, that we are massaging
+    the arguments to dpkg-buildpackage, and suppressing our clean target,
+    etc., correctly).
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 27 Jul 2015 16:34:31 +0100
+
+dgit (1.0) unstable; urgency=medium
+
+  Improvements:
+  * Switch to new production git repositories for reading.
+    (this can no longer divert to alioth).  Public readonly access
+    now works.  Closes:#791447.
+  * Memoise git config lookups (big speedup!)
+  * Provide -wdd aka --clean=dpkg-source-d.  Closes:#792433.
+  * Provide -wc aka --clean=check.
+
+  Manpage updates:
+  * Remove some obsolete caveats from BUGS.
+  * Reorganise and complete the configuration section.
+  * Remove obselete comment about DMs not being able to push.
+    We have, for now, a way to add keys manually.  Closes:#720173.
+
+  Access machinery:
+  * Remove configuration relating to alioth.
+  * Provide for different access mechanisms when pushing.
+  * Provide for configurable git url suffix.
+  * Allow git-url to be '' to force fallback to git-proto etc.
+  * Provide for checking git presence via http[s].
+  * Do some quoting on debug output (needed if the server might not
+    be trustworthy and might send us bad stuff).
+  * Talk to push.dgit.debian.org, rather than the .debian.net alias.
+
+  Infrastructure:
+  * Provide for mirroring git updates to a different server.
+  * Provide cgit-regen-config command for cgi-grnet-01.
+  * Make dgit-ssh-dispatch not spew (harmless) warnings if caller
+    tries for a shell session (ie SSH_ORIGINAL_COMMAND not set).
+
+  Cleanups:
+  * Remove an obsolete comment from the code.
+  * Improve an error message from dgit-repos-policy-debian.
+  * Test suite: Break out t-make-hook-link.
+  * Fix a manpage typo.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 19 Jul 2015 22:15:53 +0100
+
+dgit (0.30) unstable; urgency=high
+
+  INCOMPATIBLE CHANGES:
+
+  * Client uses new infrastructure:
+    - Check for new dgit git service on dgit-git.debian.net (ie
+      gideon.debian.org), with transition plan based on diversion feature.
+      Closes:#720172.
+    - Old versions of dgit will stop working when the server-side handle is
+      pulled.
+
+  * dgit git trees no longer contain .pc for format `3.0 (quilt)' source
+    packages.  Closes:#764606.
+    - It is deleted whenever we find it.
+    - Older versions of dgit will choke on trees without .pc.
+    - (When doing quilt fixup, we recreate a suitable .pc in a temporary
+      directory so that we can do dpkg-source --comit.)
+
+  * All users are urged to upgrade ASAP.
+
+  Other significant improvements:
+
+  * When generating quilt patches, try to linearise the git history into a
+    series of individual new patches for debian/patches.  Closes:#770710.
+
+  * When receiving a push with dgit-repos-server, update the server's
+    refs/heads/master if we are pushing to what the distro regards as a
+    relevant branch, and the push would ff master.  Closes:#728209.
+
+  * For non-Debian distros, distro version release tags contain distro
+    name a la DEP-14 (rather than hardcoding `debian/').
+
+  * Set up a merge driver for debian/changelog.  Closes:#769291.
+
+  * --clean=git and --clean=none cause dgit to pass -nc to
+    dpkg-buildpackage, suppressing calls to the package's clean target.
+    Also, expand the documentation in this area slightly.  Closes:#768590.
+
+  * Provide --clean=git-ff (aka -wgf), which is useful for dgit itself (!)
+
+  Minor improvements:
+
+  * Reduce some noise output and improve the clarity of some messages.
+  * Be more careful about tag updates during fetch: only update tags
+    referring to uploads to distro we are trying to fetch from.
+  * Change realpath dependency to `coreutils (>= 8.23-1~) | realpath'
+    (Closes:#786955.)
+
+  Bugfixes:
+
+  * Fix handling of rmadison-based and gitless distros (e.g., Ubuntu).
+  * Add missing `gpgv' to test dependencies in debian/tests/control.
+  * Strip `-b <branch>' from contents of Vcs-Git header, when setting up
+    the vcs-git remote.  Closes:#759374.
+  * Do not offer wget as an alternative dependency to curl.  We always
+    unconditionally invoke curl and have no code to use wget.
+    Closes:#760805.
+  * Complain about lack of cuddled values for value-taking single-letter
+    options, rather than thinking the user meat an empty value.
+    Closes:#763332.
+  * Reject (rather than ignoring) further options merged witth -wn, -wg,
+    -wd.
+  * Fix inaccurate error message when archive's git hash is not an
+    ancestor of git repo's git hash.
+  * Detect and bomb out on vendor-specific `3.0 (quilt)' patch series.
+  * Fix the rules clean target to remove test results and output.
+
+  Documentation improvements:
+
+  * Break out dgit(7) from dgit(1).
+  * Provide example workflow for dgit rpush.  Closes:#763334.
+    (Also part of the fix for #768470.)
+  * Document that dgit repos are cloneable with git, in dgit(1)
+    section MODEL.  [Andreas Barth.]  Closes:#768470.
+  * Better documentation for quilt series handling.
+  * Document under `dgit push' that it is best to build with dgit too.
+    Closes:#763333.
+  * Other minor clarifications and improvements.
+
+  Behind-the-scenes work:
+
+  * Use ftpmasterapi archive query method.
+    (Closes:#727702.  Also partly obsoletes #768470.)
+  * New dgit-infrastructure binary package containing dgit-repos-server et
+    al.  Client users probably don't want this stuff.  Also, it provides a
+    convenient way to publish the dependencies.
+  * Many many bugfixes to the server side (dpkg-repos-server et al.).
+  * Add :..; prefix to ssh remote commands, for the benefit of future
+    forced command wrappers.  Implicitly, this defines a new ssh-based
+    command protocol.  Closes:#720174, #720175.
+  * Distro access configuration handling changes (should not be noticeable
+    to most users).
+  * In places, significant restructuring or tidying up.
+  * Turn all perl warnings into errors using $SIG{__WARN__}.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 05 Jul 2015 01:34:55 +0100
+
+dgit (0.22.1) unstable; urgency=high
+
+  * Use Dpkg::Version::version_compare everywhere, not
+    Dpkg::Version::version_compare_string.  The latter is entirely wrong,
+    meaning that dgit would get many version comparisons wrong.
+    Closes:#768038.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 04 Nov 2014 12:46:40 +0000
+
+dgit (0.22) unstable; urgency=medium
+
+  Bugfixes:
+  * Clone removes destination directory on error.  Closes:#736153.
+  * Work with wheezy-backports (and keep squeeze-backports working too).
+    Closes:#736524.
+  * Work in read-only no-git-history mode with Ubuntu.  You still have
+    to pass -dubuntu.  Closes:#751781.
+  * Use mirror.ftp-master.debian.org DNS alias rather than coccia.
+    Closes:#752602.
+  * Check hashes of files ourselves rather than running dget to
+    re-retreive the .dsc.
+  * Check SHA-256 of .dsc against hash from archive_query (ie projectb)
+    rather than letting dpkg-source do a signature verification.
+    Closes:#737619.  Closes:#737625.
+  * Treat .dsc as bytes, just like everything else, rather than letting
+    HTTP::Message convert it to a Perl unicode string which the rest of
+    the program mishandles.  Closes:#738536.
+
+  Minor improvements:
+  * Include canonicalised suite name in signed tag message.
+  * Mention cross-version dgit rpush incompatibility in manpage.
+  * Check for rpush protocol version incompatibility and crash early
+    if incompatible.
+  * New script tests/using-intree for running tests on the source tree.
+  * Do not spew diff output to terminal (by default).  Print sensible
+    message instead.  Closes:#736526.
+  * Print better message for lack of configuration settings.
+  * Document that dgit rpush needs gnupg and your public key on the build
+    host.  Closes:#736529.
+  * Fix a manpage reference to `--dget=' where `--dgit=' was intended.
+  * Provide t-archive-process-incoming and t-archive-query subroutines for
+    regression test scripts to use.
+  * Print better message for unknown operations.
+  * Provide `dgit clean'.  Closes:#736527.
+  * When cloning, set up a remote `vcs-git' from the package's Vcs-Git
+    (and put an appropriate caveat in the manpage).  Closes:#740687.
+    Closes:#740721.
+  * Improve error message for .dsc having already been signed (iff
+    using libdpkg-perl 1.17.x).  Closes:#731635.
+  * Improve error message for .dsc parsing failures more generally.
+  * Better reporting of child exit statuses (esp. deaths due to signals).
+  * In rpush, on protocol error talking to build host, check if the
+    subprocess died and report differently if so.  Closes:#736528.
+  * Fixed a manpage typo.
+  * When tests invoke dgit, use --dgit= so that subprocesses use our
+    dgit rather than system one.
+  * Add a test for dgit rpush.
+
+  Major new feature, currently stalled awaiting server infrastructure:
+  * dgit-repos-server: New program for receiving signed-tag-based
+    pushes.  Corresponding support in dgit itself, but not currently
+    used by default for any distro.
+  * Bring forward push of the version tag ref so it happens alongside
+    the push of the suite branch ref.
+  * New git-check and git-create methods "true" which are no-ops.
+  * test-dummy-drs `distro': for testing dgit and dgit-repos-server.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 19 Aug 2014 11:24:02 +0100
+
+dgit (0.21) unstable; urgency=medium
+
+  Bugfixes relating to unclean trees:
+  * Run a clean (of the specified type) before any build operation; do
+    this with `dpkg-buildpackage -T' clean if necessary, so -wd now works
+    with all the building methods.
+  * Refuse to do quilt fixup (explicitly requested, or as a result of
+    build) if the tree contains ignored files.  Closes:#731632.
+
+  Error message improvements:
+  * Use failedcmd to report errors when ssh psql fails.  Closes:#734281.
+  * failedcmd prints $us, not $_[0] - ie, dgit doesn't pretend,
+    in the error message, to be its child.
+  * Do not report the (irrelevant) $? when madison parsing fails.
+
+  Better workflow flexibility:
+  * Provide --build-products-dir option (and corresponding semantics
+    for -C) to specify where to find the files to upload.  Closes:#731633.
+
+  Support for Debian backports suites:
+  * New quirks infrastructure in configuration and internals,
+    for suites (or perhaps distros) which are a bit like others.
+  * Use correct default archive location.
+  * Compute "-v" option default value correctly.
+  * Closes:#733954.
+
+  Packaging improvement:
+  * Add `Testsuite: autopkgtest' to debian/control.  (This will only have
+    the right effect with recent enought dpkg; it will generate a harmless
+    warning with earlier versions of dpkg.)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 19 Jan 2014 02:14:25 +0000
+
+dgit (0.20) unstable; urgency=high
+
+  * Use newest (not oldest) version currently in suite when calculating
+    what value to use for -v<version> by default.  Closes:#732781.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 21 Dec 2013 19:13:56 +0000
+
+dgit (0.19) unstable; urgency=low
+
+  Testing facilities:
+  * Provide "test-dummy" distro with "dummycat" access method.
+  * Provide a selection of autopkgtest (DEP-8) tests.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Wed, 27 Nov 2013 18:27:17 +0000
+
+dgit (0.18.2) unstable; urgency=high
+
+  Bump archive upload urgency to high.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 24 Nov 2013 17:42:57 +0000
+dgit (0.18.1) unstable; urgency=low
+
+  Bugfixes:
+  * sshpsql archive query method passes LANG=C.  Closes:#729788.
+  * Subcommand program or argument options containing hyphens work.
+    (Eg, --dpkg-buildpackage:blah was previously incorrectly rejected.)
+
+  Packaging fixes:
+  * Depend on dput.
+  * Depend on curl | wget, as dget needs one of those.  (The dput package,
+    which contains dget, doesn't require them because dput itself works
+    without.)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 24 Nov 2013 17:36:03 +0000
+
+dgit (0.18) unstable; urgency=low
+
+  Major new feature:
+  * Remote push (dgit rpush), a la debsign -r.  Closes:#721185.
+
+  Improved behaviours:
+  * dgit build, by default, uses the archive to find out what the correct
+    -v<version> option is to pass to dpkg-genchanges.  Closes:#727200.
+  * Abolish the sshdakls method and replace it with sshpsql: that is, ssh
+    (to coccia, by default) and run sql commands on the ftpmaster
+    database.  This is faster and has fewer bugs but is vulnerable to db
+    schema changes.  Closes:#726955.  Closes:#720170.  Closes:#720176.
+  * When generating git tags, quote the (uncanonicalised) changelog's
+    Distribution field as the suite.
+  * Command execution reports from --dry-run go to stderr.
+
+  Other new features:
+  * Support --gpg=... to provide a replacement command for gpg.
+  * Support --ssh=... and --ssh:... to affect how we run ssh.
+
+  Bugfixes:
+  * When using sbuild, pass the arguments to mergechanges in the right
+    order so that we use the correct Description (the _source one,
+    not the one from sbuild which didn't get e.g. -v<version>).
+  * push actually takes an optional suite, like it says in the synopsis.
+    Closes:#727125.
+  * Fix dgit --damp-run sbuild to actually work.
+  * Fix the "shellquote" internal subroutine.  The bugs in it ought not to
+    have caused any real trouble in previous versions of dgit.
+
+  Documentation and message fixes:
+  * manpage: Clarify comments about orig tarballs.  Closes: #723605.
+  * manpage: Remove comment in BUGS about lack of policy docs
+    for Dgit field, which is specified now.  Closes:#720201.
+  * manpage: Make discussion of --existing-package less scary.  The
+    default archive access method no longer needs it.  Closes:#720171.
+  * Mention "git merge", not "git-merge", in helpful message.
+    Closes:#725632.
+
+  Internal and debugging improvements:
+  * Report chdir actions in debugging output.
+  * Improvements to implementation of --dry-run and --damp-run.
+  * Some code motion and cleanups.
+
+  Note: changelog entries for the following versions, which were uploaded
+  to Debian experimental, have been collapsed into this single entry:
+    0.18~experimental2 0.18~experimental1
+    0.17~experimental7 0.17~experimental6 0.17~experimental5
+    0.17~experimental4 0.17~experimental3 0.17~experimental2
+    0.17~experimental1
+    0.16~experimental3 0.16~experimental2 0.16~experimental1
+  We do describe here all the changes since 0.17.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 09 Nov 2013 10:12:13 +0000
+
+dgit (0.17) unstable; urgency=high
+
+  * Do not grobble around in .git/refs/; instead, use git-show-ref.
+    This avoids breaking when git makes packed refs.  Closes:728893.
+  * Clarify error message for missing refs/remotes/dgit/dgit/<suite>.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 07 Nov 2013 00:02:47 +0000
+
+dgit (0.16) unstable; urgency=high
+
+  * Format `(3.0) quilt' fixup does not mind extraneous other files
+    in the build tree (e.g., build products and logs).  Closes: #727053.
+  * Set autoflush on stdout, to get better ordering of debugging
+    etc. output when stdout is redirected.
+  * New --damp-run mode, for more convenient and fuller testing etc.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 22 Oct 2013 13:06:54 +0100
+
+dgit (0.15) unstable; urgency=low
+
+  * Better handling of packages pushed using dgit and stuck in NEW.
+    (And, use of `--new' is not needed with fetch.)  Closes: #722199.
+  * More comprehensive warnings in many cases of archive skew.
+  * Implement `dgit help' as well as `--help'.  Closes: #721661.
+  * Provide `dgit version' and `--version'.  Closes: #721654.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 12 Sep 2013 00:14:05 +0100
+
+dgit (0.14) unstable; urgency=low
+
+  * Include package name in tag message.
+  * Create directory .git/dgit when needed during build.  Closes: #721428.
+  * Add Vcs-Git and Vcs-Browser [Richard Hartmann].  Closes: #721404.
+    These fields refer to the development branch, "master", on alioth,
+    not to the dgit suite refs (which are not accessible to git clone).
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 01 Sep 2013 18:30:44 +0100
+
+dgit (0.13) unstable; urgency=low
+
+  * Reuse already-downloaded .orig files after checking their hashes.
+    Closes: #720526.  (This introduces a dependency on Digest::SHA.)
+  * Do not always pointlessly fetch the .dsc twice.  (That code was
+    erroneously duplicated during editing, apparently.)
+  * Remove DGET_UNPACK from the environment in case the user has set it.
+  * Remove scary warning from Description.
+  * When uploading to Debian, tell dput to upload to "ftp-master".  This
+    avoids problems with derivatives whose dput has a different default.
+    Closes: #720958.
+  * Fix some bugs in dgit fetch --dry-run which made dgit push
+    --dry-run often not work at all.
+  * Update the local tracking branch for the dgit remote, when pushing.
+    Closes: #720956.
+  * Fix references in manpage to old Vcs-Dgit-Master field name.
+  * Reorganise manpage sections to be in a more conventional order.
+  * New manpage section on FILES IN THE SOURCE PACKAGE BUT NOT IN GIT.
+    Closes: #721186.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 29 Aug 2013 00:27:23 +0100
+
+dgit (0.12) unstable; urgency=low
+
+  * Cope with packages with epoch.  Closes: #720897.
+  * Improve error message for non-fast-forward push.  Closes: #720896.
+  * New --ignore-dirty option to skip noncritical check.  Closes: #720895.
+  * New --no-quilt-fixup option to suppress quilt fixup.  RTFM.
+  * Add Closes line for #720595 to changelog entry for 0.11.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 26 Aug 2013 16:50:39 +0100
+
+dgit (0.11) unstable; urgency=low
+
+  * Location of dgit-repos is now git.debian.org:/git/dgit-repos/repos.
+    Closes: #720525.  The rename on the server side will break older
+    versions of dgit.
+  * Fix bug which would make quilt patch fixup fail if git status
+    produced "M" lines.
+  * Autogenerated quilt patch fixup patch Description contains several
+    recent git commits, rather than implying that the patch corresponds
+    exactly to the top git commit.
+  * Use "ftp.debian.org" not "http.debian.net" as the default Debian
+    archive.  (http.debian.net tends to defeat certain kinds of cacheing,
+    and can also have more skew.)
+  * dgit build uses dpkg-buildpackage; there is a dgit git-build
+    for using git-buildpackage.  Closes: #720595.
+  * Better error message for use of UNRELEASED suite.  Closes: #720523.
+  * Do not canonicalise suite more than once.  Related to: #720526.
+  * Fix a badly open-coded copy of check_not_dirty.  Closes: #720524.
+  * Fix some bugs in building (eg build-source would fail to do the quilt
+    fixup; the --clean check in build was wrong).
+  * Add missing dependency on realpath.
+  * git-build (git-buildpackage wrapper) does not bother canonicalising
+    the suite if --git-ignore-branch is used.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 25 Aug 2013 17:00:43 +0100
+
+dgit (0.10) unstable; urgency=low
+
+  * Create .pc/applied-patches - do not empty it (!)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 25 Aug 2013 00:51:50 +0100
+
+dgit (0.9) unstable; urgency=low
+
+  * New cleaning arrangements.
+  * More comprehensive workaround for `3.0 (quilt)'.
+  * In push, double-check the .changes against the changelog.
+  * Better error when source package contains .git.  Closes: #720555.
+  * Change our .dsc field name to `Dgit'.  Relevant to #720201.
+  * Fix bug handling our synthetic merges when we see them in
+    the remote suite branch.
+  * `3.0 (quilt)' fixup creates .pc/applied-patches since modern
+    dpkg-source creates it even though old ones didn't always.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 24 Aug 2013 18:49:02 +0100
+
+dgit (0.8) unstable; urgency=low
+
+  * Fix comparison of archive's .dsc's hash and git branch head
+    to DTRT.
+  * When creating repos in dgit-repos (using the ssh-cmd method),
+    copy _template rather than using mkdir and git init.
+    Closes: #720522.
+  * In push, do git fetch as well as archive fetch, or archive
+    fetch can fail.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 23 Aug 2013 12:24:09 +0100
+
+dgit (0.7) unstable; urgency=low
+
+  * If dak ls, or rmadison, reports multiple versions, look for them
+    all, and pick the newest .dsc that doesn't give 404.
+  * Manpage formatting fix.
+  * Name the local remote tracking branch remotes/dgit/dgit/<suite>
+    so that we avoid a warning from git about ambiguous branch names.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 22 Aug 2013 18:29:10 +0100
+
+dgit (0.6) unstable; urgency=low
+
+  * Allow fetching when archive has out-of-date git hash in .dsc.
+    Closes: #720490.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 22 Aug 2013 16:02:10 +0100
+
+dgit (0.5) unstable; urgency=low
+
+  * Upload to unstable, as this version mostly works.  (All the RC
+    bugs of which I'm aware are now properly represented in the BTS.)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 22 Aug 2013 15:38:00 +0100
+
+dgit (0.4~pre2) experimental; urgency=low
+
+  * Mangle debian/<version> tags the way git-buildpackage does
+    (as of git-buildpackage 0.5.5, 3c6bbd0f4992f8da).
+  * Support dgit-distro.<distro>.keyid config option.
+  * Revert change to ssh to alioth CNAME, as the recommended CNAME
+    is to something with no write access to the fs and the new CNAME
+    has not yet been set up.  This reintroduces #720172 :-/.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 22 Aug 2013 15:31:17 +0100
+
+dgit (0.4~pre1) experimental; urgency=low
+
+  * Use dgit.debian.net vhost on alioth.  Closes:#720172.
+  * Usage message.  Closes:#720085.
+  * Provide "dgit sbuild".
+  * Assorted manpage fixes and improvements.
+  * Fail if a required config item is missing.
+  * Much better error messages.
+  * Better error checking when parsing RFC822-style control data.
+  * Better checking that the supplied .dsc and debian/changes correspond.
+  * Ordering improvement in push: don't add dsc field until git push done.
+  * New --distro option (helps with unknown suites).
+  * Bugfixes.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 22 Aug 2013 13:36:44 +0100
+
+dgit (0.3) experimental; urgency=low
+
+  * New version which appears to be able to sort of work at least
+    some of the time.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 17 Aug 2013 09:18:04 +0100
+
+dgit (0.2) experimental; urgency=low
+
+  * New version which might actually work but probably won't.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 16 Aug 2013 16:52:17 +0100
+
+dgit (0.1) experimental; urgency=low
+
+  * Initial experimental (partial) version.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Thu, 15 Aug 2013 12:09:01 +0100
+

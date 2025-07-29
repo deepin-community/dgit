@@ -1,0 +1,354 @@
+=head1 NAME
+
+dgit-downstream-dsc - setting up dgit push for a new distro
+
+=head1 INTRODUCTION
+
+This document is aimed at downstreams of Debian.
+It explains how you can
+publish your packages' source code
+both as traditional Debian source packages,
+and as git branches,
+using B<dgit push>.
+Your users will be able to get the source with B<dgit clone>,
+or with traditional tools such as B<apt-get source>.
+
+Note that often it is unnecessary to
+publish traditional source packages.
+Debian-format source packages can be complex,
+idiosyncratic and difficult to work with.
+You should avoid them if you can.
+If you do not need to publish source packages,
+you can work as a Debian downstream purely using git branches,
+(using dgit to get the source from Debian in git form).
+You can build binaries directly from git,
+and push package source code as a git branch to an ordinary git server.
+See L<dgit-user(7)>.
+
+Not every option is covered here.
+L<dgit(1)> has a mostly-complete list
+of config options, although not always with useful descriptions.
+
+=head1 NAMES
+
+You need to choose some names.
+
+=over
+
+=item I<distro> name
+
+dgit understands each thing it interacts with as a B<distro>.
+So in dgit terms, you are setting up a distro.
+
+You need a name for yourself (ie for your distro).
+The name will appear in the git tags made by your tools,
+and in configuration settings.
+It must be globally unique across
+all people and institutions who use dgit.
+
+You could choose your organisation's domain name,
+or a part of it if you think that is going to be very unique.
+
+The distro name may contain ascii alphanumerics and B<. + ->,
+although B<-> may be confusing and is probably best avoided.
+Try to avoid uppercase letters (and underscore):
+you will be typing this name a lot.
+
+For example,
+if you were the Free Software Foundation Europe (fsfe.org)
+you might call your distro fsfe or fsfe.org.
+In the rest of this document we will write
+I<distro> for your distro name.
+
+=item I<suite> names
+
+In dgit and Debian archive terminology, a B<suite> is a line of
+development, and/or a Debian release.
+For example, at the time of writing, Debian has suites like
+B<sid> aka B<unstable>, B<buster> aka B<testing>,
+and B<stretch> aka B<stable>.
+There are also ancillary suites like B<stretch-security>.
+
+If your releases align with Debian's releases,
+then your suites should contain the Debian suite names.
+B<Do not> use just the Debian names.
+That will cause confusion.
+Instead, prepend your organisation's name and a hyphen.
+For example, FSFE might end up with suites like fsfe-stretch.
+
+Suite names end up in git ref and branch names,
+and on dgit command lines.
+Suite names can contain alphanumerics and C<->.
+Other characters may work but are not recommended.
+
+=back
+
+=head1 SERVICES
+
+You will need to run two parallel services:
+
+=over
+
+=item git server
+
+This will hold the git branches accessed by dgit.
+
+Everyone who will use dgit push needs to be able to update
+B<refs/dgit/>I<suite>
+(note, not B<refs/heads/dgit/>I<suite>) on that server,
+and to make tags
+I<distro>B</>I<version> and B<archive/>I<distro>B</>I<version>.
+Normally this would be done over ssh.
+
+The server may host other branches and tags too.
+So this might be your ordinary git server,
+or an instance of a git hosting system.
+
+Everyone who obtains one of your source packages,
+or who will run B<dgit clone> and  B<dgit fetch>,
+needs to have at least read access to the git server.
+Ideally everything would be published
+via the git smart https protocol.
+
+The git server name, and public git url structure,
+should be chosen so they will not need to change in the future.
+Best is to give the git server a DNS name of its own.
+
+Debian's dgit git server has special access control rules,
+implemented in B<dgit-repos-server> and B<dgit-repos-policy-debian>
+in the package B<dgit-infrastructure>.
+but in most installations this is not needed.
+If there is no or little distinction between
+(i) developers who are entitled to upload (push) and
+(ii) repository administrators,
+then it is sufficient to provide a
+git server with a unix account for each user who will be pushing,
+perhaps using ssh restricted commands.
+
+=item Debian-format archive (repository)
+
+This holds the source packages.
+You will probably use the same archive to host your binaries,
+and point your B<apt> at it.
+
+dgit uses the term B<archive> for this.
+
+There are a variety of tools for
+creating and managing a Debian-format archive.
+In this document we will assume you are using B<reprepro>.
+
+Setting up reprepro is not covered in this tutorial.
+Instead, we assume you already have reprepro working.
+
+You should also write appropriate dput configuration,
+since dgit uses dput to upload packages to the archive.
+This will involve choosing a dput host name.
+That's probably your distro name, I<distro>.
+
+=back
+
+=head1 CONFIGURATION
+
+When you have all of the above set up,
+you are ready to explain to dgit how to access your systems.
+
+dgit is configured via git's configuration system,
+so this is done with git configuration.
+See L<git-config(1)>.
+
+Below, each heading is one or more git config keys.
+B<bold> is literal text and I<italics>
+is things that vary.
+In the descriptions of the effects of config settings,
+we refer to the config values C<like this>.
+
+=over
+
+=item B<dgit-distro.>I<distro>B<.git-url>, B<.git-url-suffix>
+
+Specify the publicly accessible git URLs for your
+dgit git server.  The urls generated are
+C<git-url>B</>I<package>C<git-url-suffix>
+
+The url should be stable,
+and publicly accessible,
+because its name is published in .dsc files.
+(Note that if you make modified versions of packages from Debian,
+the copyleft licences used for Free Software
+often require you to permit your users, employees, and downstreams
+to further distribute your modified source code.)
+
+=item B<dgit-distro.>I<distro>B</push.git-host>
+
+The domain name of your git server's ssh interface.
+
+=item B<dgit-distro.>I<distro>B</push.git-user-force> B<dgit-distro.>I<distro>B</push.username>
+
+Some git hosting systems expect everyone to
+connect over ssh as the same user, often B<git>.
+If this is the case, set C<git-user-force> to that user.
+
+If you have a normal git over ssh arrangement,
+where people ssh as themselves,
+leave C<git-user-force> unset.
+If a user wishes to override the username
+(for example, if their local username is not the same as on the server)
+they can set C<username>.
+
+=item B<dgit-distro.>I<distro>B</push.git-url>
+
+Set this to the empty string.
+This will arrange that push accesses to the ssh server will use
+C</push.git-host>, etc.
+
+=item B<dgit-distro.>I<distro>B</push.git-proto> B<git+ssh://>
+
+=item C<dgit-distro.>I<distro>B</push.git-path>
+
+The path to your repositories.
+dgit push will try to push to
+C<git-proto>[C<git-user-force>|C<username>B<@>]C<git-path>B</>I<package>B<.git>
+
+=item B<dgit-distro.>I<distro>B<.git-check>, B<.git-check-suffix>
+
+dgit clone needs to be able to tell whether there is
+yet a git repository for a particular package.
+
+If you always have a git repository for every package in your archive,
+perhaps because you never use dput/dupload, and always dgit push,
+set C<git-check> to B<true>.
+
+Otherwise, set C<git-check> to a url prefix - ideally, https.
+dgit clone will try to fetch
+C<git-check>B</>I<package>C<git-check-suffix>
+and expect to get either some successful fetch (it doesn't matter what)
+or a file not found error (http 404 status code).
+Other outcomes are fatal errors.
+
+If your git server runs cgit,
+then you can set C<git-check> to the same as C<git-url>,
+and C<git-check-suffix> to B</info/refs>.
+
+=item B<dgit-distro.>I<distro>B</push.git-check>, B</push.git-create>
+
+dgit push also needs to be able to check whether the repo exists.
+
+You can set both of these to B<ssh-cmd>,
+which will use an ssh shell command to test repository existence.
+Or leave them unset, and dgit push will use the readonly details.
+If repositories are created automatically on push, somehow,
+you can set C<git-create> to B<true>.
+
+=item B<dgit-distro.>I<distro>B<.upload-host>
+
+What I<host> value to pass to dput, to upload.
+
+This is a nickname, not the real host name.
+You need to provide everyone who will push with an appropriate
+dput configuration.
+See L<dput.cf(5)>.
+
+A good nickname for your upload host is your distro name I<distro>.
+
+=item B<dgit-distro.>I<distro>B<.mirror>
+
+Set this to the url of your source package archive.
+This is the same string as appears
+in the 2nd field of each B<sources.list> entry.
+
+=item B<dgit-distro.>I<distro>B<.archive-query>, B<.archive-query-url>
+
+If you have a smallish distro,
+set C<archive-query> to B<aptget:> (with a colon).
+
+If your distro is large
+(eg, if it contains a substantial fraction of Debian)
+then this will not be very efficient:
+with this setting,
+dgit often needs to download and update Sources files.
+
+For large distros,
+it is better to implement the Debian archive ftpmaster API.
+See L<https://api.ftp-master.debian.org/>,
+and set C<archive-query> to B<ftpmasterapi:> (with a colon)
+and C<archive-query-url> to your API base URL.
+dgit uses these queries:
+B<suites>,
+B<dsc_in_suite/>I<isuite>B</>I<package> and
+B<file_in_archive/>I<pat>
+(so you need not implement anything else).
+
+Alternatively,
+if your system supports the rmadison protocol,
+you can set C<archive-query> to B<madison:>[I<madison-distro>].
+dgit will invoke B<rmadison> -uI<madison-distro>.
+
+=item B<dgit-suite.>I<suite>B<.distro> I<distro>
+
+Set this for every one of your suites.
+You will have to update this when new suites are created.
+If you forget, your users can explicitly specify B<-d> I<distro>
+to dgit.
+
+=back
+
+=head1 TEMPLATE GIT REPOSITORY
+
+When dgit push is used for I<package> for the first time,
+it must create a git repository on the git server.
+
+If C<git-create> is set to B<ssh-cmd>, 
+dgit will use the user's shell access to the server to
+B<cp -a _template.git> I<package>B<.git>.
+So you should create B<_template.git> with suitable contents.
+
+Note that the ssh rune invoked by dgit does not do any locking.
+So if two people dgit push the same package at the same time,
+there will be lossage.
+Either don't do that, or set up B<dgit-repos-server>.
+
+=head1 SSH COMMANDS
+
+When a user who can push runs dgit,
+dgit uses ssh to access the git server.
+
+To make use of ssh restricted command easier,
+and for the benefit of dgit-repos-server,
+dgit's ssh commands
+each start with a parseable commentish rune.
+
+The ssh commands used by dgit are these:
+
+=over
+
+=item B<: dgit> I<distro> B<git-check> I<package> B<;>...
+
+Test whether I<package> has a git repo on the server already.
+Should print B<0> or B<1> and a newline,
+and exit status zero in either case.
+The rest of the command, after B<;>,
+is a shell implementation of this test.
+Used when C<git-check> is set to B<ssh-cmd>.
+
+=item B<: dgit> I<distro> B<git-create> I<package> B<;>...
+
+Create the git repository for I<package> on the server.
+See L</TEMPLATE GIT REPOSITORY>, above.
+The rest of the command is an appropriate invocation of cd and cp.
+Used when C<git-create> is set to B<ssh-cmd>.
+
+=item B<git-receive-pack>..., B<git-upload-pack>...
+
+dgit invokes git to access the repository;
+git then runs these commands.
+Note that dgit push will first do a git fetch over ssh,
+so you must provide upload-pack as well as receive-pack.
+
+=back
+
+(There are also other ssh commands
+which are historical or obscure.)
+
+=head1 SEE ALSO
+
+dgit(1)

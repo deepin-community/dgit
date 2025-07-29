@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+tmp=$DGIT_TEST_TMP
+
+echo >&2 '(((((((((((((((((((((((((((((((((((((((('
+set -x
+export SSH_ORIGINAL_COMMAND="$*"
+${DGIT_REPOS_SERVER_TEST-dgit-repos-server} \
+	test-dummy $tmp/distro=test-dummy \
+	"$DGIT_TEST_DRS_AUTH" \
+	--repos=$tmp/git --suites=$tmp/suites \
+	--${DGIT_DRS_MODE-ssh}
+: '))))))))))))))))))))))))))))))))))))))))'

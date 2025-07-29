@@ -1,0 +1,68 @@
+#!/bin/sh
+set -ex
+
+d () {
+	date --iso-8601=ns >&2
+	ps -ef | grep gpg-agent >&2 ||:
+}
+
+d
+
+retry_until_ok () {
+	sleeptime=0
+	d
+	while ! "$@"; do
+		d
+		case $sleeptime in
+		??.*)
+			echo >&2 "$0: GPG AGENT STARTP $@ TIMED OUT"
+			exit 127
+			;;
+		esac
+		sleep $sleeptime
+		sleeptime=$(echo "($sleeptime + 0.001) * 2" | bc -l)
+	done
+}
+
+kill_agent_not_running () {
+	LC_MESSAGES=C gpg-connect-agent --no-autostart </dev/null \
+		KILLAGENT /bye 2>&1 \
+	| tee -a /dev/stderr \
+	| grep 'no gpg-agent running' >&2
+}
+
+echo >&2 'GPG-WITHAGENT... PRE-STOPPING'
+
+retry_until_ok kill_agent_not_running
+
+agent_is_running () {
+	gpg-connect-agent --no-autostart </dev/null \
+		'/echo dgit-gpg-agent-ok' /bye 2>&1 \
+	| grep dgit-gpg-agent-ok >&2
+}
+
+
+$DGIT_STUNT_AGENT --daemon </dev/null >&2
+retry_until_ok agent_is_running
+
+echo >&2 'GPG-WITHAGENT... RUNNING'
+
+d
+
+set +e
+$DGIT_TEST_REAL_GPG					\
+	--agent-program=$DGIT_STUNT_AGENT "$@" 2>&9
+rc=$?
+set -e
+
+d
+
+echo >&2 'GPG-WITHAGENT... STOPPING'
+
+retry_until_ok kill_agent_not_running
+
+echo >&2 'GPG-WITHAGENT... DONE'
+
+d
+
+exit $rc

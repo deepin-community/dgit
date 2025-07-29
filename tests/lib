@@ -1,0 +1,1630 @@
+# -*- sh -*-
+
+exec 2>&1
+set -o pipefail
+shopt -s inherit_errexit # #514862, wtf
+
+. tests/lib-core
+. tests/lib-restricts
+
+t-report-failure () {
+	set +x
+	rc=$1
+	cat <<END >&2
+TEST FAILED (for proximate cause, look earlier in the log for many %)
+cwd: $PWD
+funcs: ${FUNCNAME[*]}
+lines: ${BASH_LINENO[*]}
+files: ${BASH_SOURCE[*]}
+END
+	t-save-artifacts
+
+	exit 16
+}
+
+trap '
+	rc=$?
+	set +x
+	redirected_log="$DGIT_TEST_REDIRECTED_LOG"
+	if [ "$redirected_log" ]; then
+		exec 2>&7 >&2
+		unset DGIT_TEST_REDIRECTED_LOG
+		cat -- "$redirected_log" ||:
+	fi
+	test $rc = 0 || echo "
+%%%%%%%%%%%%%%%%%%%% EXITING $rc %%%%%%%%%%%%%%%%%%%%
+
+		Most relevant logs are just before assignment rc=$rc
+		Will now do cleanup etc.
+"
+	if [ $rc != 0 ] || ! [ "$DGIT_TRAP_QUIET" ]; then
+		set -${DGIT_TEST_NDEBUG-x}
+		${DGIT_TEST_NDEBUG+ :} pwd
+	fi
+	set +e
+	(cd $tmp && \
+	 grep "" t2u/worker-cwd/w0/dgit-tmp/t2u.log)
+	for pid in $end_kill_pids; do kill -9 $pid; done
+	[ "x$DGIT_TEST_KEEP_MUSTCLEAN" != x ] || \
+	[ "x$DGIT_TEST_TMP" = x ] || rm -rf $DGIT_TEST_TMP/must-clean
+	set -e
+        case $rc in
+	0)    echo success.;;
+	*)    t-report-failure;;
+	esac
+' EXIT
+
+if [ "$AUTOPKGTEST_ARTIFACTS" ] && ! [ "$DGIT_TEST_REDIRECTED_LOG" ] \
+   && ! [ "$DGIT_TEST_DIRECT_LOG" ]; then
+	# When running under real autopkgtest, don't spew our megabytes of
+	# logs unconditionally.  Redirect them to a file, and print them
+	# only on failure.  On success, t-save-artifacts comppresses them.
+	exec 7>&2
+	export DGIT_TEST_REDIRECTED_LOG="$AUTOPKGTEST_ARTIFACTS"/"${0##*/}.log"
+	exec >"$DGIT_TEST_REDIRECTED_LOG"
+	exec 2>&1
+fi
+
+# DGIT_TEST_NDEBUG can be used to disable most of the whole test suite's
+# debugging enablement, whereever there isn't a separate env var for it.
+# (Note: this ^ is an aspiration; we have have missed some places.)
+# It must be unset (debugging enabled) or set to '' (debugging disabled).
+# Other values are not allowed!
+
+set -${DGIT_TEST_NDEBUG-x}
+
+t-filter-out-git-hyphen-dir
+
+t-set-intree
+
+: ${DGIT_TEST_DEBUG=-D}
+export DGIT_TEST_DEBUG
+
+: ${DGIT_TEST_DEBPUSH_DEBUG=x}
+export DGIT_TEST_DEBPUSH_DEBUG
+
+: ${DGIT_DRS_DEBUG:=1}
+export DGIT_DRS_DEBUG
+
+: ${DGIT_TEST_DISTRO+ ${distro=${DGIT_TEST_DISTRO}}}
+
+: ${DGIT_TEST_SIGNING_KEY_OPTS= -kBCD22CD83243B79D3DFAC33EA3DBCBC039B13D8A }
+export DGIT_TEST_SIGNING_KEY_OPTS
+
+export GIT_COMMITTER_DATE='1530000000 +0100'
+export GIT_AUTHOR_DATE='1530000000 +0100'
+
+export LC_CTYPE=C.UTF-8
+unset CDPATH
+
+# We use git-filter-branch in various tests.
+# Nowadays it has a warning with associated sleep.
+export FILTER_BRANCH_SQUELCH_WARNING=1
+
+root=`pwd`
+troot=$root/tests
+testname="${DGIT_TEST_TESTNAME-${0##*/}}"
+export DGIT_TEST_TROOT=$troot
+bpd=..
+
+tmp=$ADTTMP
+if [ x"$tmp" = x ]; then
+	export DGIT_TEST_BYHAND=1
+	mkdir -p tests/tmp
+	tmpbase=$troot/tmp
+	tmp=tests/tmp/$testname
+	rm -rf $tmp
+	mkdir $tmp
+elif [ "x$DGIT_TEST_TMPBASE" != x ]; then
+	tmpbase="$DGIT_TEST_TMPBASE"
+fi
+cd $tmp
+
+tmp=`pwd`
+
+t-set-using-tmp
+
+test -f $tmp/.save-env || \
+env -0 >$tmp/.save-env
+
+ln -sf $troot/ssh ssh
+
+export DEBCHANGE_VENDOR=dpkg
+unset VISUAL
+unset GIT_EDITOR
+
+mkdir -p $tmp/must-clean
+# must-clean is usually removed after each test, on success or failure.
+# But this must not be relied on for correctness, only for garbage
+# collection etc.
+
+mkdir -p $tmp/incoming
+cat <<END >$tmp/dput.cf
+[test-dummy]
+method			= local
+incoming		= $tmp/incoming
+run_dinstall		= 0
+END
+
+schroot=${DGIT_SCHROOT_CHROOT:-build}
+# Pretty much any Debian sid snapshot schroot will do.
+
+: ${t_archive_method:=aq}
+: ${tagpfx:=archive/test-dummy}
+: ${suitespecs:=sid:unstable}
+
+t-git-next-date () {
+	GIT_COMMITTER_DATE="$(( ${GIT_COMMITTER_DATE%% *} + 1 )) ${GIT_COMMITTER_DATE#* }"
+	GIT_AUTHOR_DATE="$GIT_COMMITTER_DATE"
+}
+
+t-expect-fail () {
+	local mpat="$1"; shift
+
+	set +o pipefail
+	LC_MESSAGES=${expect_fail_lcmessages-C} \
+	LANGUAGE=${expect_fail_lcmessages-C} \
+	"$@" 2>&1 | tee $tmp/t.output
+	local ps="${PIPESTATUS[*]}"
+	set -o pipefail
+
+	case $ps in
+	"0 0")	fail "command unexpectedly succeeded (instead of: $mpat)" ;;
+	*" 0")	;;
+	*)	fail "tee failed"  ;;
+	esac
+
+	t-grep-mpat "$mpat" $tmp/t.output
+}
+
+t-grep-mpat () {
+	local mpat="$1"
+	local file="$2"
+
+	local grepper=fgrep
+	case "$mpat" in
+	[A-Z]:*)
+		case "$mpat" in
+		E:*)	grepper=egrep	;;
+		F:*)	grepper=fgrep	;;
+		*)	fail "bad mpat prefix in $mpat";;
+		esac
+		mpat=${mpat#[A-Z]:}
+		;;
+	esac
+
+	$grepper -e "$mpat" "$file" ||
+		fail "message not found"
+}
+
+t-expect-push-fail () {
+	local mpat="$1"; shift
+
+	local triedpush; triedpush=`git rev-parse HEAD`
+
+	t-reporefs pre-push
+	t-expect-fail "$mpat"  "$@"
+	cp $tmp/t.output $tmp/t.push-output
+	t-reporefs post-push
+	diff $tmp/show-refs.{pre,post}-push
+
+	t-git-objects-not-present '' $triedpush
+
+	eval "$t_expect_push_fail_hook"
+}
+
+t-expect-push-fail-retriably () {
+	t-expect-push-fail "$@"
+	grep 'You can retry the push, after fixing the problem, if you like' \
+		$tmp/t.push-output
+}
+
+t-expect-push-fail-tainted () {
+	# t-expect-push-fail-local-and-remote $m $push_args...
+	# Message is implicitly prefixed with 'E:^'
+	# to avoid spotting them in protocol debug output etc.
+	# Same message is expected from the remote.
+	local m="$1"; shift
+
+	t-expect-push-fail-retriably "E:^$m" "$@"
+	t-expect-push-fail "E:^remote: $m" "$@" --force-push-tainted
+}
+
+t-git-objects-not-present () {
+	# t-git-objects-not-present GITDIR|'' OBJID [...]
+	# specifying '' means the repo for package $p
+	local gitdir="${1-$dgitrepo}"
+	local obj
+	if ! [ -e "$gitdir" ]; then return; fi
+	for obj in "$@"; do
+		GIT_DIR=$gitdir \
+		t-expect-fail 'unable to find' \
+		git cat-file -t $obj
+	done
+}
+
+t-reporefs () {
+	local whichoutput=$1; shift
+	local whichrepo=${1-$dgitrepo}
+	local outputfile="$tmp/show-refs.$whichoutput"
+	(set -e
+	 exec >"$outputfile"
+	 if test -d $whichrepo; then
+		cd $whichrepo
+		git show-ref |t-sort
+	fi)
+}
+
+t-untar () {
+	local tarfile=$1.tar
+	local edittree=$1.edit
+	if test -d "$edittree"; then
+		cp -a "$edittree"/* .
+	else
+		t-tar-x -f "$tarfile"
+	fi
+}
+
+t-tar-x () {
+	tar --no-same-owner -x "$@"
+}
+
+t-worktree () {
+	rm -rf $p
+	t-untar $troot/worktrees/${p}_$1
+}
+
+t-select-package () {
+	p=$1
+	dgitrepo=$tmp/git/$p.git
+}
+
+t-git () {
+	t-select-package $1
+	v=$2
+	mkdir -p $tmp/git
+	local gs=$troot/git-srcs/${p}_$v.git
+	(set -e; cd $tmp/git; t-untar $gs)
+}
+
+t-git-none () {
+	mkdir -p $tmp/git
+	(set -e; cd $tmp/git; t-tar-x -f $troot/git-template.tar)
+}
+
+t-salsa-add-remote () {
+	local d=$tmp/salsa/$p
+	mkdir -p $d
+	(set -e; cd $d; git init --bare)
+	git remote add ${1-origin} $d
+}
+
+t-git-merge-base () {
+	git merge-base $1 $2 || test $? = 1
+}
+
+t-has-ancestor () {
+	# t-has-ancestor ANCESTOR
+	# (CHILD is implicit, HEAD)
+	local now;      now=`git rev-parse HEAD`
+	local ancestor; ancestor=`git rev-parse $1^{}`
+	local mbase;    mbase=`t-git-merge-base $ancestor $now`
+	if [ x$mbase != x$ancestor ]; then
+		fail "not ff $ancestor..$now, $mbase != $ancestor"
+	fi
+}
+
+t-has-parent-or-is () {
+	# t-has-parent-or-is CHILD PARENT
+	local child=$1
+	local parent=$2
+	local parents
+	parents=$(git show --pretty=format:' %P %H ' "$child")
+	parent=$(git rev-parse "$parent~0")
+	case "$parents" in
+	*" $parent "*)	;;
+	*)	fail "child $child lacks parent $parent" ;;
+	esac
+}
+
+t-prep-newpackage () {
+	t-select-package $1
+	v=$2
+	t-archive-none $p
+	t-git-none
+	t-worktree $v
+	cd $p
+	if ! git show-ref --verify --quiet refs/heads/master; then
+		git branch -m dgit/sid master
+		git remote rm dgit
+	fi
+	cd ..
+}
+
+t-archive-none () {
+	t-select-package $1
+	t-archive-none-$t_archive_method
+}
+t-archive-none-aq () {
+	mkdir -p $tmp/aq/dsc_in_suite $tmp/mirror/pool/main
+
+	: >$tmp/aq/suites
+	local jsondelim="["
+
+	local suitespec
+	for suitespec in $suitespecs; do
+		local suite=${suitespec%%:*}
+		local sname=${suitespec#*:}
+
+		>$tmp/aq/package.$suite.$p
+		t-aq-archive-updated $suite $p
+
+		>$tmp/aq/package.new.$p
+		t-aq-archive-updated new $p
+
+		ln -sf $suite $tmp/aq/dsc_in_suite/$sname
+
+		cat <<END >>$tmp/aq/suites
+$jsondelim
+   {
+      "archive" : "ftp-master",
+      "codename" : "$suite",
+      "components" : [
+         "main",
+         "contrib",
+         "non-free"
+      ],
+      "name" : "$sname",
+      "dakname" : "$sname"
+END
+
+		jsondelim="   },"
+
+	done
+	cat <<END >>$tmp/aq/suites
+    }
+]
+END
+}
+
+t-aq-archive-updated () {
+	local suite=$1
+	local p=$2
+	local suitedir=$tmp/aq/dsc_in_suite/$suite
+	mkdir -p $suitedir
+	perl <$tmp/aq/package.$suite.$p >$suitedir/$p -wne '
+		use JSON;
+		use strict;
+		our @v;
+		m{^(\S+) (\w+) ([^ \t/]+)/(\S+)} or die;
+		push @v, {
+			"version" => "$1",
+			"sha256sum" => "$2",
+			"component" => "$3",
+			"filename" => "$4",
+		};
+		END {
+			my $json = JSON->new->canonical();
+			print $json->encode(\@v) or die $!;
+		}
+	'
+}
+
+t-archive-process-incoming () {
+	local suite=$1
+	local v=${2-$v}
+	mv $tmp/incoming/${p}_* $tmp/mirror/pool/main/
+	t-archive-query "$suite"
+}
+
+t-archive-query () {
+	local suite=${1-sid}
+	local dscf=main/${p}_${v}.dsc
+	t-archive-query-$t_archive_method "$suite" "$p" "$v" "$dscf"
+}
+t-archive-query-aq () {
+	local suite=$1
+	local p=$2
+	local v=$3
+	local dscf=$4
+	local sha; sha=`sha256sum <$tmp/mirror/pool/$dscf`
+	echo "${v} ${sha%  -} $dscf" >>$tmp/aq/package.$suite.${p}
+	t-aq-archive-updated $suite $p
+}
+
+t-archive () {
+	t-archive-none $1
+	v=$2
+	local dscf=${p}_$2.dsc
+	rm -f $tmp/mirror/pool/main/${p}_*
+	${t_archive_ln_s-ln -s} \
+		 $troot/pkg-srcs/${p}_${2%-*}* $tmp/mirror/pool/main/
+	t-archive-query $suite
+	rm -rf $tmp/extract
+	mkdir $tmp/extract
+	(set -e; cd $tmp/extract; dpkg-source -x ../mirror/pool/main/$dscf)
+}
+
+t-git-dir-time-passes () {
+	touch -d 'last year' $dgitrepo
+}
+
+t-git-dir-check () {
+	local gitdir=$dgitrepo
+	case "$1" in
+	enoent)
+		if test -e "$gitdir"; then fail "$gitdir exists"; fi
+		return
+		;;
+	public) wantstat='7[75]5' ;;
+	secret)	wantstat='7[70]0' ;;
+	*)	fail "$1 t-git-dir-check ?" ;;
+	esac
+	gotstat=`stat -c%a $gitdir`
+	case "$gotstat" in
+	*$wantstat) return ;;
+	*)	fail "$gitdir has mode $gotstat, expected $wantstat" ;;
+	esac
+}
+
+t-expect-fsck-fail () {
+	echo >>$tmp/fsck.expected-errors "$1"
+}
+
+t-git-fsck () {
+	local fsckerrs=$(git rev-parse --git-dir)/dgit-test-fsck.errs
+
+	set +e
+	LC_MESSAGES=C git fsck --no-dangling --strict 2>&1 \
+		| tee $fsckerrs
+	ps="${PIPESTATUS[*]}"
+	set -e
+
+	local pats
+	if [ -f $tmp/fsck.expected-errors ]; then
+		pats=(-w -f $tmp/fsck.expected-errors)
+	else
+		test "$ps" = "0 0"
+	fi
+	pats+=(-e 'notice: HEAD points to an unborn branch')
+	pats+=(-e 'notice: No default references')
+
+	set +e
+	grep -v "${pats[@]}" $fsckerrs
+	rc=$?
+	set -e
+	case $rc in
+	1) ;; # no unexpected errors
+	0) fail "unexpected messages from git-fsck" ;;
+	*) fail "grep of git-fsck failed" ;;
+	esac
+
+	t-output "" git log --all --grep '^\[dgit .*INTERNAL.*]'
+}
+
+t-check-only-bpd () {
+	if [ "$bpd" = .. ]; then return; fi
+	t-files-notexist \
+		$tmp/*.{deb,changes,dsc,buildinfo} \
+		$tmp/*.{tar,diff}.*
+}
+
+t-fscks () {
+	(
+	shopt -s nullglob
+	for d in $tmp/*/.git $tmp/git/*.git; do
+		cd "${d%/.git}"
+		t-git-fsck
+	done
+	)
+}
+
+t-ok () {
+	: '========================================'
+	t-check-only-bpd
+	t-fscks
+	t-save-artifacts
+	echo ok.
+}
+
+t-save-artifacts () {
+	artifacts="$AUTOPKGTEST_ARTIFACTS"
+	if [ x"$artifacts" = x ]; then return; fi
+	if [ x"tmp" = x ]; then return; fi
+	# Empirically in a non-autopkgtest run with AUTOPKGTEST_ARTIFACTS
+	# this `-1` flag to gzip decreased the runtime from 585s (2558s CPU) 
+	# to 609s (2730s CPU), a decrease of 5-7%.  It increased the
+	# total size of the artifacts from 24220k to 26092k, ie +8%,
+	# but in a real autopkgtest run there are many bigger things
+	# alongside AUTOPKGTEST_ARTIFACTS put there by autopkgtest itself.
+	GZIP=-1v tar -C "$tmp" -zc -f "$artifacts/${0##*/}.tar.gz" \
+		--exclude=\*.tar .
+	local logfile="$DGIT_TEST_REDIRECTED_LOG"
+	if [ "$logfile" ]; then
+		unset DGIT_TEST_REDIRECTED_LOG
+		set +x
+		DGIT_TRAP_QUIET=1
+		exec >&7 2>&1
+		gzip -f -- "$logfile"
+	fi
+}
+
+t-rm-dput-dropping () {
+	rm -f $tmp/${p}_${v}_*.upload
+}
+
+t-non-dgit-upload () {
+	t-dgit -wgf build-source
+
+	cd ..
+	c=${p}_${v}_source.changes
+	debsign -kBCD22CD83243B79D3DFAC33EA3DBCBC039B13D8A $c
+	dput -c $tmp/dput.cf test-dummy $c
+
+	t-archive-process-incoming sid
+	t-git-next-date
+	cd $p
+}
+
+t-dgit-manpage () {
+	local section=$1
+	local page=$2
+	(export LC_ALL=C.UTF-8
+	 if [ "$DGIT_TEST_INTREE" ]; then
+		make -C $DGIT_TEST_INTREE $page.$section.view
+	 else
+		man $section $page
+	 fi)
+}
+
+t-diff-nogit () {
+	diff --exclude=.git --exclude=.pc -ruN $*
+}
+
+t-files-notexist () {
+	local f
+	for f in "$@"; do
+		if [ -e $f ]; then
+			fail "$f exists!"
+		fi
+	done
+}
+
+t-cloned-fetched-good () {
+	t-diff-nogit ../extract/$p-${v%-*} .
+	t-clean-on-branch dgit/sid
+	t-refs-same-start
+	t-refs-same \
+		refs/heads/dgit/sid \
+		refs/remotes/dgit/dgit/sid
+	t-refs-notexist refs/dgit/unstable refs/remotes/dgit/dgit/unstable
+}
+
+t-output () {
+	printf "%s${1:+\n}" "$1" >$tmp/t.want
+	shift
+	"$@" >$tmp/t.got
+	diff $tmp/t.want $tmp/t.got
+}
+
+t-clean-on-branch () {
+	t-output "## $1" git status -b --porcelain
+}
+
+t-setup-done () {
+	local savevars=$1
+	local savedirs=$2
+	local importeval=$3
+
+	local import=IMPORT.${DGIT_TEST_TESTNAME-${0##*/}}
+	exec 4>$tmp/$import.new
+
+	local vn
+	for vn in $savevars; do
+		perl >&4 -"I$root" -MDebian::Dgit -e '
+			printf "%s=%s\n", $ARGV[0], shellquote $ARGV[1]
+		' $vn "$(eval "printf '%s\n' \"\$$vn\"")"
+	done
+
+	perl >&4 -"I$root" -MDebian::Dgit -we '
+		foreach my $vn (grep m/^DGIT_TEST_REAL_/, keys %ENV) {
+			print STDERR "saving-exporting $vn\n";
+			printf "export %s=%s\n", $vn, shellquote $ENV{$vn}
+				or die $!;
+		}
+	'
+
+	(set -e; cd $tmp; tar cf $import.tar $savedirs)
+
+	printf >&4 "\n%s\n" "$importeval"
+
+	mv -f $tmp/$import.new $tmp/$import
+}
+
+t-setup-import () {
+	local setupname=$1
+
+	local setupsrc
+	local lock
+	if [ "x$tmpbase" = x ]; then
+		# ADTTMP was set on entry to tests/lib, so we
+		# are not sharing tmp area between tests
+		setupsrc="$tmp"
+		lock="$tmp/.dummy.lock"
+	else
+		setupsrc="$tmpbase/$setupname"
+		lock="$setupsrc.lock"
+	fi
+
+	local simport="$setupsrc/IMPORT.$setupname"
+
+	if ! [ -e "$simport" ]; then
+		with-lock-ex -w "$lock" \
+		xargs -0 -a $tmp/.save-env \
+		bash -xec '
+			cd "$1"; shift
+			setupname="$1"; shift
+			simport="$1"; shift
+			if [ -e "$simport" ]; then exit 0; fi
+			env - "$@" \
+			env -u DGIT_TEST_REDIRECTED_LOG \
+			"tests/setup/$setupname"
+		' x "$root" "$setupname" "$simport"
+	fi
+
+	if [ "x$setupsrc" != "x$tmp" ]; then
+		(set -e; cd $tmp; tar xf "$simport.tar")
+	fi
+
+	mkdir -p $tmp/must-clean
+
+	. "$simport"
+}
+
+t-git-get-ref-exact () {
+	local ref=$1
+	# does not dereference, unlike t-git-get-ref
+	case "$ref" in
+	refs/*) ;;
+	*) fail "t-git-get-ref-exact bad $ref" ;;
+	esac
+	git for-each-ref --format='%(objectname)' "[r]efs/${ref#refs/}"
+}
+
+t-git-get-ref () {
+	local ref=$1
+	case "$ref" in
+	refs/*)	;;
+	*) fail "t-git-get-ref bad $ref" ;;
+	esac
+	(git show-ref -d $1 || test $? = 1) | perl -ne '
+		$x = $1 if m#^(\w+) \Q'$1'\E(?:\^\{\})?$#;
+		END { print "$x\n" if length $x; }
+	'
+}
+
+t-ref-same-exact () {
+	local name="$1"
+	local val; val=`t-git-get-ref-exact $name`
+	t-ref-same-val "$name" $val
+}
+
+t-ref-same () {
+	local name="$1"
+	local val; val=`t-git-get-ref $name`
+	t-ref-same-val "$name" $val
+}
+
+t-ref-head () {
+	local val; val=`git rev-parse HEAD`
+	t-ref-same-val HEAD $val
+}
+
+t-ref-same-val () {
+	local name="$1"
+	local val=$2
+	case "${t_ref_val-unset}" in
+	unset)		;;
+	"$val")		;;
+	*)		fail "ref varies: ($name)\
+ ${val:-nothing} != ${t_ref_val:-nothing} (${t_ref_names[*]})" ;;
+	esac
+	t_ref_val="$val"
+	t_ref_names+=("$name")
+}
+
+t-refs-same-start () {
+	unset t_ref_val
+	t_ref_names=()
+}
+
+t-refs-same () {
+	local g
+	for g in $*; do
+		t-ref-same $g
+	done
+}
+
+t-refs-notexist () {
+	local val
+	for g in $*; do
+		val=`t-git-get-ref $g`
+		if [ "x$val" != x ]; then
+			fail "ref $g unexpectedly exists ($val)"
+		fi
+	done
+}
+
+t-v-tag () {
+	echo refs/tags/$tagpfx/${v//\~/_}
+}
+
+t-format-ref () {
+	git log -n1 --pretty=format:"$1" "$2"
+}
+
+t-sametree-parent () {
+	local ref=$1
+	local parent
+	local ctree; ctree=$(t-format-ref '%T' "$ref")
+	while :; do
+		local psame=''
+		for parent in $(t-format-ref '%P' "$ref"); do
+			local ptree; ptree=$(t-format-ref '%T' "$parent")
+			if [ "x$ptree" = "x$ctree" ]; then
+				psame+=" $parent"
+			fi
+		done
+		case "$psame" in ""|" * *") break ;; esac
+		ref="${psame# }"
+	done
+	echo "$ref"
+}
+
+t-check-pushed-master () {
+	local master; master=`t-git-get-ref refs/heads/master`
+	if [ x$master = x$t_ref_val ]; then return; fi
+	if [ x$master = x ]; then fail "failed to push master"; fi
+	# didn't update master, it must be not FF
+	local mbase; mbase=`t-git-merge-base $master $t_ref_val`
+	if [ x$mbase = x$master ]; then fail "failed to ff master"; fi
+}
+
+t-push-was-source-only () {
+        local f
+	t-files-notexist $tmp/incoming/${p}_${v}_*.deb \
+                         $tmp/incoming/${p}_${v}_*.udeb
+	# we permit _source.buildinfo files; see test_changes_source_only()
+	for f in $tmp/incoming/${p}_${v}_*.buildinfo; do
+            if [ -e $f ]; then
+                case "$f" in
+                    *_source.buildinfo) ;;
+                    *) fail "non-source-only file $f exists!" ;;
+                esac
+            fi
+        done
+}
+
+t-push-included () {
+    for f in $@; do
+        stat $tmp/incoming/$f
+    done
+}
+
+t-pushed-good () {
+	local branch=$1
+	local suite=${2:-sid}
+	t-refs-same \
+		refs/heads/$branch
+	t-pushed-good-core
+}
+	
+t-pushed-good-core () {
+	t-ref-dsc-dgit
+	t-refs-same \
+		`t-v-tag` \
+		refs/remotes/dgit/dgit/$suite
+	t-refs-notexist \
+		refs/heads/dgit/unstable \
+		refs/remotes/dgit/dgit/unstable
+	(set -e; cd $dgitrepo
+	 t-refs-same \
+		refs/dgit/$suite \
+		`t-v-tag`
+	 ${t_check_pushed_master:- : NOT-DRS-NO-CHECK-PUSHED-MASTER}
+	 t-refs-notexist \
+		refs/dgit/unstable
+	)
+	git verify-tag `t-v-tag`
+}
+
+t-pushed-good-check-changes () {
+	changes_filename="$tmp/incoming/${p}_${v}_*.changes"
+        grep -E "^Distribution: $suite" $changes_filename
+        grep -E "^Version: $v" $changes_filename
+}
+
+t-splitbrain-pushed-good--unpack () {
+	cd $tmp
+	rm -rf t-unpack
+	mkdir t-unpack
+	cd t-unpack
+	ln -s $tmp/mirror/pool/main/*.orig*.tar* .
+	ln -s $tmp/incoming/*.orig*.tar* . ||:
+	ln -s $incoming_dsc .
+	ln -s ${incoming_dsc/.dsc/.debian.tar}* .
+	ln -s ${incoming_dsc/.dsc/.tar}* . ||:
+	dpkg-source "$@" -x *.dsc
+	cd */.
+	git init
+	git fetch ../../$p "refs/tags/*:refs/tags/*"
+}
+
+t-splitbrain-pushed-good--checkprep () {
+	git add -Af .
+	git rm --cached -r --ignore-unmatch .pc
+}
+
+t-splitbrain-pushed-good--checkdiff () {
+	local tag=$1
+	t-splitbrain-pushed-good--checkprep
+	t-output "" git diff --stat --cached $tag
+}
+
+t-splitbrain-pushed-good-start () {
+	dep14tag=refs/tags/test-dummy/${v//\~/_}
+	dgittag=$(t-v-tag)
+	t-output "" git status --porcelain
+	t-ref-head
+	t-refs-same $dep14tag
+	(set -e; cd $dgitrepo; t-refs-same $dep14tag)
+	git merge-base --is-ancestor $dep14tag $dgittag
+
+	t-refs-same-start
+	t-ref-same refs/heads/split.p
+	local split_b=$(t-git-get-ref refs/heads/split.b)
+	case "$split_b" in
+	"$t_ref_val") ;;
+	"$(git rev-parse refs/heads/split.p^0)") ;;
+	"$(git rev-parse refs/heads/split.p^1)") ;;
+	*) fail "bad b/p (b=$split_b)" ;;
+	esac
+	t-pushed-good-core
+
+	t-incoming-dsc
+
+	t-splitbrain-pushed-good--unpack
+	t-splitbrain-pushed-good--checkdiff $dgittag
+}
+t-splitbrain-pushed-good-end-made-dep14 () {
+	t-splitbrain-pushed-good--checkdiff $dep14tag
+	cd $tmp/$p
+}
+
+t-splitbrain-rm-1-patch () {
+	local patchname=$1
+	perl -i -pe '
+		next unless $_ eq "'"$patchname"'\n";
+		die if $counter++;
+		chomp;
+		rename "debian/patches/$_", "../t-'"$patchname"'" or die $!;
+		$_ = "";
+	' debian/patches/series
+}
+
+t-splitbrain-rm-gitignore-patch () {
+	t-splitbrain-rm-1-patch auto-gitignore
+}
+
+t-gbp-pushed-good () {
+	local suite=${1:-sid}
+	t-splitbrain-pushed-good-start
+
+	# Right, now we want to check that the maintainer tree and
+	# the dgit tree differ in exactly the ways we expect.  We
+	# achieve this by trying to reconstruct the maintainer tree
+	# from the dgit tree.
+
+	# So, unpack it withut the patches applied
+	t-splitbrain-pushed-good--unpack --skip-patches
+
+	# dgit might have added a .gitignore patch, which we need to
+	# drop and remove
+	t-splitbrain-rm-gitignore-patch
+
+	# Now the result should differ only in non-debian/ .gitignores
+	t-splitbrain-pushed-good--checkprep
+	git diff --cached --name-only $dep14tag >../changed
+	perl -ne '
+		next if !m#^debian/# && m#(^|/)\.gitignore#;
+		die "$_ mismatch";
+	' <../changed
+
+	# If we actually apply the gitignore patch by hand, it
+	# should be perfect:
+	if [ -f ../t-auto-gitignore ]; then
+		patch --backup-if-mismatch -p1 -u <../t-auto-gitignore
+	fi
+
+	t-splitbrain-pushed-good-end-made-dep14
+}
+
+t-unapplied-pushed-good () {
+	local suite=${1:-sid}
+	t-splitbrain-pushed-good-start
+	t-splitbrain-pushed-good--unpack --skip-patches
+	t-splitbrain-pushed-good-end-made-dep14
+}
+
+t-dpm-pushed-good () {
+	local suite=${1:-sid}
+	t-splitbrain-pushed-good-start
+	t-splitbrain-pushed-good--unpack
+	t-splitbrain-rm-gitignore-patch
+	t-splitbrain-pushed-good-end-made-dep14
+}
+
+t-split-unchanged-pushed-good () {
+	local suite=${1:-sid}
+	t-splitbrain-pushed-good-start
+	t-splitbrain-pushed-good--unpack
+	t-splitbrain-pushed-good-end-made-dep14
+}
+
+t-commit-build-push-expect-log () {
+	local msg=$1
+	local mpat=$2
+	t-commit "$msg"
+	t-dgit build
+	LC_MESSAGES=C \
+	t-dgit push-built --new 2>&1 |tee $tmp/push.log
+	t-grep-mpat "$mpat" $tmp/push.log
+}
+
+t-sponsee-dep14tag-sign () {
+	t-sponsee-dep14tag "$@" -u Hannibal
+}
+t-sponsee-dep14tag () {
+	git tag -m 'Sponsee tag' "$@" test-dummy/$v
+	dep14tagref=refs/tags/test-dummy/$v
+	dep14tag=$(t-git-get-ref $dep14tagref)
+}
+t-sponsee-dep14tag-check-kept () {
+	t-refs-same-start
+	t-ref-same-val sponsee-tag $dep14tag
+	t-refs-same $dep14tagref
+	(cd $dgitrepo; t-refs-same $dep14tagref)
+}
+
+t-822-field () {
+	local file=$1
+	local field=$2
+	perl -e '
+		use Dpkg::Control::Hash;
+		my $h = new Dpkg::Control::Hash allow_pgp=>1;
+		$h->parse(\*STDIN,"'"$file"'");
+		my $val = $h->{"'$field'"},"\n";
+		die "'"$file $field"'" unless defined $val;
+		print $val,"\n";
+	' <$file
+}
+
+t-defdistro () {
+	export DGIT_TEST_DISTRO=''
+	distro=''
+	t-git-config dgit-suite.unstable.distro test-dummy
+}
+
+t-stunt-envvar () {
+	local var=$1
+	local tstunt=$2
+	eval '
+		case "$'$var'" in
+		"$tstunt:"*)	;;
+		*":$tstunt:"*)	;;
+		"")		'$var'="$tstunt" ;;
+		*)		'$var'="$tstunt:$'$var'" ;;
+		esac
+		export '$var'
+	'
+}
+
+t-tstunt--save-real () {
+	local f="$1"
+	case "$f" in
+	*/*) return ;;
+	esac
+
+	local rc
+	local real
+	set +e
+	real=$(
+		p=":$PATH:"
+		p="${p/:"$tmp/tstunt":/:}"
+		p="${p%:}"
+		p="${p#:}"
+		PATH="$p"
+		type -p "$f"
+	)
+	rc=$?
+	set -e
+
+	case $rc in
+	1)	return ;;
+	0)	;;
+	*)	fail "did not find $f on PATH $PATH" ;;
+	esac
+
+	local varname=${f//[^_0-9a-zA-Z]/_}
+	varname=DGIT_TEST_REAL_${varname^^}
+
+	eval "
+		: \${$varname:=\$real}
+		export $varname
+	"
+}
+
+t-tstunt () {
+	local tstunt=$tmp/tstunt
+	t-stunt-envvar PATH $tstunt
+	t-stunt-envvar PERLLIB $tstunt
+	local f
+	for f in "$@"; do
+		t-tstunt--save-real $f
+		f="./$f"
+		local d="$tstunt/${f%/*}"
+		mkdir -p $d
+		ln -sf "$troot/tstunt/$f" "$d"/.
+	done
+}
+
+t-tstunt-parsechangelog () {
+	t-tstunt dpkg-parsechangelog Dpkg/Changelog/Parse.pm
+}
+
+t-tstunt-lintian () {
+	t-tstunt lintian
+}
+
+t-tstunt-debuild () {
+	t-tstunt debuild
+}
+
+t-incoming-dsc () {
+	local dsc=${p}_${v}.dsc
+	incoming_dsc=$tmp/incoming/$dsc
+}
+
+t-ref-dsc-dgit () {
+	t-incoming-dsc
+	local val; val=`t-822-field $incoming_dsc Dgit`
+	val=$( perl -e '
+		$_=shift @ARGV;
+		die "Dgit $_ ?" unless m/^\w+\b/;
+		print $&,"\n" or die $!;
+	' "$val")
+	t-ref-same-val $incoming_dsc "$val"
+}
+
+t-apply-diff () {
+	local v1=$1
+	local v2=$2
+	(cd $troot/pkg-srcs;
+	 debdiff ${p}_${v1}.dsc ${p}_${v2}.dsc || test $? = 1) \
+	 | patch -p1 -u
+}
+
+t-gbp-unapplied-pq2qc () {
+	# does `gbp pq export'
+	# commits the resulting debian/patches on  qc/BRANCH
+	# leaves us on qc/BRANCH (eg "qc/quilt-tip"))
+	# qc/BRANCH is not fast-forwarding
+
+	gbp pq export
+
+	branch=`git symbolic-ref HEAD`
+	branch=${branch#refs/heads/}
+
+	case "$branch" in
+	*/*) fail "unexpected branch $branch" ;;
+	esac
+
+	git branch -f qc/$branch
+	git checkout qc/$branch
+	git add debian/patches
+	git commit -m 'Commit patch queue'
+}
+
+t-git-pseudo-merge () {
+	# like   git merge -s ours
+	if [ ! "$git_pseuomerge_opts" ]; then
+		if git merge --help \
+		 | grep -q allow-unrelated-histories; then
+			git_pseuomerge_opts='--allow-unrelated-histories'
+		fi
+		git_pseuomerge_opts+=' -s ours'
+	fi
+	git merge $git_pseuomerge_opts "$@"
+}
+
+t-gbp-example-prep-no-ff () {
+	t-archive example 1.0-1
+	t-git-none
+	t-worktree 1.0
+
+	cd example
+
+	t-dgit fetch
+
+	git checkout -b patch-queue/quilt-tip-2 patch-queue/quilt-tip
+	gbp pq rebase
+
+	echo '/* some comment */' >>src.c
+	git add src.c
+	git commit -m 'Add a comment to an upstream file'
+
+	t-gbp-unapplied-pq2qc
+
+	t-commit 'some updates' 1.0-2
+}
+
+t-gbp-example-prep () {
+	t-gbp-example-prep-no-ff
+
+	t-git-pseudo-merge \
+		-m 'Pseudo-merge to make descendant of archive' \
+		remotes/dgit/dgit/sid
+}
+
+t-t2u-native-prep () {
+    t-archive-none example
+    t-git-none
+    t-worktree 1.1
+
+    v=1.0-1
+
+    cd $p
+    git checkout -B master
+
+    printf '%s\n' -sn >debian/source/options
+    git add debian/source/options
+    git rm -f debian/source/format
+    git commit -m 'convert to 1.0 native'
+}
+
+t-make-badcommit () {
+	badcommit=$(
+		git cat-file commit HEAD | \
+		perl -pe 's/^committer /commiter /' | \
+		git hash-object -w -t commit --stdin
+	)
+	t-expect-fsck-fail $badcommit
+}
+
+t-make-orig () {
+	# leaves ust set to filename of orig tarball
+	local p=$1
+	local v=$2
+	local tag=${3-v$2}
+	ust=${p}_${v}.orig.tar.gz
+	GZIP=-1 git archive -o $bpd/$ust --prefix=${p}-${v}/ $tag
+}
+
+t-merge-conflicted-stripping-conflict-markers () {
+	local otherbranch=$1
+	local file=$2
+
+	t-expect-fail F:"Merge conflict in $file" \
+	git merge $otherbranch
+
+	perl -i~ -ne 'print unless m{^(?:\<\<\<|\>\>\>|===)}' "$file"
+	git add "$file"
+	git commit --no-edit
+}
+
+t-commit () {
+	local msg=$1
+	v=${2:-${majorv:-1}.$revision}
+	t-debchange \
+		--force-distribution -v$v --distribution ${3:-unstable} "$1"
+	git add debian/changelog
+	debcommit
+	revision=$(( ${revision-0} + 1 ))
+}
+
+t-dch-r-rune () {
+	local cmd="$1"; shift
+	local suite=${1-unstable}
+	$cmd -r -D "$suite" ''
+}
+
+t-dch-commit-r () {
+	t-dch-r-rune t-dch-commit "$@"
+}
+
+t-dch-commit () {
+	t-debchange "$@"
+	git commit -m "dch $*" debian/changelog
+}
+
+t-debchange () {
+	DEBEMAIL=dgit-tests@example.org $troot/tstunt/debchange "$@"
+}
+
+t-git-config () {
+	git config --global "$@"
+}
+
+t-drs () {
+ t-git-config dgit-distro.test-dummy.git-url "ext::$troot/drs-git-ext %S "
+ t-git-config dgit-distro.test-dummy.git-check true
+ t-git-config dgit-distro.test-dummy.git-create true
+	cp $troot/gnupg/{dd.gpg,dm.gpg,dm.txt,t2uokr.gpg} $tmp/.
+	cp $troot/suites $tmp/.
+	cp $troot/suites $tmp/suites-master
+
+	export DGIT_TEST_DRS_AUTH=$tmp/dd.gpg,a:$tmp/t2uokr.gpg,a:$tmp/dm.gpg,m$tmp/dm.txt
+
+	export t_check_pushed_master=t-check-pushed-master
+
+	drs_dispatch=$tmp/distro=test-dummy
+	mkdir $drs_dispatch
+
+	if [ "x$DGIT_TEST_INTREE" != x ]; then
+		ln -sf "$DGIT_TEST_INTREE" $drs_dispatch/dgit-live
+	fi
+
+	ln -sf $tmp/git $drs_dispatch/repos
+	ln -sf $tmp/suites $tmp/suites-master $tmp/dm.txt $drs_dispatch/
+	mkdir -p $drs_dispatch/keyrings $drs_dispatch/outgoing-mail
+	ln -sf $tmp/dd.gpg $drs_dispatch/keyrings/debian-keyring.gpg
+	ln -sf $tmp/dm.gpg $drs_dispatch/keyrings/debian-maintainers.gpg
+	touch $drs_dispatch/keyrings/debian-nonupload.gpg
+	ln -sf $tmp/t2uokr.gpg $drs_dispatch/debian-tag2upload.gpg
+	ln -sf /bin/true $drs_dispatch/policy-hook
+	echo example.org >>$drs_dispatch/preferred-mail-domains
+}
+
+t-dsd () {
+	t-drs
+ t-git-config dgit-distro.test-dummy.ssh "$troot/dsd-ssh"
+ t-git-config dgit-distro.test-dummy.git-check ssh-cmd
+ t-git-config dgit-distro.test-dummy.git-create true
+ t-git-config dgit-distro.test-dummy.git-url \
+		"ext::$troot/dsd-ssh X %S /dgit/test-dummy/repos"
+
+ t-git-config dgit-distro.test-dummy.diverts.drs /drs
+ t-git-config dgit-distro.test-dummy/drs.ssh "$troot/ssh"
+ t-git-config dgit-distro.test-dummy/drs.git-url $tmp/git
+ t-git-config dgit-distro.test-dummy/drs.git-check ssh-cmd
+ t-git-config dgit-distro.test-dummy/drs.git-create ssh-cmd
+
+	echo 'no-such-package* drs' >$drs_dispatch/diverts
+}
+
+t-policy-admin () {
+	: '(((((((((((((((((((((((((((((((((((((((('
+	${DGIT_INFRA_PFX}dgit-repos-admin-debian --repos $tmp/git "$@"
+	: '))))))))))))))))))))))))))))))))))))))))'
+}
+
+t-policy-nonexist () {
+	ln -sf no-such-file-or-directory $drs_dispatch/policy-hook
+}
+
+t-make-hook-link () {
+	local hook=$1 # in infra/
+	local linkpath=$2
+	hook=${DGIT_INFRA_PFX}$hook
+	case $hook in
+	*/*) 	;;
+	*)	hook=`type -P $hook` ;;
+	esac
+	ln -sf "$hook" $linkpath
+}
+
+t-policy () {
+	local policyhook=$1
+	t-make-hook-link $policyhook $drs_dispatch/policy-hook
+}
+
+t-debpolicy () {
+	t-dsd
+	t-policy dgit-repos-policy-debian
+
+	mkdir -p $tmp/git
+	t-policy-admin create-db
+}
+
+t-policy-periodic () {
+	: '(((((((((((((((((((((((((((((((((((((((('
+	${DGIT_REPOS_SERVER_TEST-dgit-repos-server} \
+		test-dummy $drs_dispatch '' --cron
+	: '))))))))))))))))))))))))))))))))))))))))'
+}
+
+t-debpush-settings () {
+	t2u_fake_https_dir="$tmp/fake_https_dir"
+	t2u_fake_salsa_host=gitlab.test-dummy.example.org
+	t2u_fake_salsa_project_id=20603
+	t2u_fake_salsa_repo="$t2u_fake_https_dir/$t2u_fake_salsa_host/$p.git"
+}
+t-t2u-settings () {
+	t-debpush-settings
+
+	export DGIT_DRS_SENDMAIL=$troot/tstunt/sendmail
+	export DGIT_DRS_DGIT=$troot/tstunt/dgit
+	t-chain-test-somehow
+
+	cp -r $troot/gnupg-t2uo/. $tmp/gnupg-t2uo
+}
+t-t2u-setup-repo () {
+	t-debpush-settings
+
+	mkdir -p -- "$t2u_fake_salsa_repo"
+	(set -e; cd "$t2u_fake_salsa_repo"; git init --bare)
+	git remote add salsa "$t2u_fake_salsa_repo"
+	# git branch --set-upstream-to complains, so
+	git config branch.master.remote salsa
+	git config branch.master.merge refs/heads/master
+}
+
+t-t2u-run-drs () {
+    # This function used to invoke 'dgit-repos-server --tag2upload4'
+    # directly; now it calls upon tag2upload-oracled to do that.
+    # This means that we have integration tests for
+    # tag2upload-oracled's functionality that don't depend upon
+    # tag2upload-service-manager, as tests/tests/t2u-integration does.
+    #
+    # We try to make the use of tag2upload-oracled here as transparent
+    # as possible in the hope that the fact we don't invoke
+    # dgit-repos-server directly doesn't interfere too much with using
+    # tests that call this function to debug dgit-repos-server
+    # independently of tag2upload-oracled.
+
+    local source=$1; shift
+    local exp_response=$1; shift
+    local version= worker_id= response= msg_rcvd=false ret=
+
+    # We want to carry on even if we can't find the tag, for
+    # one of the test cases in t2u.
+    git cat-file tag $tagname >../t2u/raw-tag ||:
+
+    local size="$(wc -c <../t2u/raw-tag)"
+
+    rm -f "$DGIT_TEST_TMP/sendmail.last"
+
+    cd ../t2u
+
+    t2u_oracled_response_scripts=('
+
+    echo "t2u-manager-ready"
+    read version
+    test "$version" = "t2u-oracle-version 4"
+    read worker_id worker_fidelity
+
+    echo ayt
+    read response
+    test "$response" = ack
+
+    echo "job fake-job '"${t2u_job_package-$p}"' '"$source"'"
+    printf "data-block %d\n" "'"$size"'"
+    cat raw-tag
+    echo data-end
+
+    read response
+    case "$response" in
+	"message "*) echo "${response:8}" |tee "$DGIT_TEST_TMP"/t2u-message ;;
+	*) fail "expected message, got $response" ;;
+    esac
+
+    read response
+    printf "%s\n" "$response" >t2u-response
+
+    ')
+    t-t2u-interact-t2u-oracled --no-restart-workers
+
+    read response <t2u-response
+
+    cd $tmp/$p
+
+    test "x $response" = "x $exp_response"
+
+    for expected_in_email in "$@"; do
+	egrep -e "$expected_in_email" "$DGIT_TEST_TMP/sendmail.last"
+    done
+}
+
+t-t2u-interact-t2u-oracled () {
+    t-set-t2u-oracled-cmd "$@"					\
+	--ssh="$troot/ssh"					\
+	--manager=t2u-service-manager-host    			\
+	--manager-socket="$tmp/o2m.s"				\
+	"${t2u_oracled_args[@]}"
+
+    rm -f "$tmp/o2m.s"
+    $troot/t2u-fake-manager "$tmp/o2m.s"				\
+			    "${t2u_oracled_response_scripts[@]}"	\
+			    ---						\
+			    "${t2u_oracled_cmd[@]}"
+}
+
+t-set-t2u-oracled-cmd () {
+    t2u_oracled_cmd=(
+	env
+	LC_MESSAGES=C
+        DGIT_DRS_ANY_URL=1
+	GNUPGHOME=$tmp/gnupg-t2uo
+	DGIT_TEST_SIGNING_KEY_OPTS=''
+    ${T2U_ORACLED_TEST-tag2upload-oracled} -D
+	--adt-virt="$troot/autopkgtest-virt-null-for-test"
+	--retain-tmp
+	--builder=builder@t2u-b
+	--noreply="test-dummy t2u service <noreply@example.org>"
+	--reply-to=reply-to@example.org
+	--copies=copies@example.org
+	"$@"
+	test-dummy
+	$tmp/distro=test-dummy
+	"$DGIT_TEST_DRS_AUTH"
+    )
+}
+
+t-t2u-exec-t2u-oracled () {
+    t-set-t2u-oracled-cmd "$@"
+    exec "${t2u_oracled_cmd[@]}"
+}
+
+t-git-debpush () {
+	${DGIT_DEBPUSH_TEST-git debpush}	\
+		--distro=test-dummy		\
+		-u Senatus "$@"
+}
+t-t2u-test () {
+	t-git-debpush "$@"
+
+	dep14tagref="refs/tags/$tagname"
+	dep14tag=$(t-git-get-ref $dep14tagref)
+
+	mkdir ../t2u
+	t-t2u-run-drs "$t2u_fake_salsa_repo" uploaded
+
+	cd "$t2u_fake_salsa_repo"
+	t-refs-same refs/heads/master
+	cd $tmp/$p
+
+	t-dgit fetch
+}
+
+t-t2u-succeeded () {
+	local buildinfo=${p}_${v}_source.buildinfo
+	gittarxz=${p}_${v}.git.tar.xz
+	for f in $buildinfo $gittarxz; do
+		test -f $tmp/incoming/$f
+		fgrep $f $tmp/incoming/${p}_${v}_source.changes
+	done
+
+	# devscripts should be there for both in- and out-of-tree test
+	# runs (unlike dgit/dgit-infrastructure) and its presence
+	# indicates it's not just example.dsc's actual installed build
+	# dependencies.
+	t-grep-mpat E:'^ devscripts \(= .+\),?$' \
+		    $tmp/incoming/$buildinfo
+
+	${DGIT_MGTF_TEST-mini-git-tag-fsck}		\
+		  --audit "$tmp/incoming/$gittarxz"	\
+		  --out-txt=$tmp/tag --out-sig=$tmp/sig	\
+		  --distro=test-dummy			\
+		 | cat -vet >$tmp/mgtf.got
+	git ls-files -z							\
+		  --format="%(objectmode) %(objectname)    %(path)"	\
+    		| cat -vet >$tmp/mgtf.exp
+	diff -u $tmp/mgtf.{exp,got}
+
+	git cat-file tag test-dummy/$v >$tmp/mgtf.whole-tag-real
+	cat $tmp/tag $tmp/sig >$tmp/mgtf.whole-tag-reconstructed
+	diff -u	$tmp/mgtf.whole-tag-{real,reconstructed}
+
+	for f in ${p}_${v}.dsc ${p}_${v}_source.changes; do
+		f=$tmp/incoming/$f
+		fgrep "Git-Tag-Tagger: dgit test git user" $f
+		local tag=$(t-git-get-ref-exact $dep14tagref)
+		local fp=bcd22cd83243b79d3dfac33ea3dbcbc039b13d8a
+		#        ^ Senatus's key, used for all t2u tests
+		t-grep-mpat E:"^Git-Tag-Info: tag=$tag fp=$fp\$" $f
+	done
+}
+
+t-t2u-gittarxz-unpack () {
+    cd $tmp
+    rm -rf t-gittarxz
+    mkdir -p t-gittarxz/.git
+    cd t-gittarxz/.git
+    t-tar-x --strip-components=1 -af $tmp/incoming/$gittarxz
+    cd ..
+    git config --local --bool core.bare false
+    git reset --hard $tagname
+}
+
+t-t2u-gittarxz-reproduced () {
+    # Assert that we have successfully reproduced the dgit view,
+    # in split.t, from the maintainer view, in $tagname.
+    git fetch ../$p refs/heads/split.p:refs/heads/split.p
+    t-output "" git diff --stat split.p split.t
+    cd $tmp/$p
+}
+
+t-buildproductsdir-config () {
+	bpd=$tmp/bpd
+	t-git-config dgit.default.build-products-dir $bpd
+	mkdir -p $bpd
+	cat <<END >>$tmp/.gbp.conf
+[buildpackage]
+export-dir = $bpd
+END
+}
+
+t-poll-loop () {
+    # t-poll-loop TIMEOUT_MS COMMAND...
+    # COMMAND should call t-poll-done
+    #
+    # In practice COMMAND will probably need to be a bespoke function
+    local poll_timeout=$1; shift
+    local poll_done=false
+    for poll_time in $($troot/poll-loop-schedule $poll_timeout); do
+	sleep $poll_time
+	"$@"
+	if $poll_done; then return; fi
+    done
+    fail "poll timed out (${poll_time}s): $*"
+}
+t-poll-done () {
+    poll_done=true
+}
+
+t-template-expect () {
+    local file=$1
+    cat >"$file.expected"
+    $troot/match-check-template "$file"{.expected,}
+}
+
+t-restrict () {
+	local restriction=$1
+	(cd $root; t-restriction-${restriction//,/ /} >&2)
+}
+
+t-dependencies () {
+	: "Hopefully installed: $*"
+}
+
+t-chain-test-somehow () {
+	export DGIT_TEST_TESTNAME="$testname"
+	export DGIT_TEST_TMPBASE="$tmpbase"
+	export ADTTMP=$tmp
+}
+
+t-chain-test () {
+	t-chain-test-somehow
+	local ct=$1
+	local d=${0%/*}
+	cd $root
+	exec "$d/$ct"
+}	
+
+t-alt-test () {
+	local t=${0##*/}
+	t-${t%%-*}
+	t-chain-test "${t#*-}"
+}
+
+t-git-config dgit.default.old-dsc-distro test-dummy
+t-git-config dgit-distro.test-dummy.policy-query-supported-ssh true
+
+for import in ${autoimport-gnupg}; do
+	case "$0" in
+	*/$import) ;;
+	*)
+		t-setup-import $import
+		;;
+	esac
+done

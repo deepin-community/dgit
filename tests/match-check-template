@@ -1,0 +1,187 @@
+#!/usr/bin/perl -w
+#
+# usage:
+#   match-check-template TEMPLATE FILE
+# Checks a text file against a template (a pattern).
+#
+# Template data is indented by 4 characters, with control information
+# in the first two and then two separating spaces.
+#
+# Template line syntax
+#   TR PATTERN
+# where T can be
+#   space   - ??? maps to .*, no way to escape ???
+#   E       - PATTERN is a perl regexp fragment
+#   L       - PATTERN is a literal string
+#   #       - this is a comment line, rest is ignored
+# and R can be
+#   space ? * +
+#
+# For regexp PATTERNs, don't use numbered capture groups: the supplied regexp
+# will be embedded in a longer regexp including many other PATTERNs.  Use
+# named capture groups, which should be distinct across all PATTERNs.
+#
+# If the template doesn't match, prints (to stdout) a report showing
+# the longest prefix of the template which *does* match,
+# and which template lines matched which file lines.
+#
+# TODO put this in chiark-utils and depend on it instead of including it
+# (with a transition plan).
+
+use strict;
+use Carp;
+
+sub read_file ($) {
+    my ($n) = @_;
+    local $/ = undef;
+    open F, '<', $n or die "$n: $!";
+    my $r = <F>;
+    F->error and die $!;
+    close F;
+    return $r;
+}
+
+die unless @ARGV==2 && $ARGV[0] !~ m/^-/;
+my ($exp_file) = @ARGV;
+our ($exp, $got) = map { read_file $_ } @ARGV;
+
+# This template file syntax is line based; files without trailing newline
+# can't sensibly be matched.  (If we didn't do this here, you could in
+# theory handle a file without a final newline but the missing newline
+# would have to be matched against the final line of the template.
+# Instead, to support missing final newlines, we should have some
+# bespoke other pattern syntax.
+sub no_nl_chk ($$) {
+    my ($desc, $data) = @_;
+    return if $data =~ m/\n$/s;
+    die "no newline at end of $desc\n";
+}
+no_nl_chk 'expected', $exp;
+no_nl_chk 'actual', $got;
+
+my $exp_line = 0;
+my @exp;
+# $exp[]{Re}      regexp for PATTERN (including the newline)
+# $exp[]{Line}    line number in template file
+# $exp[]{Repeat}  R from the input, but '' instead of ' '
+
+foreach (split m{(?<=\n)}, $exp, -1) {
+    $exp_line++;
+
+    next if m{^\#};
+
+    my $e = { Orig => $_ };
+
+    # pad (before the newline) with spaces, in case the line is short
+    s{^(.{0,3})(\n?)$}{ sprintf "%-4s%s", $1, $2 }e;
+
+    s{^(.)(.)  }{} or
+      die "$exp_file:$exp_line: missing spaces before pattern data\n";
+
+    my ($t, $r) = ($1, $2);
+
+    $e->{Re} =
+      $t eq ' ' ? join '.*', map { quotemeta $_ } split m/\Q???/, $_, -1 :
+      $t eq 'L' ? quotemeta $_ :
+      $t eq 'E' ? $_ :
+      die "$exp_file:$exp_line: unknown line type ($t)\n";
+
+    $r =~ m{^[ ?*+]$} or
+      die "$exp_file:$exp_line: unknown repeat mode ($r)\n";
+    $r =~ s{ }{};
+
+    $e->{Repeat} = $r;
+    $e->{Line} = $exp_line;
+
+    #use Data::Dumper;
+    #print STDERR Dumper($e);
+
+    push @exp, $e;
+}
+
+my $exp_whole = join '', map {
+    my $e = $_;
+    my $re = $e->{Re};
+    qr{$re}.$e->{Repeat}
+} @exp;
+
+#print STDERR ">>>>>$exp_whole<<<<<";
+
+# fast success path
+exit 0 if $got =~ m{$exp_whole}s;
+
+
+#---- failure reporting -----
+
+sub p { print @_ or die $!; }
+
+p "# mismatch! prefix that matches (| = actual output):\n";
+
+# use Data::Dumper;
+
+my ($l, $rhs, @cap);
+
+# Find the longest prefix that matches.  We iterate O(n), rather than
+# (eg) binary search, for simplicity.  If this ever turns out to be too slow
+# it could be improved.
+
+for ($l=@exp; ; $l--) {
+    $exp_whole = '^';
+    for (my $i=0; $i<$l; $i++) {
+	my $e = $exp[$i];
+	my $re = $e->{Re};
+	# Each template line's regexp is wrapped in a named capture group.
+	# That will let us print how the match went.
+	# We use capture groups with these long names to avoid any confusion
+	# if any PATTERN also uses capture groups.
+	$exp_whole .= sprintf "(?<%s>%s)",
+	  "template_match_check_$i",
+	  qr{$re}.$e->{Repeat};
+    }
+    # No $ at the end of $exp_whole - we expect to match a prefix of the file.
+    if ($got =~ m{$exp_whole}s) {
+	# Perl scoping rules for $' and $+ mean we must copy things here.
+	$rhs = $';
+	foreach (my $i=0; $i<$l; $i++) {
+	    push @cap, $+{"template_match_check_$i"};
+	}
+	last;
+    }
+    confess "$exp_whole ?" unless $l > 0;
+}
+
+my $i;
+for ($i=0; $i<$l; $i++) {
+    my $e = $exp[$i];
+    p $e->{Orig};
+    if ($cap[$i] ne '') {
+	# Every pattern which had a nonzero repeat will have a nonempty
+	# match text, since the pattern always ends in \n.
+	my $cap = $cap[$i];
+	my @l = split m{^}m, $cap, -1;
+	#use Data::Dumper;
+	#print STDERR Dumper($i, $cap, \@l);
+	p "|   $_" foreach @l;
+    } else {
+	# But ? and * might repeat 0 times and we should print *something*.
+	p "|(none)\n";
+    }
+}
+print "# mismatch:\n" or die $!;
+if ($i<@exp) {
+    my $e = $exp[$i];
+    # use Data::Dumper;
+    # p Dumper($exp_whole, $&, $', $e->{Orig}, $+{"template_match_check_$i"});
+    p $e->{Orig};
+} else {
+    p " (eof)\n";
+}
+if ($rhs) {
+    # $rhs is the whole unmatched suffix of the file
+    my @l = split "\n", $rhs, 2; # trailing newline was guaranteed earlier
+    p "|   $l[0]\n";
+} else {
+    p "|(eof)\n";
+}
+
+exit 1;

@@ -1,0 +1,197 @@
+#!/usr/bin/perl -w
+# wrapper to dispatch git ssh service requests
+#
+# Copyright (C) 2015-2016  Ian Jackson
+#
+#    This program is free software; you can redistribute it and/or modify
+#    it under the terms of the GNU General Public License as published by
+#    the Free Software Foundation; either version 3 of the License, or
+#    (at your option) any later version.
+#
+#    This program is distributed in the hope that it will be useful,
+#    but WITHOUT ANY WARRANTY; without even the implied warranty of
+#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#    GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+use strict;
+
+use Debian::Dgit::Infra; # must precede Debian::Dgit; - can change @INC!
+use Debian::Dgit;
+setup_sigwarn();
+
+use POSIX;
+
+open DEBUG, '>/dev/null' or die $!;
+if (@ARGV && $ARGV[0] eq '-D') {
+    shift @ARGV;
+    open DEBUG, '>&STDERR' or die $!;
+}
+
+die unless @ARGV>=1 && @ARGV<=2 && $ARGV[0] !~ m/^-/;
+our ($dispatchdir,$authrune) = @ARGV;
+
+$authrune //= join ':',
+    '@/debian-tag2upload.gpg,a',
+    '@/keyrings/debian-keyring.gpg,a',
+    '@/keyrings/debian-maintainers.gpg,m@/dm.txt',
+    '@/keyrings/debian-nonupload.gpg,m@/dm.txt';
+
+our $lre = $package_re;
+our $qre = '["'."']?";
+
+# $dispatchdir/distro=DISTRO should contain
+#    dgit-live          a clone of dgit (only if not using installed vsns)
+#    diverts
+#    repos/             }  by virtue of
+#    suites             }    dgit-repos-server's defaults relating to
+#    policy-hook        }    dispatch-dir
+# plus files required by the authrune (by default, keyrings/ and dm.txt)
+#
+# diverts should be list of
+#  <pat> [<divert-to>]
+# where <pat> is a package name pattern which may contain * or literals.
+# <divert-to> is for `git config dgit-distro.DISTRO.diverts.<divert-to>'
+
+our ($distro,$pkg, $d);
+our ($dgitlive,$repos,$suites,$diverts,$policyhook,$repo);
+
+sub checkdivert ($) {
+    my ($df) = @_;
+    if (!open DIV, '<', $df) {
+	$!==ENOENT or die $!;
+	return undef;
+    } else {
+	while (<DIV>) {
+	    s/^\s+//; s/\s+$//;
+	    next unless m/\S/;
+	    next if m/^\#/;
+	    my $divert;
+	    if (s/\s+(\S+)$//) { $divert=$1; }
+	    s/[^-+._0-9a-zA-Z*]/\\$&/g;
+	    s/\*/.*/g;
+	    printf DEBUG 'DISPATCH DIVERT ^%s$ %s'."\n",
+	        $_, ($divert // '(undef)');
+	    if ($pkg =~ m/^$_$/) { return $divert; }
+	}
+	DIV->error and die $!;
+	close DIV;
+	return undef;
+    }
+}
+	
+sub finish () {
+    close STDOUT or die $!;
+    exit 0;
+}
+
+sub prl ($) {
+    print @_, "\n" or die $!;
+}
+	
+sub selectpackage ($$;$) {
+    my $divertfn;
+    ($distro,$pkg, $divertfn) = @_; # $distro,$pkg must have sane syntax
+
+    $d = "$dispatchdir/distro=$distro";
+
+    if (!stat $d) {
+	die $! unless $!==ENOENT;
+	die "unknown distro ($distro)\n";
+    }
+
+    $dgitlive=    "$d/dgit-live";
+    $repos=       "$d/repos";
+    $suites=      "$d/suites";
+    $policyhook=  "$d/policy-hook";
+
+    $authrune =~ s/\@/$d/g;
+
+    my $divert = checkdivert("$d/diverts");
+    if (defined $divert) {
+	$divertfn //= sub {
+	    die "diverted to $divert incompletely or too late!\n";
+	};
+	$divertfn->($divert);
+	die;
+    }
+
+    $repo = "$repos/$pkg.git";
+
+    print DEBUG "DISPATCH DISTRO $distro PKG $pkg\n";
+}
+
+sub hasrepo () {
+    if (stat $repo) {
+	-d _ or die;
+	return 1;
+    } else {
+	$!==ENOENT or die $!;
+	return 0;
+    }
+}
+
+sub serve_up ($) {
+    my ($repo) = @_;
+    exec qw(git upload-pack --strict --timeout=1000), $repo;
+    die "exec git: $!";
+}
+
+sub perllib_local () {
+    $ENV{'PERLLIB'} //= '';
+    $ENV{'PERLLIB'} =~ s#^(?=.)#:#;
+    $ENV{'PERLLIB'} =~ s#^# $ENV{DGIT_TEST_INTREE} // $dgitlive #e;
+}
+
+sub dispatch () {
+    local ($_) = $ENV{'SSH_ORIGINAL_COMMAND'} // '';
+
+    if (m#^: dgit ($lre) git-check ($lre) ;#) {
+	selectpackage $1,$2, sub { prl "divert @_"; finish; };
+	prl hasrepo;
+	finish;
+    } elsif (
+	m#^${qre}git-([-a-z]+) ${qre}/dgit/($lre)/repos/($lre)\.git${qre}$#
+	) {
+	my $cmd=$1;
+	selectpackage $2,$3;
+	if ($cmd eq 'receive-pack') {
+	    perllib_local();
+	    my $s = "$dgitlive/infra/dgit-repos-server";
+	    $s = "dgit-repos-server" if !stat_exists $s;
+	    exec $s, $distro, $d, $authrune, qw(--ssh);
+	    die "exec $s: $!";
+	} elsif ($cmd eq 'upload-pack') {
+	    $repo='$repos/_empty' unless hasrepo;
+	    serve_up $repo;
+	} else {
+	    die "unsupported git operation $cmd ($_)";
+	}
+    } elsif (
+ m#^${qre}git-upload-pack ${qre}/dgit/($lre)/(?:repos/)?_dgit-repos-server\.git${qre}$#
+	) {
+	my $distro= $1;
+	# if running installed packages, source code should come
+	# some other way
+	serve_up("$dispatchdir/distro=$1/dgit-live/.git");
+    } elsif (m#^${qre}git-upload-pack\s#) {
+	die "unknown repo to serve ($_).  use dgit, or for server source ".
+	    "git clone here:/dgit/DISTRO/repos/_dgit-repos-server.git";
+    } elsif (m#^: dgit ($lre) policy-client-query ($lre) ($lre) ([^;]*) ;#) {
+	my $query_op = $3;
+	my $query_args = $4;
+	selectpackage $1,$2;
+        my @cmd = ($policyhook,$distro,$repos,$dgitlive,$d,
+		   'policy-client-query', $pkg, $query_op,
+		   split / /, $query_args);
+	perllib_local();
+	exec @cmd;;
+	die "exec $cmd[0]: $!";
+    } else {
+	die "unsupported operation ($_)";
+    }
+}
+
+dispatch;

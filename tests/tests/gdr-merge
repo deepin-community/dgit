@@ -1,0 +1,60 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp-noarchive
+
+cd $p
+
+t-gdr-prep-new-upstream 2.1
+git tag v2.1 upstream
+
+t-some-changes before
+t-git-debrebase quick
+
+: ----- prepare LH branch -----
+
+git checkout -b other
+t-some-changes other '' -other
+
+echo 'other-conflict' >>debian/zorkmid
+git commit -m 'other-conflict' debian/zorkmid
+
+: ----- prepare RH branch -----
+
+git checkout master
+t-some-changes us-1 '' -us
+t-git-debrebase new-upstream 2.1
+t-some-changes us-2 '' -us
+echo 'us-conflict' >>debian/zorkmid
+git commit -m 'us-conflict' debian/zorkmid
+t-git-debrebase quick
+
+: ----- introduce a vanilla merge -----
+
+t-merge-conflicted-stripping-conflict-markers other debian/zorkmid
+
+: ----- expect to be able to merge -----
+
+t-git-debrebase
+t-gdr-good laundered
+
+t-refs-same-start
+t-ref-head
+t-git-debrebase
+t-ref-head
+
+t-git-debrebase scrap
+
+t-some-changes after
+t-git-debrebase
+t-gdr-good laundered
+
+t-dgit quilt-fixup
+t-gdr-made-patches
+
+t-ok

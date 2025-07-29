@@ -1,0 +1,97 @@
+#!/usr/bin/perl -w
+#
+# This file is part of the dgit test suite.
+#
+# Copyright (C)2004-2015 Best Practical Solutions, LLC
+# Copyright (C)2019      Ian Jackson
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+#
+# invocation protocol:
+#
+#   http-static-server >port-file tests/tmp/$thing/aq
+#
+# Will write the allocated port number to port-file.
+# Then we fork and the parent exits 0.
+# If port-file is unlinked, we exit.
+
+use strict;
+use IO::Handle;
+
+our ($webroot) = @ARGV;
+our $port = '';
+
+# HTTP::Server::Simple handles requests in the main process so it
+# must redirect and close STDOUT.  So transplant STDOUT to CHECK.
+open CHECK, ">& STDOUT" or die $!;
+open STDOUT, ">/dev/null" or die $!;
+
+sub stat_type_check () {
+    die "[$port, $webroot] stdout not ta plain file"
+	unless -f _;
+}
+
+stat CHECK or die $!;
+stat_type_check();
+
+sub start_polling_fstat () {
+    our $polling_pid = $$;
+    $SIG{ALRM} = sub {
+	return unless $$ = $polling_pid;
+	stat CHECK or die $!;
+	my $nlink = (stat _)[3];
+	exit 0 unless $nlink;
+	stat_type_check(); # doesn't seem possible to fail but check anyway
+	alarm(1);
+    };
+    alarm(1);
+}
+
+package ServerClass;
+
+use strict;
+use Socket qw(AF_INET SOCK_STREAM);
+use Socket qw(AF_INET SOCK_STREAM unpack_sockaddr_in);
+use IO::Handle;
+
+use base qw(HTTP::Server::Simple::CGI);
+use HTTP::Server::Simple::Static;
+
+sub handle_request {
+    my ($self, $cgi) = @_;
+
+    if (!$self->serve_static($cgi, $::webroot)) {
+	print "HTTP/1.0 404 Not found\r\n";
+	print $cgi->header;
+	print $cgi->start_html('Not found'),
+	    $cgi->h1('Not found'),
+	    $cgi->end_html
+	    if uc $cgi->request_method eq 'GET';
+    }
+}
+
+sub port () { return 0; }
+
+sub after_setup_listener () {
+    my $sn = getsockname HTTP::Server::Simple::HTTPDaemon or die $!;
+    ($main::port,) = unpack_sockaddr_in $sn;
+    print main::CHECK $port, "\n" or die $!;
+    flush main::CHECK or die $!;
+    my $c = fork // die $!;
+    exit 0 if $c;
+    ::main::start_polling_fstat();
+}
+
+package main;
+
+our $server = ServerClass->new();
+$server->run();

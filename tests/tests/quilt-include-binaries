@@ -1,0 +1,130 @@
+#!/bin/bash
+set -e
+. tests/lib
+t-tstunt-parsechangelog
+
+p=example
+
+mkdir example
+cd example
+git init
+
+r=1
+v0=1.0-$r
+t-dgit import-dsc $troot/pkg-srcs/${p}_${v0}.dsc +import
+
+git reset --hard import
+
+cat >debian/source/include-binaries <<END
+# comment
+
+enoent/file
+bins/file
+debian/binfile
+
+../bin-in-parent
+$tmp/bin-with-abs
+debian/../../bin-tricky-in-parent
+.git/index
+bins/bin-via-link
+$tmp/
+..
+debian/../..
+END
+
+for f in bin-in-parent bin-with-abs bin-tricky-in-parent bin-via-link; do
+	echo SHOULD-NOT-APPEAR-$f >../$f
+done
+
+git add debian/source/include-binaries
+git commit -m 'specify include binaries'
+
+t-prep () {
+	local m=$1
+	git checkout -B work master
+	t-git-next-date
+	r=$(( $r + 1 ))
+	v=1.0-$r
+	t-dch-commit -v$v -m "$1"
+}
+
+t-make-some-bin () {
+	local file="$1"
+	perl -e '
+		use autodie;
+		print pack "H*", "d41d8cd98f00b204e9800998ecf8427e";
+		print "\n'"$file $r"'\n";
+	' >"$file"
+}
+
+t-try-build-source () {
+	LC_MESSAGES=C LANGUAGE=C \
+	t-dgit --quilt=nofix --since-version=$v0 "$@" build-source
+}
+
+t-roundtrips-1 () {
+ 	t-try-build-source "$@" 2>&1 | tee ../build-source-out.$r
+	t-dgit import-dsc ../${p}_${v}.dsc +reimport
+	set +e
+	git --no-pager grep SHOULD-NOT-APPEAR reimport --
+	rc=$?
+	set -e
+	test $rc = 1
+	git diff --exit-code work reimport --
+}
+
+t-roundtrips () {
+	t-roundtrips-1
+	t-roundtrips-1 --include-dirty
+}
+
+t-prep 'straightforward'
+
+mkdir bins
+t-make-some-bin bins/file
+git add bins/file
+git commit -m 'add bin'
+
+t-roundtrips
+
+for wrongness in 			\
+ "forbidden path component '..'" 	\
+ "path starts with '.git'" 		\
+; do
+	grep "$wrongness" ../build-source-out.$r
+done
+
+t-prep 'bin via link'
+
+linktarget="$tmp"
+: 'make a new orig, gnagh'
+mkdir ../repack
+cd ../repack
+tar axf $troot/pkg-srcs/${p}_1.0.orig.tar.gz
+ln -s "$linktarget" example/bins
+tar zcf ../${p}_1.1.orig.tar.gz example
+cd ../example
+cp ../${p}_1.{0,1}.orig-docs.tar.gz
+
+v=1.1-$r
+t-dch-commit -v$v -m 'update upstream'
+
+ln -s "$linktarget" bins
+git add bins
+git commit -m 'add bins'
+
+t-roundtrips
+
+t-prep 'ignored weird file'
+
+mkdir bins
+t-mkfifo bins/file
+
+t-roundtrips-1 -wdn
+
+grep "'bins/file' not a plain file or directory" ../build-source-out.$r
+
+t-expect-fail E:'dpkg-source: error:  *new version is named pipe' \
+t-try-build-source -wdn --ignore-dirty
+
+t-ok

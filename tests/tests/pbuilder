@@ -1,0 +1,42 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+suitespecs+=' stable'
+
+t-buildproductsdir-config
+
+t-prep-newpackage example 1.0
+
+cd $p
+
+t-commit "make a commit" 1.1 stable
+
+t-tstunt pbuilder
+
+t-expect-fail "dgit: error: you asked for a builder but your debbuildopts didn't ask for any binaries -- is this really what you meant?" \
+t-dgit -v0 --pbuilder="$troot/pretend-pbuilder" pbuilder -S
+
+t-expect-fail "dgit: error: we must build a .dsc to pass to the builder but your debbuiltopts forbids the building of a source package; cannot continue" \
+t-dgit -v0 --pbuilder="$troot/pretend-pbuilder" pbuilder -b
+
+# it would be nice to try passing -g on the end of the following line
+# to confirm it gets massaged into -A, but the example package is
+# RC-buggy in that it doesn't build with -A ..
+t-dgit -v0 --pbuilder="$troot/pretend-pbuilder" --pbuilder!:--no-source-only-changes pbuilder
+
+t-dgit -wgf push-built --new
+
+t-pushed-good master stable
+t-pushed-good-check-changes
+
+# check we actually built binaries
+t-push-included example_1.1_all.deb
+
+# this purpose of this is to check that the _source.changes that was
+# merged is the one that dgit made, not something pbuilder made (this
+# works because the -v$v in the above is handled by dgit and not
+# passed on to pbuilder)
+grep -F "example (1.0)" $changes_filename
+
+t-ok

@@ -1,0 +1,60 @@
+#!/bin/bash
+set -e
+# convenience script for running the tests outside adt-run
+# usage: tests/using-intree tests/run-all [-p|--progressive] [tests/tests/*]
+#
+# passing `:' as if it were tests/tests/something is
+#  a no-op and therefore just means to (delete and) set up the tmpdir
+
+set -o pipefail
+shopt -s inherit_errexit # #514862, wtf
+
+while [ $# != 0 ]; do
+	case "$1" in
+	--progressive|-p)	shift; export DGIT_TESTS_PROGRESSIVE=y;;
+	--)			shift; break ;;
+	-*)	echo >&2 "run-all: unknown option $1"; exit 20 ;;
+	*)			break ;;
+	esac
+done
+
+ncpus=$(nproc || echo 1)
+jcpus=-j$(( ncpus * 167 / 100 ))
+
+if [ "x$DGIT_TESTS_TMPDIR" != x ]; then
+	tmpdir="$PWD"
+	tmpdir="${tmpdir#/}"
+	tmpdir="${tmpdir//!/!#!}"
+	tmpdir="${tmpdir//\//!}"
+	tmpdir="$DGIT_TESTS_TMPDIR/$tmpdir"
+	rm -f tests/tmp
+	ln -ns -- "$tmpdir" tests/tmp
+else
+	tmpdir=tests/tmp
+fi
+
+case "$DGIT_TESTS_PROGRESSIVE" in
+''|n)
+	rm -rf -- "$tmpdir"
+	;;
+esac
+
+mkdir -p -- "$tmpdir"
+
+case "$1" in
+:)
+	shift
+	if [ $# = 0 ]; then exit 0; fi
+	;;
+esac
+
+if [ $# != 0 ]; then
+	set TESTSCRIPTS="$*"
+fi
+
+export DGIT_GNUPG_STUNT_ERRLOG=$( tty -s ||: )
+
+(
+ set -x
+ exec make $jcpus -k -f tests/Makefile "$@"
+) 2>&1 |tee tests/tmp/run-all.log

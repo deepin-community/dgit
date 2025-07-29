@@ -1,0 +1,20 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive pari-extra 3-2~dummy1
+t-git-none
+t-worktree 3-1
+cd $p
+old=`git rev-parse HEAD`
+
+# pretend that we previously fetched 3-1 (otherwise, dgit
+# is entitled to, and will, make a new history)
+git update-ref refs/remotes/dgit/dgit/sid refs/heads/dgit/sid
+
+t-dgit pull
+
+t-cloned-fetched-good
+t-has-ancestor $old
+
+t-ok

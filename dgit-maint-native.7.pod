@@ -1,0 +1,127 @@
+=head1 NAME
+
+dgit - tutorial for package maintainers of Debian-native packages
+
+=head1 INTRODUCTION
+
+This document describes elements of a workflow for using B<dgit> to
+maintain a Debian package that uses one of the native source formats
+("1.0" & "3.0 (native)").
+
+=over 4
+
+=item
+
+We expect that your git history is fast-forwarding.
+
+=item
+
+You should be prepared to tolerate a small amount of
+ugliness in your git history
+in the form of merges which stitch
+the dgit-generated archive view
+into your maintainer history.
+
+This is to handle uploads that were not made with dgit,
+such as the uploads you made before switching to this workflow,
+or NMUs.
+
+=back
+
+=head2 Benefits
+
+=over 4
+
+=item
+
+Benefit from dgit's safety catches.  In particular, ensure that your
+upload always matches exactly your git HEAD.
+
+=item
+
+Provide a better,
+more detailed history
+to downstream dgit users.
+
+=item
+
+Incorporate an NMU with one command.
+
+=back
+
+=head1 FIRST PUSH WITH DGIT
+
+You do not need to do anything special to your tree
+to push with dgit.
+
+Simply prepare your git tree in the usual way, and then:
+
+=over 4
+
+    % dgit -wgf --trust-changelog push-source
+
+=back
+
+(Do not make any tags yourself: dgit push will do that.)
+
+You may use B<dgit pbuilder> or B<dgit cowbuilder>
+instead of B<dgit sbuild>;
+see dgit(1) for the syntax of those subcommands.
+
+The --trust-changelog option tells dgit that you are expecting
+that your git history is not a descendant of the
+history which dgit synthesised from the previous
+non-dgit uploads.
+
+dgit will make a merge commit
+on your branch
+but without making any code changes
+(ie, a pseudo-merge)
+so that your history,
+which will be pushed to the dgit git server,
+is fast forward from the dgit archive view.
+
+Alternatively,
+if this was the first ever dgit push of the package to this suite,
+you can avoid this merge commit by
+passing C<--deliberately-not-fast-forward>
+instead of C<--trust-changelog>.
+This avoids introducing a new origin commit into
+your git history.
+
+=head1 SUBSEQUENT PUSHES
+
+=over 4
+
+    % dgit -wgf push-source
+
+=back
+
+That's it.
+
+=head1 INCORPORATING AN NMU
+
+=over 4
+
+    % dgit pull
+
+=back
+
+That's it.
+
+Or, if you would prefer to review the changes,
+you can do this:
+
+=over 4
+
+    % dgit fetch
+    % dgit diff HEAD..dgit/dgit/sid
+
+=back
+
+If you do not merge the NMU into your own git history,
+the next push will then require I<--trust-changelog>.
+
+=head1 SEE ALSO
+
+dgit(1), dgit(7)

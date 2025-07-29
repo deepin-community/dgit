@@ -1,0 +1,27 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+
+my $operation = shift;
+die "pbuilder: you should use me only to build, dgit"
+  unless ($operation eq "build" || $operation eq "b");
+
+my $debbuildopts = undef;
+my $distribution = undef;
+GetOptions('debbuildopts=s' => \$debbuildopts,
+           'distribution=s' => \$distribution)
+    or die;
+
+# ignore user args; last argument has to be the .dsc filename
+my $dsc = $ARGV[-1];
+die "pbuilder: last argument has wrong file extension"
+  unless ($dsc =~ m/^(.*)_.*\.dsc$/);
+
+system "dpkg-source -x $dsc pbuilder";
+chdir 'pbuilder';
+system <<END
+dpkg-buildpackage --changes-option=-DDistribution=$distribution $debbuildopts
+END

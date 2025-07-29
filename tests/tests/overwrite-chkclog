@@ -1,0 +1,50 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import examplegit
+
+cd example
+
+suite=stable
+
+t-commit 'No changes, just send to stable' '' stable
+
+t-dgit -wgf build
+
+t-expect-fail 'Perhaps debian/changelog does not mention' \
+t-dgit push-built --trust-changelog stable
+
+t-dgit setup-mergechangelogs
+
+t-expect-fail 'fix conflicts and then commit the result' \
+git merge dgit/dgit/stable
+
+git checkout master which
+EDITOR=: git commit
+
+perl -i~ -pe 's/^(\w+ \(\S+\)) stable/$1 UNRELEASED/ if $.>1' debian/changelog
+git add debian/changelog
+git commit -m 'UNRELEASED changelog'
+
+t-dgit -wgf build
+
+t-expect-fail E:'Distribution.*is UNRELEASED' \
+t-dgit push-built --trust-changelog stable
+
+git revert --no-edit 'HEAD^{/UNRELEASED changelog}'
+
+t-dgit -wgf build
+
+perl -i~ -pe 's/^(\w+ \(\S+)(\) stable)/$1+X$2/ if $.>1' debian/changelog
+git add debian/changelog
+git commit -m 'Break changelog'
+
+t-expect-fail 'Perhaps debian/changelog does not mention' \
+t-dgit push-built --trust-changelog stable
+
+git revert --no-edit 'HEAD^{/Break changelog}'
+
+t-dgit push-built --overwrite stable
+
+t-ok

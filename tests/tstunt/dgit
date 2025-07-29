@@ -1,0 +1,8 @@
+#!/bin/bash
+# NB This requires use of t-chain-test-somehow.
+set -e${DGIT_TEST_NDEBUG-x}
+troot=$DGIT_TEST_TROOT
+tmp=$DGIT_TEST_TMP
+. "$troot/lib-core"
+t-set-intree
+t-dgit "$@"

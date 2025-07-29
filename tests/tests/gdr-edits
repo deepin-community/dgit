@@ -1,0 +1,53 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp
+
+git config --global init.defaultBranch trunk
+
+cd $p
+
+v=2.0-3
+t-dch-commit -v $v -m testing
+
+t-git-debrebase analyse |tee ../anal.1
+cat ../anal.1
+
+t-some-changes edits
+
+t-dch-commit-r
+
+git tag t.before
+
+t-git-debrebase
+t-gdr-good laundered
+
+t-dgit push-source
+t-gdr-good pushed-interop
+
+t-expect-fail E:'add a new changelog stanza.*and try again' \
+t-dgit push-source
+
+git branch before-noop
+
+t-git-next-date
+t-git-debrebase
+t-git-debrebase stitch
+t-gdr-good pushed-interop
+
+t-refs-same-start
+t-ref-same refs/heads/before-noop
+t-ref-head
+
+git checkout -b some-new-branch
+t-some-changes 2nd-maintainer
+t-dgit quilt-fixup
+t-gdr-made-patches
+#  NB quilt-fixup doesn't always manage to call gdr;
+#  push does, since it will make the pseudomerge first
+
+t-ok

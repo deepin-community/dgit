@@ -1,4 +1,101 @@
 #!/usr/bin/make -f
 
+# dgit
+# Integration between git and Debian-style archives
+#
+# Copyright (C)2013-2019 Ian Jackson
+# Copyright (C)2019      Sean Whitton
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+export prefix=/usr
+
 %:
 	dh $@
+
+override_dh_gencontrol:
+	dh_gencontrol
+	set -e; \
+	 cd debian/dgit; \
+	 v=$$(perl -ne 'print if s/^version:\s+//i' DEBIAN/control); \
+	 perl -i -pe "s/UNRELEASED/$$v/g if m/###substituted###/" usr/bin/dgit
+
+override_dh_auto_clean:
+	dh_auto_clean
+	make -C po clean
+
+globalperl=/usr/share/perl5
+
+override_dh_auto_install: specpkg_install_gdp \
+ specpkg_install_gdr \
+ specpkg_install_infra
+	make install prefix=/usr DESTDIR=debian/dgit
+	make -C po install prefix=/usr DESTDIR=../debian/tmp \
+		SUPPRESS_PO_UPDATE=1 S=''
+	mv debian/dgit/usr/bin/git-playtree-setup debian/dgit/usr/share/dgit
+	make -C po4a install DESTDIR=../debian/tmp S=''
+
+override_dh_installsystemduser:
+	dh_installsystemduser --name=tag2upload-oracled --no-enable
+
+override_dh_missing:
+	dh_missing --fail-missing
+
+specpkg_install_gdp: p=git-debpush
+
+specpkg_install_gdr: p=git-debrebase
+specpkg_install_gdr: pm=GDR
+
+specpkg_install_infra: p=dgit-infrastructure
+specpkg_install_infra: pm=Infra
+
+define specpkg_install_common
+	make install-$(tok) prefix=/usr DESTDIR=debian/$(p) perldir=$(specperl)
+endef
+
+specpkg_install_gdp: tok=gdp
+specpkg_install_gdp: specperl=/usr/share/dgit/gdp/perl5
+specpkg_install_gdp:
+	$(specpkg_install_common)
+	set -x; perl -i -pe 'next unless m/###substituted###/;' \
+ -e 's{^(git_playtree_setup)=.*}{$$1=/usr/share/$p/git-playtree-setup};' \
+		debian/$(p)/usr/bin/*
+
+specpkg_install_%: tok=$*
+specpkg_install_%: specperl=/usr/share/dgit/$(tok)/perl5
+specpkg_install_%:
+	$(specpkg_install_common)
+#	# Most of the Perl modules in this package live in
+#	# $(specperl).  The exception is Debian::Dgit::Infra, which
+#	# lives in $(globalperl) and adds $(specperl) to @INC.
+#	# We also abuse this for git-playtree-setup.  In .debs, this
+#	# goes in the per-.deb @INC dir.  See Dgit.pm::playtree_setup.
+	set -ex; \
+	 base=debian/$(p); \
+	 mod=Debian/Dgit/$(pm).pm; \
+	 src=$${base}$(specperl)/$${mod}; \
+	 dst=$${base}$(globalperl)/$${mod}; \
+	 mkdir -p $${dst%/*}; \
+	 mv -f $$src $$dst; \
+	 install -m 755 git-playtree-setup $${base}$(specperl); \
+	 perl -i -p -e 'next unless m/###substituted###/;' \
+		-e 'next unless s/^# (?=unshift \@INC,)//;' \
+		-e 'die unless s{q\{\S+\}}{q{$(specperl)}};' \
+		 $$dst
+
+debian/tests/control: tests/enumerate-tests debian/tests/control.in
+	$< gencontrol >$@.new && mv -f $@.new $@
+
+debian/tests/control: tests/lib-core tests/lib-restricts
+debian/tests/control: tests/tests $(wildcard tests/tests/*[^~#])

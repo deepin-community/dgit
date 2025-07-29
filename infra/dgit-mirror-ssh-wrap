@@ -1,0 +1,42 @@
+#!/usr/bin/perl -w
+
+# Intended to be used as a restricted command.
+# Usage:
+#    command="/path/to/dgit-mirror-ssh-wrap /srv/repos/ .git --"
+# or similar.  The two substantive arguments are literals.
+# The example permits writes to directories
+#    /srv/repos/$PACKAGE.git
+# where $PACKAGE has the syntax of a Debian package name.
+
+use strict;
+
+die 'bad usage' unless @ARGV==3 && $ARGV[2] eq '--';
+our ($prefix, $suffix) = @ARGV;
+
+$prefix =~ s/\W/\\$&/g;
+$suffix =~ s/\W/\\$&/g;
+
+my $package = qr{[0-9a-z][-+.0-9a-z]*};
+my $d = qr{$prefix$package$suffix};
+
+my $command = $ENV{SSH_ORIGINAL_COMMAND}
+    // die "missing SSH_ORIGINAL_COMMAND";
+
+#print STDERR ">$d<\n";
+
+$_ = $command;
+
+m{^rsync --server -lHtre\.iLsfxC --timeout=\d+ --delete --safe-links \. $d$}
+||
+m{^rsync --server -lHtre\.iLsfxCIv --timeout=\d+ --delete --safe-links \. $d$}
+||
+m{^rsync --server -lHtre\.iLsfxCIvu --timeout=\d+ --delete --safe-links \. $d$}
+
+# To add a new command pattern, add || m{^ ... $} above.
+# The pattern should contain $d where the per-package destination
+# directory would go.
+
+or die "dgit-mirror-ssh-wrap: unexpected command (rsync upgraded?):
+ $command\n";
+
+exec $& or die $!;

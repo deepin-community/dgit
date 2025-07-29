@@ -1,0 +1,531 @@
+# SOME DESCRIPTIVE TITLE
+# Copyright (C) YEAR Free Software Foundation, Inc.
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2025-03-28 17:38+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. type: =head1
+#: ../dgit.1:3 ../dgit.7:2 ../dgit-user.7.pod:1 ../dgit-nmu-simple.7.pod:1
+#: ../dgit-maint-native.7.pod:1 ../dgit-maint-merge.7.pod:1
+#: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
+#: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
+#: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#: ../git-debpush.1.pod:1 ../tag2upload.5.pod:1
+#, no-wrap
+msgid "NAME"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:1826 ../dgit.7:23 ../dgit-user.7.pod:463
+#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:125
+#: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
+#: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
+#: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
+#: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
+#: ../git-debpush.1.pod:272 ../tag2upload.5.pod:224
+#, no-wrap
+msgid "SEE ALSO"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-nmu-simple.7.pod:5 ../dgit-sponsorship.7.pod:5
+msgid "INTRODUCTION AND SCOPE"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-maint-gbp.7.pod:105 ../dgit-sponsorship.7.pod:177
+#, no-wrap
+msgid ""
+"    % dgit --gbp push-source\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:3
+msgid "dgit-sponsorship - tutorial for Debian upload sponsorship, using git"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:7
+msgid ""
+"This tutorial describes how a Debian sponsored contributor and a sponsoring "
+"DD (or DM)  can collaborate and publish using git."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:12
+msgid ""
+"The sponsor must be intending to use dgit for the upload.  (If the sponsor "
+"does not use dgit, it is not possible to properly publish a sponsee's git "
+"branch.)"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:17
+msgid ""
+"It is best if the sponsee also uses dgit; but also covered (later on) is the "
+"case where the sponsee provides a proposed upload in source package form, "
+"but the sponsor would like to work in git."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:22
+msgid ""
+"This tutorial does not provide a checklist for the sponsor's review.  Both "
+"contributors are expected to be familiar with Debian packaging and Debian's "
+"processes, and with git."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-sponsorship.7.pod:26
+msgid "SPONSEE WORKFLOW"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:28
+msgid "This section is addressed to the sponsee:"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-sponsorship.7.pod:30
+msgid "General"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:32
+msgid ""
+"You should prepare the package as if you were going to upload it with C<dgit "
+"push-source> or C<dgit push-built> yourself."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:35
+msgid "For a straightforward NMU, consult L<dgit-nmu-simple(7)>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:37
+msgid ""
+"If you are the (prospective) maintainer, you can adopt any suitable (dgit-"
+"compatible)  git workflow.  The L<dgit-maint-*(7)> tutorials describe some "
+"of the possibilities."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-sponsorship.7.pod:42
+msgid "Upload preparation"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:44
+msgid ""
+"You should go through all of the steps a self-uploading maintainer would do, "
+"including building for ad hoc tests, and checking via a formal build (eg "
+"using C<dgit sbuild>)  that the package builds on sid (or the target "
+"release)."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:50
+msgid ""
+"At the point where you would, if you were a DD, do the actual upload by "
+"running dgit push, you hand off to your sponsor."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:56
+msgid ""
+"If you were going to use one of the C<--quilt=> options to dgit, or C<dgit --"
+"gbp> or C<dgit --dpm>, you must specify that in your handoff email - see "
+"below."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-sponsorship.7.pod:62
+msgid "git+origs based handoff"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:64
+msgid "The elements of the handoff consists of:"
+msgstr ""
+
+#. type: =item
+#: ../dgit-sponsorship.7.pod:68 ../dgit-sponsorship.7.pod:72
+#: ../dgit-sponsorship.7.pod:80 ../dgit-sponsorship.7.pod:85
+msgid "*"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:70
+msgid "The git branch."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:74
+msgid ""
+"Any .orig tarballs which will be needed, or sample git-deborig(1), git-"
+"archive(1)  or gbp-buildpackage(1)  command(s) to generate them."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:82
+msgid ""
+"A sample dgit push-source command, containing any dgit --quilt=, --gbp or --"
+"dpm option needed"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:87
+msgid ""
+"Plus of course all the usual information about the state of the package, any "
+"caveats or areas you would like the sponsor to focus their review, "
+"constraints about upload timing, etc."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:94
+msgid ""
+"If the handoff is done by email, the elements above should be a in a single, "
+"signed, message.  This could be an RFS submission against the sponsorship-"
+"requests pseudo-package."
+msgstr ""
+
+#. type: =head3
+#: ../dgit-sponsorship.7.pod:99
+msgid "git branch"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:103
+msgid ""
+"The sponsee should push their HEAD as a git branch to any suitable git "
+"server.  They can use their own git server; salsa is another possibility."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:108
+msgid ""
+"The branch names used by the sponsee on their local machine, and on the "
+"server, do not matter."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:111
+msgid ""
+"Instead, the sponsee should include the git commit id of their HEAD in their "
+"handover email."
+msgstr ""
+
+#. type: =head3
+#: ../dgit-sponsorship.7.pod:117
+msgid "orig tarballs"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:121
+msgid ""
+"If there are any .origs that are not in the archive already, the sponsor "
+"will need them as part of the upload.  (When using a native source package "
+"format, no origs are needed.)"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:125
+msgid ""
+"If the sponsee generated these tarballs with git-deborig(1), git-archive(1)  "
+"or gbp-buildpackage(1), they can simply include a sample invocation of git-"
+"deborig(1) or git-archive(1)  or ensure that a suitable gbp.conf is present "
+"in the source package to generate the tarball."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:134
+msgid ""
+"Otherwise, the simplest approach is to commit the orig tarballs with "
+"pristine-tar(1), e.g."
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-sponsorship.7.pod:140
+#, no-wrap
+msgid ""
+"    % pristine-tar commit ../foo_1.2.3.orig.tar.xz upstream/1.2.3\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:144
+msgid ""
+"and be sure to push the pristine-tar branch.  If you are using git-"
+"buildpackage(1), just pass I<--git-pristine-tar> and I<--git-pristine-tar-"
+"commit>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:148
+msgid ""
+"Alternatively, the sponsee can put them on a suitable webserver, or attach "
+"to the e-mail, if they are small."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:153
+msgid ""
+"The sponsee should quote sha256sums of the .origs in their handoff email, "
+"unless they supplied commands to generate them."
+msgstr ""
+
+#. type: =head3
+#: ../dgit-sponsorship.7.pod:159
+msgid "quilt options"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:163
+msgid ""
+"Some workflows involve git branches which are not natively dgit-compatible.  "
+"Normally dgit will convert them as needed, during push."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:167
+msgid ""
+"Supply a sample \"dgit push-source\" command including any C<--gbp> (aka C<--"
+"quilt=gbp>), C<--dpm> (aka C<--quilt=dpm>), or other C<--quilt=> option they "
+"need to use.  e.g."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-sponsorship.7.pod:183
+msgid "SPONSOR WORKFLOW"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:185 ../dgit-sponsorship.7.pod:277
+msgid "This part is addressed to the sponsor:"
+msgstr ""
+
+#. type: =head2
+#: ../dgit-sponsorship.7.pod:187
+msgid "Receiving and validating the sponsorship request"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:189
+msgid "You should check the signature on the email."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:191
+msgid ""
+"Use C<git fetch> or C<git clone> to obtain the git branch prepared by your "
+"sponsee, and obtain any .origs mentioned by the sponsee (to extract .origs "
+"committed with pristine-tar, you can use origtargz(1), or use \"gbp clone --"
+"pristine-tar\".)"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:198
+msgid ""
+"Check the git commit ID of the sponsee's branch tip, and the sha256sums of "
+"the .origs, against the handoff email."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:202
+msgid "Now you can check out the branch tip, and do your substantive review."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-sponsorship.7.pod:205
+msgid "Dealing with branches that want --quilt="
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:207
+msgid ""
+"If your sponsee mentioned a C<--quilt> option, and you don't want to grapple "
+"with their preferred tree format, you can convert their tree into the "
+"standard dgit view:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-sponsorship.7.pod:213
+#, no-wrap
+msgid ""
+"    % dgit -wgf --quilt=foo --dgit-view-save=unquilted quilt-fixup\n"
+"    % git checkout unquilted\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:218
+msgid ""
+"You should check that what you're looking at is a descendant of the "
+"sponsee's branch."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-sponsorship.7.pod:221
+msgid "Some hints which may help the review"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:223
+msgid ""
+"C<dgit fetch sid> will get you an up-to-date C<refs/remotes/dgit/dgit/sid> "
+"showing what's in the archive already."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:227
+msgid ""
+"C<dgit -wgf --damp-run push-source> will check that dgit can build an "
+"appropriate source package."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:230
+msgid ""
+"There is no need to run debdiff.  dgit will not upload anything that doesn't "
+"unpack to exactly the git commit you are pushing, so you can rely on what "
+"you see in C<git diff>."
+msgstr ""
+
+#. type: =head2
+#: ../dgit-sponsorship.7.pod:235
+msgid "Doing the upload"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:237
+msgid ""
+"When you have completed your source review, and use C<dgit -wgf [--"
+"quilt=...] sbuild -A -C> or similar, to to the build, and then C<dgit -wgf "
+"[--quilt=...] push-source> or C<dgit -wgf [--quilt=...] push-built> to do "
+"the upload."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:246
+msgid ""
+"Check whether the sponsee made a debian/I<version> tag.  If they did, ensure "
+"you have their tag in the repository you are pushing from, or pass C<--no-"
+"dep14tag>.  This avoids identically named, non-identical tags, which can be "
+"confusing."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:253
+msgid ""
+"(It is possible to upload from the quilt-cache dgit view.  If you want to do "
+"this, B<do not> pass the C<--quilt> or C<--gbp> or C<--dpm> options again, "
+"and B<do> pass C<--no-dep14tag>, since the debian/I<version> tag should go "
+"on the sponsee's branch.)"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:261
+msgid ""
+"If this was the first upload done with dgit, you may need to pass C<--trust-"
+"changelog> to dgit."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:266
+msgid ""
+"Alternatively, if this was the first ever dgit push of the package to this "
+"suite, you can pass C<--deliberately-not-fast-forward> instead of C<--trust-"
+"changelog>.  This avoids introducing a new origin commit into the dgit view "
+"of the sponsee's git history which is unnecessary and could be confusing."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-sponsorship.7.pod:275
+msgid "SPONSORING A NON-GIT-USING SPONSEE"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:279
+msgid ""
+"If your sponsee does not use git, you can still do your review with git, and "
+"use dgit for the upload."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:283
+msgid ""
+"Your sponsee will provide you with a source package: that is, a .dsc and the "
+"files it refers to.  Obtain these files, and check signatures as "
+"appropriate.  Then:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-sponsorship.7.pod:290
+#, no-wrap
+msgid ""
+"    % dgit clone PACKAGE\n"
+"    % cd PACKAGE\n"
+"    % dgit import-dsc /path/to/sponsee's.dsc +sponsee\n"
+"    % git checkout sponsee\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:297
+msgid "Or for an entirely new package:"
+msgstr ""
+
+#. type: verbatim
+#: ../dgit-sponsorship.7.pod:301
+#, no-wrap
+msgid ""
+"    % mkdir PACKAGE\n"
+"    % cd PACKAGE\n"
+"    % git init\n"
+"    % dgit -pPACKAGE import-dsc /path/to/sponsee's.dsc +sponsee\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:308
+msgid ""
+"This will leave you looking at the sponsee's package, formatted as a dgit "
+"branch."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:311
+msgid ""
+"When you have finished your review and your tests, you can do the dgit push-"
+"source (or dgit sbuild and dgit push-built)  directly from the \"sponsee\" "
+"branch."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:317
+msgid ""
+"You will need to pass C<--trust-changelog> to dgit push for every successive "
+"upload.  This disables a safety catch which would normally spot situations "
+"where changes are accidentally lost.  When your sponsee is sending you "
+"source packages - perhaps multiple source packages with the same version "
+"number - these safety catches are inevitably ineffective."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-sponsorship.7.pod:328
+msgid "dgit(1), dgit(7), dgit-nmu-simple(7), dgit-maint-*(7)"
+msgstr ""

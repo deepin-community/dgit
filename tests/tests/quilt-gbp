@@ -1,0 +1,74 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+# `dgit build-source` cleans before applying patches.  However, the
+# clean targets of 3.0 (quilt) packages are allowed to assume that
+# patches are applied.  If they are not, the clean targets can
+# misbehave in basically two ways:
+#
+# - fail to clean everything
+# - error out and stop the build
+#
+# In this test, what we want to see is whether dgit detects that quilt
+# fixup cannot be linear because the user has failed to pass --gbp.
+# So we need to ensure the package's clean target does not error out,
+# because that blocks dgit attempting quilt linearisation.  This
+# environment variable tells the example package's clean target not to
+# error out if it notices that patches have not yet been applied.
+export DGIT_TEST_TOLERATE_UNPATCHED_CLEAN=true
+
+t-tstunt-parsechangelog
+
+t-gbp-example-prep
+
+git config --global init.defaultBranch trunk
+
+t-expect-fail 'quilt fixup cannot be linear' \
+  t-dgit build-source
+
+t-dgit --quilt=gbp --dgit-view-save=split.b1 build-source
+git rev-parse split.b1
+
+t-dgit --quilt=gbp --gbp-pq=no-such-command-gbp build-source
+
+echo spong >debian/pointless-for-dgit-test
+git add debian/pointless-for-dgit-test
+git commit -m Pointless
+
+t-expect-fail no-such-command-gbp \
+t-dgit --quilt=gbp --clean=git --gbp-pq=no-such-command-gbp build-source
+
+test-push-1 () {
+	t-refs-same-start
+	t-ref-head
+}
+
+test-push-2 () {
+	t-dgit --quilt=gbp --dgit-view-save=split.p push-built
+
+	t-gbp-pushed-good
+}
+
+test-push-1
+
+t-dgit --quilt=gbp --clean=git --dgit-view-save=split.b build-source
+
+t-expect-fail "HEAD specifies a different tree to $p" \
+  t-dgit push-built
+
+test-push-2
+
+echo wombat >>debian/pointless-for-dgit-test
+git add debian/pointless-for-dgit-test
+git commit -m 'Pointless 2'
+
+t-commit 'Check pseudomerge' 1.0-3
+
+test-push-1
+
+t-dgit --quilt=gbp --clean=git --dgit-view-save=split.b build-source
+
+test-push-2
+
+t-ok

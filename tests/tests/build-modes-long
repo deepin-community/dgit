@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-build-modes
+
+bm-prep
+
+for build in			\
+	'source'		\
+	'any'			\
+	'all'			\
+	'binary'		\
+	'full'			\
+	'source,any'		\
+	'all,any'		\
+; do
+	act="build --build=$build"
+
+	case "$build" in
+	*source*|*full*)		e_source=true	;;
+	*)				e_source=false	;;
+	esac
+
+	case "$build" in
+	*binary*|*any*all*|*all*any*)
+			e_targets='build binary'		;;
+	*any*)		e_targets='build-arch binary-arch'	;;
+	*all*)		e_targets='build-indep binary-indep'	;;
+	esac
+
+	cleanmodes="$cleanmodes_default"
+	real_act="$act"
+	bm-act-iterate
+done
+
+t-ok

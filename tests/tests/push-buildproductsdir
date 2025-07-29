@@ -1,0 +1,39 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive pari-extra 3-1
+t-git pari-extra 3-1
+
+t-dgit clone $p
+
+cd $p
+t-cloned-fetched-good
+
+v=3-2~dummy1
+t-apply-diff 3-1 $v
+debcommit -a
+
+t-refs-same-start
+t-ref-head
+
+t-dgit --dpkg-buildpackage:-d build
+
+cd ..
+mkdir bpd
+mv $p*_* bpd/
+mv bpd/*orig* .
+cd $p
+
+t-dgit --build-products-dir=../bpd push-built
+
+t-pushed-good dgit/sid
+
+cd ..
+for f in ${p}_*.orig.*; do
+	in_ddd=$( stat -c %D:%i -L $f )
+	in_bpd=$( stat -c %D:%i -L bpd/$f )
+	test $in_ddd = $in_bpd
+done
+
+t-ok

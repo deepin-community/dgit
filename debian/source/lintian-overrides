@@ -1,0 +1,4 @@
+#file-contains-trailing-whitespace debian/changelog *
+unknown-runtime-tests-restriction x-dgit-*
+missing-debian-source-format
+older-source-format 1.0

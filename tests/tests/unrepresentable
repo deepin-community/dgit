@@ -1,0 +1,140 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.1
+
+ln -s $troot/pkg-srcs/${p}_${v%-*}.orig.tar.* .
+
+cd $p
+
+make_singlepatch () {
+	git checkout quilt-tip-1.1
+	echo >debian/source/options single-debian-patch
+	git add debian/source/options
+	git commit -m single-debian-patch debian/source/options
+}
+
+quilt_mode=smash
+case $DGIT_TEST_TESTNAME in
+	*-single-dpkg) make_singlepatch ;;
+	*-single-git) quilt_mode=single ;;
+	*-*) fail 'unknown test name' ;;
+	*) ;;
+esac
+
+quilt-fixup () {
+	t-dgit -wgf --quilt=$quilt_mode quilt-fixup
+}
+build-source () {
+	t-dgit --quilt=nofix -wgf build-source
+}
+run-push () {
+	t-dgit -wgf --dry-run push-built --new
+}
+badly-raw () {
+	wrongmsg=$1
+	t-expect-fail "$1" \
+	quilt-fixup
+}
+badly-late-raw () {
+	quilt-fixup
+	build-source
+	t-expect-fail "$1" \
+	run-push
+}
+good () {
+	quilt-fixup
+	build-source
+	run-push
+}
+
+start () {
+	path=$1
+	git checkout quilt-tip-1.1~0;
+}
+finish () {
+	case "$DGIT_TEST_TESTNAME" in
+	*-single-dpkg)	expected=${2-$1} ;;
+	*)		expected=$1 ;;
+	esac
+
+	case "$expected" in
+	NOTHING) ;;
+	*)	git commit -m "$expected" ;;
+	esac
+
+	case "$expected" in
+	GOOD:*|NOTHING)
+		good
+		;;
+
+	EP:*)
+		wrongmsg="${expected#*:}"
+		badly-raw E:"cannot represent change: $wrongmsg .*: $path"
+		;;
+
+	LATE-EP:*)
+		# quilt-fixup and dpkg-source succeeded, but dgit push failed.
+		# This is rather a poor outcome.
+		case "$DGIT_TEST_TESTNAME" in
+		*-single-dpkg)	;;
+		*) fail 'push failure, other than with single-debina-patch' ;;
+		esac
+
+		wrongmsg="${expected#*:}"
+		badly-late-raw "E:$wrongmsg.*: $path"
+		;;
+
+	E:* | [^A-Z]*)
+		badly-raw "$expected"
+		;;
+
+	*)	fail 'bad pattern' ;;
+
+	esac
+}
+
+start orig-symlink
+	ln -sf NEWTARGET orig-symlink
+	git add orig-symlink
+finish EP:'modified symlink' 'new version is symlink'
+
+start orig-symlink
+	git rm -f orig-symlink
+finish EP:'deletion of symlink' LATE-EP:'Mode change from 20000 to 000000'
+
+start new
+	ln -s hi new
+	git add new
+finish EP:'creation .* symlink' 'new version is symlink'
+
+start src.c
+	git rm src.c
+finish GOOD:deleted
+
+start orig-exec
+	git rm orig-exec
+finish GOOD:'deleted exec'
+
+start orig-unwriteable
+	git rm -f orig-unwriteable
+finish GOOD:'deleted unwritable'
+
+start src.c 
+	chmod +x src.c
+	git add src.c
+finish GOOD:chmod LATE-EP:'Mode change from 644 to 755'
+
+start newx
+	echo hi >newx
+	chmod 755 newx
+	git add newx
+finish GOOD:add-755 LATE-EP:'Mode change from 644 to 755'
+
+start nothing
+finish NOTHING NOTHING
+
+t-ok

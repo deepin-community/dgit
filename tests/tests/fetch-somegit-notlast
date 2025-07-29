@@ -1,0 +1,15 @@
+#!/bin/bash
+
+set -e
+. tests/lib
+
+t-git pari-extra 3-1
+t-archive pari-extra 3-2~dummy1
+
+t-dgit clone $p
+cd $p
+
+t-cloned-fetched-good
+t-has-ancestor test-dummy/3-1
+
+t-ok

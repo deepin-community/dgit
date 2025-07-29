@@ -1,0 +1,12 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-build-modes
+
+t-dependencies sbuild
+t-restrict x-dgit-schroot-build
+
+bm-gbp-example-acts				\
+	"sbuild -c $schroot --arch-all"		\
+
+t-ok

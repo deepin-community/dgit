@@ -1,0 +1,108 @@
+# -*- sh -*-
+
+baredebian-test-vars () {
+	quiltmode=baredebian
+	v=1.0-1
+	suite=sid
+	uv=${v%-*}
+	uvtag=v$uv
+	origbase=${p}_${uv}.orig
+	xorigcomps=''
+}
+
+baredebian-tarball-mode () {
+	git tag -d $uvtag
+	uvtag=''
+	quiltmode=baredebian+tarball
+}
+
+baredebian-test-minimum () {
+	t-expect-fail 'contradicts clean mode git-ff' \
+	t-dgit -wgf --dgit-view-save=split.f1 --$quiltmode quilt-fixup
+
+	t-dgit -wn --dgit-view-save=split.f1 --$quiltmode quilt-fixup
+}
+
+baredebian-test-core-prepush () {
+	t-tar-x --strip-components=1 -af ../$origbase.tar.*
+	for comp in $xorigcomps; do
+		mkdir $comp
+		cd $comp
+		t-tar-x --strip-components=1 -af ../../$origbase-$comp.tar.*
+		cd ..
+	done
+
+	cd debian
+	git clean -xdff
+	git checkout HEAD -- .
+	cd ..
+
+	# Now we are in this insane state that people seem to expect
+
+	export QUILT_PATCHES=debian/patches
+	quilt push -a
+
+	git add -Af .
+	git reset .pc
+	git diff --cached --exit-code split.f1 -- :/ :!/debian
+	git diff --exit-code HEAD..split.f1 -- :/debian
+	git reset
+
+	quilt new made-with-quilt
+	quilt add src.c
+	echo //omg >>src.c
+	quilt refresh
+
+	git add debian/patches/.
+	t-commit 'extra patch made with quilt' 1.0-2
+
+	t-refs-same-start
+	t-ref-head
+	t-dgit -wn --quilt=$quiltmode --dgit-view-save=split.b quilt-fixup
+	t-ref-head
+}
+
+baredebian-test-core-push () {
+	dpkg-buildpackage -uc -us --build=source
+	# ^ Do this by hand here not because we expect users to do this
+	#   (rather than dgit build), but so that we can check that our
+	#   output is the same as users are used to.
+
+	t-dgit -wn --quilt=$quiltmode --dgit-view-save=split.p --new \
+		push-built
+}
+
+baredebian-test-core-postpush () {
+	git merge-base --is-ancestor HEAD     split.p
+	if [ "$uvtag" ]; then
+		git merge-base --is-ancestor $uvtag split.p
+		set +e; git merge-base HEAD $uvtag; rc=$?; set -e; [ $rc = 1 ]
+	fi
+
+	git clean -xdff
+	# t-pushed-good-* wants a clean tree to start with, but this
+	#  workflow expects a mess
+
+	t-splitbrain-pushed-good-start
+	t-splitbrain-pushed-good--unpack
+
+	find . -mindepth 1 -maxdepth 1		\
+		\! -path ./debian		\
+		\! -path ./.git			\
+		-print0				\
+		| xargs -0r rm -rf --
+
+	t-splitbrain-pushed-good-end-made-dep14
+}
+
+baredebian-test-core () {
+	baredebian-test-core-prepush
+	baredebian-test-core-push
+	baredebian-test-core-postpush
+}
+
+baredebian-test () {
+	baredebian-test-vars
+	baredebian-test-minimum
+	baredebian-test-core
+}

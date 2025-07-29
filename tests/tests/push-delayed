@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+t-buildproductsdir-config
+
+t-prep-newpackage example 1.0
+
+cd $p
+
+t-refs-same-start
+t-ref-head
+
+mkdir $tmp/incoming/DELAYED{,/7-day}
+
+t-dgit push-source --delayed=7 --new
+
+dcmd mv $tmp/incoming/DELAYED/7-day/${p}_${v}_source.changes $tmp/incoming/
+
+t-pushed-good master
+t-push-was-source-only
+
+t-ok

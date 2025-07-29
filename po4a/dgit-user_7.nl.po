@@ -1,0 +1,982 @@
+# Dutch translations for po package dgit-user_7
+# Copyright (C) 2018 Free Software Foundation, Inc.
+# This file is distributed under the same license as the po package.
+# Automatically generated, 2018.
+# Frans Spiesschaert <Frans.Spiesschaert@yucom.be>, 2018, 2024-2025.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: dgit_12.11_dgit-user_7\n"
+"POT-Creation-Date: 2025-03-28 17:38+0000\n"
+"PO-Revision-Date: 2025-04-12 22:04+0200\n"
+"Last-Translator: Frans Spiesschaert <Frans.Spiesschaert@yucom.be>\n"
+"Language-Team: Debian Dutch l10n Team <debian-l10n-dutch@lists.debian.org>\n"
+"Language: nl\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Poedit 3.2.2\n"
+
+#. type: =head1
+#: ../dgit.1:3 ../dgit.7:2 ../dgit-user.7.pod:1 ../dgit-nmu-simple.7.pod:1
+#: ../dgit-maint-native.7.pod:1 ../dgit-maint-merge.7.pod:1
+#: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
+#: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
+#: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#: ../git-debpush.1.pod:1 ../tag2upload.5.pod:1
+#, no-wrap
+msgid "NAME"
+msgstr "NAAM"
+
+#. type: =head1
+#: ../dgit.1:1826 ../dgit.7:23 ../dgit-user.7.pod:463
+#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:125
+#: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
+#: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
+#: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
+#: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
+#: ../git-debpush.1.pod:272 ../tag2upload.5.pod:224
+#, no-wrap
+msgid "SEE ALSO"
+msgstr "ZIE OOK"
+
+#. type: =head1
+#: ../dgit.7:4 ../dgit-user.7.pod:27 ../dgit-nmu-simple.7.pod:35
+#, no-wrap
+msgid "SUMMARY"
+msgstr "SAMENVATTING"
+
+#. type: textblock
+#: ../dgit-user.7.pod:3
+msgid "dgit-user - making and sharing changes to Debian packages, with git"
+msgstr ""
+"dgit-user - maken en delen van wijzigingen aan Debian-pakketten, met git"
+
+#. type: =head1
+#: ../dgit-user.7.pod:5 ../dgit-maint-native.7.pod:5
+#: ../dgit-maint-merge.7.pod:5 ../dgit-maint-gbp.7.pod:5
+#: ../dgit-maint-debrebase.7.pod:5 ../dgit-downstream-dsc.7.pod:5
+#: ../dgit-maint-bpo.7.pod:5 ../git-debrebase.5.pod:5 ../tag2upload.5.pod:5
+msgid "INTRODUCTION"
+msgstr "INLEIDING"
+
+#. type: textblock
+#: ../dgit-user.7.pod:7
+msgid ""
+"dgit lets you fetch the source code to every package on your system as if "
+"your distro used git to maintain all of it."
+msgstr ""
+"dgit laat u toe de broncode van elk pakket op uw systeem op te halen alsof "
+"uw distributie gebruik maakte van git om die allemaal te onderhouden."
+
+#. type: textblock
+#: ../dgit-user.7.pod:11
+msgid ""
+"You can then edit it, build updated binary packages (.debs)  and install and "
+"run them.  You can also share your work with others."
+msgstr ""
+"U kunt deze broncode dan bewerken, bijgewerkte binaire pakketten (.deb's) "
+"bouwen en ze installeren en uitvoeren. U kunt uw werk ook delen met anderen."
+
+#. type: textblock
+#: ../dgit-user.7.pod:16
+msgid ""
+"This tutorial gives some recipes and hints for this.  It assumes you have "
+"basic familiarity with git.  It does not assume any initial familiarity with "
+"Debian's packaging processes."
+msgstr ""
+"Deze handleiding geeft hiervoor enkele procedures en suggesties. Ze gaat "
+"ervan uit dat u beschikt over basale noties van git. Ze veronderstelt niet "
+"dat u enigszins vertrouwd bent met de processen van pakketbeheer van Debian."
+
+#. type: textblock
+#: ../dgit-user.7.pod:21
+msgid ""
+"If you are a package maintainer within Debian; a DM or DD; and/or a sponsee: "
+"this tutorial is not for you.  Try L<dgit-nmu-simple(7)>, L<dgit-maint-"
+"*(7)>, or L<dgit(1)> and L<dgit(7)>."
+msgstr ""
+"Indien u een pakketonderhouder bent binnen Debian, een Onderhouder (DM "
+"-Debian Maintainer) of Ontwikkelaar (DD - Debian Developper) van Debian, en/"
+"of iemand wiens werk gesponsord wordt, dan is deze handleiding niet voor u. "
+"Raadpleeg in dat geval L<dgit-nmu-simple(7)>, L<dgit-maint-*(7)>, of "
+"L<dgit(1)> en L<dgit(7)>."
+
+#. type: textblock
+#: ../dgit-user.7.pod:29
+msgid "(These runes will be discussed later.)"
+msgstr "(Deze runen worden later besproken.)"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:33
+#, no-wrap
+msgid ""
+"    % dgit clone glibc jessie,-security\n"
+"    % cd glibc\n"
+"    % curl 'https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=28250;mbox=yes;msg=89' | patch -p1 -u\n"
+"    % git commit -a -m 'Fix libc lost output bug'\n"
+"    % gbp dch -S --since=dgit/dgit/sid --ignore-branch --commit\n"
+"    % sudo apt-get build-dep .\n"
+"    % dpkg-buildpackage -uc -b\n"
+"    % sudo dpkg -i ../libc6_*.deb\n"
+"\n"
+msgstr ""
+"    % dgit clone glibc jessie,-security\n"
+"    % cd glibc\n"
+"    % curl 'https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=28250;mbox=yes;msg=89' | patch -p1 -u\n"
+"    % git commit -a -m 'Reparatie van libc-bug waarbij verlies van uitvoer optreedt'\n"
+"    % gbp dch -S --since=dgit/dgit/sid --ignore-branch --commit\n"
+"    % sudo apt-get build-dep .\n"
+"    % dpkg-buildpackage -uc -b\n"
+"    % sudo dpkg -i ../libc6_*.deb\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:44
+msgid "Occasionally:"
+msgstr "Sporadisch:"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:48 ../dgit-user.7.pod:242
+#, no-wrap
+msgid ""
+"    % git clean -xdf\n"
+"    % git reset --hard\n"
+"\n"
+msgstr ""
+"    % git clean -xdf\n"
+"    % git reset --hard\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:53
+msgid "Later:"
+msgstr "Later:"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:57
+#, no-wrap
+msgid ""
+"    % cd glibc\n"
+"    % dgit pull jessie,-security\n"
+"    % gbp dch -S --since=dgit/dgit/sid --ignore-branch --commit\n"
+"    % dpkg-buildpackage -uc -b\n"
+"    % sudo dpkg -i ../libc6_*.deb\n"
+"\n"
+msgstr ""
+"    % cd glibc\n"
+"    % dgit pull jessie,-security\n"
+"    % gbp dch -S --since=dgit/dgit/sid --ignore-branch --commit\n"
+"    % dpkg-buildpackage -uc -b\n"
+"    % sudo dpkg -i ../libc6_*.deb\n"
+"\n"
+
+#. type: =head1
+#: ../dgit-user.7.pod:65
+msgid "FINDING THE RIGHT SOURCE CODE - DGIT CLONE"
+msgstr "DE JUISTE BRONCODE VINDEN - DGIT CLONE"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:69
+#, no-wrap
+msgid ""
+"    % dgit clone glibc jessie,-security\n"
+"    % cd glibc\n"
+"\n"
+msgstr ""
+"    % dgit clone glibc jessie,-security\n"
+"    % cd glibc\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:74
+msgid ""
+"dgit clone needs to be told the source package name (which might be "
+"different to the binary package name, which was the name you passed to \"apt-"
+"get install\")  and the codename or alias of the Debian release (this is "
+"called the \"suite\")."
+msgstr ""
+"Aan dgit clone moet de naam van het broncodepakket opgegeven worden (die kan "
+"verschillen van de naam van het binaire pakket; het was deze laatste naam "
+"die u opgaf aan \"apt-get install\") en de codenaam of de alias van de "
+"Debian-release (welke men de \"suite\" noemt)"
+
+#. type: =head2
+#: ../dgit-user.7.pod:80
+msgid "Finding the source package name"
+msgstr "De naam van het broncodepakket te weten komen"
+
+#. type: textblock
+#: ../dgit-user.7.pod:82
+msgid ""
+"For many packages, the source package name is obvious.  Otherwise, if you "
+"know a file that's in the package, you can look it up with dpkg:"
+msgstr ""
+"Bij veel pakketten is de naam van het broncodepakket voor de hand liggend. "
+"Anders kunt u hem opzoeken met dpkg, indien u een bestand kent dat in het "
+"pakket zit:"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:88
+#, no-wrap
+msgid ""
+"    % dpkg -S /lib/i386-linux-gnu/libc.so.6 \n"
+"    libc6:i386: /lib/i386-linux-gnu/libc.so.6\n"
+"    % dpkg -s libc6:i386\n"
+"    Package: libc6\n"
+"    Status: install ok installed\n"
+"    ...\n"
+"    Source: glibc\n"
+"\n"
+msgstr ""
+"    % dpkg -S /lib/i386-linux-gnu/libc.so.6 \n"
+"    libc6:i386: /lib/i386-linux-gnu/libc.so.6\n"
+"    % dpkg -s libc6:i386\n"
+"    Package (Pakket): libc6\n"
+"    Status (Toestand): install ok installed (geïnstalleerd)\n"
+"    ...\n"
+"    Source (Bron): glibc\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:98
+msgid ""
+"(In this example, libc6 is a \"multi-arch: allowed\" package, which means "
+"that it exists in several different builds for different architectures.  "
+"That's where C<:i386> comes from.)"
+msgstr ""
+"(In dit voorbeeld is\n"
+"libc6 een pakket van het type \"multi-arch: allowed\",\n"
+"hetgeen betekent dat het voorkomt in verschillende andere vormen/"
+"compilaties\n"
+"voor verschillende architecturen.\n"
+"Daarvandaan komt C<:i386>.)"
+
+#. type: =head2
+#: ../dgit-user.7.pod:104
+msgid "Finding the Debian release (the \"suite\")"
+msgstr "De Debian-release (de \"suite\") te weten komen"
+
+#. type: textblock
+#: ../dgit-user.7.pod:106
+msgid ""
+"Internally, Debian (and derived) distros normally refer to their releases by "
+"codenames.  Debian also has aliases which refer to the current stable "
+"release etc.  So for example, at the time of writing Debian C<jessie> "
+"(Debian 8) is Debian C<stable>; and the current version of Ubuntu is "
+"C<yakkety> (Yakkety Yak, 16.10).  You can specify either the codename "
+"C<jessie> or the alias C<stable>.  If you don't say, you get C<sid>, which "
+"is Debian C<unstable> - the main work-in progress branch."
+msgstr ""
+"Intern verwijzen Debian (en de ervan afgeleide distributies) gewoonlijk naar "
+"hun releases met een codenaam. Debian gebruikt ook aliassen die verwijzen "
+"naar de huidige stabiele release, enz. Bijvoorbeeld, bij het schrijven van "
+"deze handleiding was Debian C<jessie> (Debian 8) Debian C<stable> (de "
+"stabiele uitgave van Debian), en was de actuele versie van Ubuntu C<yakkety> "
+"(Yakkety Yak, 16.10). U kunt zowel de codenaam C<jessie> als de alias "
+"C<stable> opgeven. Indien u niets opgeeft, dan krijgt u C<sid>, welke Debian "
+"C<unstable>  is - de centrale tak van de voortgaande ontwikkeling."
+
+#. type: textblock
+#: ../dgit-user.7.pod:117
+msgid "If you don't know what you're running, try this:"
+msgstr ""
+"Indien u niet weet met welke suite u werkt, kunt u het volgende gebruiken:"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:121
+#, no-wrap
+msgid ""
+"    % grep '^deb' /etc/apt/sources.list\n"
+"    deb http://the.earth.li/debian/ jessie main non-free contrib\n"
+"    ...\n"
+"    %\n"
+"\n"
+msgstr ""
+"    % grep '^deb' /etc/apt/sources.list\n"
+"    deb http://the.earth.li/debian/ jessie main non-free contrib\n"
+"    ...\n"
+"    %\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:128
+msgid ""
+"For Debian, you should add C<,-security> to the end of the suite name, "
+"unless you're on unstable or testing.  Hence, in our example C<jessie> "
+"becomes C<jessie,-security>.  (Yes, with a comma.)"
+msgstr ""
+"Voor Debian moet u aan het eind van de naam van de suite C<,-security> "
+"toevoegen, tenzij u met de suite unstable of testing werkt. Dus in ons "
+"voorbeeld wordt C<jessie> C<jessie,-security>. (Wel degelijk met de komma.)"
+
+#. type: =head1
+#: ../dgit-user.7.pod:135
+msgid "WHAT DGIT CLONE PRODUCES"
+msgstr "WAT DGIT CLONE AANMAAKT"
+
+#. type: =head2
+#: ../dgit-user.7.pod:137
+msgid "What branches are there"
+msgstr "Welke takken er zijn"
+
+#. type: textblock
+#: ../dgit-user.7.pod:139
+msgid ""
+"dgit clone will give you a new working tree, and arrange for you to be on a "
+"branch named like C<dgit/jessie,-security> (yes, with a comma in the branch "
+"name)."
+msgstr ""
+"dgit clone zal voor u een verse werkkopie aanmaken en ervoor zorgen dat u "
+"zich bevindt op een tak met een naam als C<dgit/jessie,-security> "
+"(inderdaad, met een komma in de naam van de tak)."
+
+#. type: textblock
+#: ../dgit-user.7.pod:143
+msgid ""
+"For each release (like C<jessie>)  there is a tracking branch for the "
+"contents of the archive, called C<remotes/dgit/dgit/jessie> (and similarly "
+"for other suites).  This can be updated with C<dgit fetch jessie>.  This, "
+"the I<remote suite branch>, is synthesized by your local copy of dgit.  It "
+"is fast forwarding."
+msgstr ""
+"Voor elke release (zoals C<jessie>) bestaat een meelopende tak voor de "
+"inhoud van het archief, genoemd C<remotes/dgit/dgit/jessie> (en net zo voor "
+"andere suites). Deze kan bijgewerkt worden met C<dgit fetch jessie>. Deze, "
+"de I<\"remote\" suitetak>, wordt samengesteld door uw lokale kopie van dgit. "
+"Een lineaire veranderingsgeschiedenis wordt opgebouwd (N.v.d.V.: fast "
+"forwarding in git-terminologie)."
+
+#. type: textblock
+#: ../dgit-user.7.pod:152
+msgid ""
+"Debian separates out the security updates, into C<*-security>.  Telling dgit "
+"C<jessie,-security> means that it should include any updates available in "
+"C<jessie-security>.  The comma notation is a request to dgit to track "
+"jessie, or jessie-security if there is an update for the package there."
+msgstr ""
+"De veiligheidsupdates worden door Debian afgezonderd in C<*-security>. Aan "
+"dgit de opdracht C<jessie,-security> geven, betekent dat het de eventueel "
+"in  C<jessie-security> aanwezige updates moet opnemen. De notatie met de "
+"komma houdt de vraag aan dgit in om jessie op te volgen of jessie-security "
+"als zich daarin een update voor het pakket bevindt."
+
+#. type: textblock
+#: ../dgit-user.7.pod:158
+msgid ""
+"(You can also dgit fetch in a tree that wasn't made by dgit clone.  If "
+"there's no C<debian/changelog> you'll have to supply a C<-p>I<package> "
+"option to dgit fetch.)"
+msgstr ""
+"(U kunt ook het commando dgit fetch gebruiken in een mappenboom die niet "
+"door git clone aangemaakt werd. Indien daarin geen C<debian/changelog> "
+"aanwezig is, zult u met dgit fetch de optie C<-p>I<pakket> moeten gebruiken.)"
+
+#. type: =head2
+#: ../dgit-user.7.pod:162
+msgid "What kind of source tree do you get"
+msgstr "Welk soort broncodeboom u verkrijgt"
+
+#. type: textblock
+#: ../dgit-user.7.pod:164
+msgid ""
+"If the Debian package is based on some upstream release, the code layout "
+"should be like the upstream version.  You should find C<git grep> helpful to "
+"find where to edit."
+msgstr ""
+"Indien het Debian-pakket gebaseerd is op een release van een toeleveraar, "
+"dan zal de indeling van de broncode eruit zien als die van de versie van de "
+"toeleveraar. U kunt zich laten helpen door C<git grep> om uit te zoeken waar "
+"u met bewerken wilt beginnen."
+
+#. type: textblock
+#: ../dgit-user.7.pod:168
+msgid ""
+"The package's Debian metadata and the scripts for building binary packages "
+"are under C<debian/>.  C<debian/control>, C<debian/changelog> and C<debian/"
+"rules> are the starting points.  The Debian Policy Manual has most of the in-"
+"depth technical details."
+msgstr ""
+"De metagegevens van Debian over het pakket en de scripts voor het bouwen van "
+"de binaire pakketten bevinden zich in C<debian/>. Aanknopingspunten zijn "
+"C<debian/control>, C<debian/changelog> en C<debian/rules>. In het "
+"beleidshandboek van Debian vindt u meestal de nodige diepgaande technische "
+"informatie."
+
+#. type: textblock
+#: ../dgit-user.7.pod:175
+msgid ""
+"For many Debian packages, there will also be some things in C<debian/patches/"
+">.  It is best to ignore these.  Insofar as they are relevant the changes "
+"there will have been applied to the actual files, probably by means of "
+"actual commits in the git history.  The contents of debian/patches are "
+"ignored when building binaries from dgitish git branches."
+msgstr ""
+"Bij veel Debian-pakketten zijn ook zaken te vinden in C<debian/patches/>. U "
+"kunt deze best negeren. Voor zover deze relevant zijn, zullen deze toegepast "
+"zijn in de eigenlijke bestanden, vermoedelijk via feitelijke vastleggingen "
+"in de git-geschiedenis. Wanneer binaire pakketten gebouwd worden vanuit met "
+"dgit verkregen git-takken, wordt de inhoud van debian/patches genegeerd."
+
+#. type: textblock
+#: ../dgit-user.7.pod:185
+msgid ""
+"(For Debian afficionados: the git trees that come out of dgit are \"patches-"
+"applied packaging branches without a .pc directory\".)"
+msgstr ""
+"(Voor Debian-ingewijden: de git-boomstructuren die met dgit verkregen worden "
+"zijn \"verpakkingstakken met toegepaste patches, maar zonder .pc-map\".)"
+
+#. type: =head2
+#: ../dgit-user.7.pod:190
+msgid "What kind of history you get"
+msgstr "Welk soort geschiedenis u verkrijgt"
+
+#. type: textblock
+#: ../dgit-user.7.pod:192
+msgid ""
+"If you're lucky, the history will be a version of, or based on, the Debian "
+"maintainer's own git history, or upstream's git history."
+msgstr ""
+"Indien u geluk heeft, zal de geschiedenis een versie zijn van, of gebaseerd "
+"zijn op de eigen git-geschiedenis van de pakketonderhouder van Debian, of "
+"van de git-geschiedenis van de toeleveraar."
+
+#. type: textblock
+#: ../dgit-user.7.pod:197
+msgid ""
+"But for many packages the real git history does not exist, or has not been "
+"published in a dgitish form.  So you may find that the history is a rather "
+"short history invented by dgit."
+msgstr ""
+"Maar van veel pakketten bestaat geen echte git-geschiedenis of werd die niet "
+"in een dgit-achtige vorm gepubliceerd. Het is dus mogelijk dat u vaststelt "
+"dat de geschiedenis eerder kort is en door dgit bedacht."
+
+#. type: textblock
+#: ../dgit-user.7.pod:203
+msgid ""
+"dgit histories often contain automatically-generated commits, including "
+"commits which make no changes but just serve to make a rebasing branch fast-"
+"forward.  This is particularly true of combining branches like C<jessie,-"
+"security>."
+msgstr ""
+"dgit-geschiedenissen bevatten vaak automatisch gegenereerde vastleggingen "
+"(commits), met inbegrip van vastleggingen die geen wijzigingen aanbrengen, "
+"maar enkel dienen om een zich herintegrerende aftakking in te passen in de "
+"lineaire vorm van de veranderingsgeschiedenis (N.v.d.V.: \"make a rebasing "
+"branch fast-forward\" in git-terminologie). Dit is in het bijzonder het "
+"geval bij gecombineerde takken zoals C<jessie,-security>."
+
+#. type: textblock
+#: ../dgit-user.7.pod:210
+msgid ""
+"If the package maintainer is using git then after dgit clone you may find "
+"that there is a useful C<vcs-git> remote referring to the Debian package "
+"maintainer's repository for the package.  You can see what's there with "
+"C<git fetch vcs-git>.  But use what you find there with care: Debian "
+"maintainers' git repositories often have contents which are very confusing "
+"and idiosyncratic.  In particular, you may need to manually apply the "
+"patches that are in debian/patches before you do anything else!"
+msgstr ""
+"Indien de pakketonderhouder gebruik maakt van git, dan kunt u na een dgit "
+"clone een handig C<vcs-git> remote opmerken, wat verwijst naar het git-"
+"archief waarvan de pakketonderhouder gebruik maakt voor het pakket. U kunt "
+"zien wat zich daar bevindt met C<git fetch vcs-git>. Maar gebruik wat u daar "
+"vindt met zorg: de git-archieven van onderhouders van Debian bevatten vaak "
+"zaken die erg verwarrend en zonderling kunnen zijn. In het bijzonder zult u "
+"mogelijk handmatig de patches moeten toepassen die zich in debian/patches "
+"bevinden voor u iets anders doet!"
+
+#. type: =head1
+#: ../dgit-user.7.pod:222 ../dgit-maint-gbp.7.pod:56
+msgid "BUILDING"
+msgstr "BOUWPROCES"
+
+#. type: =head2
+#: ../dgit-user.7.pod:224
+msgid "Always commit before building"
+msgstr ""
+"Leg steeds veranderingen vast (N.v.d.V.: \"commit\" in git-terminologie) "
+"voor u begint te bouwen"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:228
+#, no-wrap
+msgid ""
+"    % wget 'https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=28250;mbox=yes;msg=89' | patch -p1 -u\n"
+"    % git commit -a -m 'Fix libc lost output bug'\n"
+"\n"
+msgstr ""
+"    % wget 'https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=28250;mbox=yes;msg=89' | patch -p1 -u\n"
+"    % git commit -a -m 'Reparatie van libc-bug waarbij verlies van uitvoer optreedt'\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:233
+msgid ""
+"Debian package builds are often quite messy: they may modify files which are "
+"also committed to git, or leave outputs and temporary files not covered by "
+"C<.gitignore>."
+msgstr ""
+"Het bouwproces van een Debian-pakket verloopt vaak erg rommelig: het kan "
+"bestanden wijzigen die ook vastgelegd zijn in git of uitvoer en tijdelijke "
+"bestanden achterlaten die niet door C<.gitignore> afgedekt zijn."
+
+#. type: textblock
+#: ../dgit-user.7.pod:237
+msgid "If you always commit, you can use"
+msgstr "Indien u steeds een vastlegging doet, kunt u gebruik maken van"
+
+#. type: textblock
+#: ../dgit-user.7.pod:247
+msgid ""
+"to tidy up after a build.  (If you forgot to commit, don't use those "
+"commands; instead, you may find that you can use C<git add -p> to help "
+"commit what you actually wanted to keep.)"
+msgstr ""
+"om na het bouwproces een opruimactie te doen. (Indien u vergat vast te "
+"leggen, gebruik dan deze commando's niet; in de plaats kunt u misschien "
+"C<git add -p> gebruiken om te helpen vastleggen wat u werkelijk wenst te "
+"bewaren.)"
+
+#. type: textblock
+#: ../dgit-user.7.pod:252
+msgid ""
+"These are destructive commands which delete all new files (so you B<must> "
+"remember to say C<git add>)  and throw away edits to every file (so you "
+"B<must> remember to commit)."
+msgstr ""
+"Dit zijn verwoestende commando's die alle nieuwe bestanden wissen (dus "
+"B<moet> u eraan denken om C<git add>) uit te voeren) en elke aanpassing aan "
+"een bestand weggooien (u B<moet> er dus aan denken om een vastlegging uit te "
+"voeren)."
+
+#. type: =head2
+#: ../dgit-user.7.pod:257
+msgid "Update the changelog (at least once) before building"
+msgstr "Werk het bestand changelog (minstens eenmaal) bij voor u bouwt"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:261
+#, no-wrap
+msgid ""
+"    % gbp dch -S --since=dgit/dgit/sid --ignore-branch --commit\n"
+"\n"
+msgstr ""
+"    % gbp dch -S --since=dgit/dgit/sid --ignore-branch --commit\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:265
+msgid ""
+"The binaries you build will have a version number which ultimately comes "
+"from the C<debian/changelog>.  You want to be able to tell your binaries "
+"apart from your distro's."
+msgstr ""
+"De binaire pakketten welke u bouwt zullen een versienummer hebben dat "
+"uiteindelijk afkomstig is uit het bestand C<debian/changelog>. U wilt toch "
+"uw binaire pakketten kunnen onderscheiden van die van uw distributie."
+
+#. type: textblock
+#: ../dgit-user.7.pod:270
+msgid ""
+"So you should update C<debian/changelog> to add a new stanza at the top, for "
+"your build."
+msgstr ""
+"En dus moet u C<debian/changelog> bijwerken en er bovenaan een item "
+"toevoegen voor u de bouw uitvoert."
+
+#. type: textblock
+#: ../dgit-user.7.pod:274
+msgid ""
+"This rune provides an easy way to do this.  It adds a new changelog entry "
+"with an uninformative message and a plausible version number (containing a "
+"bit of your git commit id)."
+msgstr ""
+"Deze rune geeft een makkelijke manier om dit te doen. Het voegt een nieuw "
+"item toe aan changelog met een niet-informatieve mededeling en een plausibel "
+"versienummer (dat een stukje van het id van uw vastlegging bevat)."
+
+#. type: textblock
+#: ../dgit-user.7.pod:279
+msgid ""
+"If you want to be more sophisticated, the package C<dpkg-dev-el> has a good "
+"Emacs mode for editing changelogs.  Alternatively, you could edit the "
+"changelog with another text editor, or run C<dch> or C<gbp dch> with "
+"different options.  Choosing a good version number is slightly tricky and a "
+"complete treatment is beyond the scope of this tutorial."
+msgstr ""
+"Indien u een meer gesofisticeerde manier wilt, biedt het pakket C<dpkg-dev-"
+"el> een goede Emacs-modus voor het bewerken van changelogs. U kunt anders de "
+"changelog ook bewerken met een andere teksteditor, of C<dch> of C<gbp dch> "
+"uitvoeren met verschillende opties. Het kiezen van een goed versienummer is "
+"een beetje een netelige kwestie en een volledige behandeling van dit "
+"onderwerp valt buiten het bestek van deze handleiding."
+
+#. type: =head2
+#: ../dgit-user.7.pod:287
+msgid "Actually building"
+msgstr "Het eigenlijke bouwen"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:291
+#, no-wrap
+msgid ""
+"    % sudo apt-get build-dep .\n"
+"    % dpkg-buildpackage -uc -b\n"
+"\n"
+msgstr ""
+"    % sudo apt-get build-dep .\n"
+"    % dpkg-buildpackage -uc -b\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:296
+msgid ""
+"dpkg-buildpackage is the primary tool for building a Debian source package.  "
+"C<-uc> means not to pgp-sign the results.  C<-b> means build all binary "
+"packages, but not to build a source package."
+msgstr ""
+"dpkg-buildpackage is het belangrijkste gereedschap voor het bouwen van een "
+"Debian-broncodepakket. C<-uc> betekent: geen pgp-ondertekening toevoegen aan "
+"de resultaten. C<-b> betekent: alle binaire pakketten bouwen, maar geen "
+"broncodepakket."
+
+#. type: =head2
+#: ../dgit-user.7.pod:302
+msgid "Using sbuild"
+msgstr "Gebruik maken van sbuild"
+
+#. type: textblock
+#: ../dgit-user.7.pod:304
+msgid ""
+"You can build in an schroot chroot, with sbuild, instead of in your main "
+"environment.  (sbuild is used by the Debian build daemons.)"
+msgstr ""
+"In plaats van in uw hoofdomgeving, kunt u de bouw uitvoeren in een \"schroot "
+"chroot\" met sbuild (sbuild wordt door de build-achtergronddiensten van "
+"Debian gebruikt.)"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:309
+#, no-wrap
+msgid ""
+"    % git clean -xdf\n"
+"    % sbuild -c jessie -A --no-clean-source \\\n"
+"             --dpkg-source-opts='-Zgzip -z1 --format=1.0 -sn'\n"
+"\n"
+msgstr ""
+"    % git clean -xdf\n"
+"    % sbuild -c jessie -A --no-clean-source \\\n"
+"             --dpkg-source-opts='-Zgzip -z1 --format=1.0 -sn'\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:315
+msgid ""
+"Note that this will seem to leave a \"source package\" (.dsc and .tar.gz)  "
+"in the parent directory, but that source package should not be used.  It is "
+"likely to be broken.  For more information see Debian bug #868527."
+msgstr ""
+"Merk op dat dit een \"broncodepakket\" (.dsc en .tar.gz) lijkt achter te "
+"laten in de bovenliggende map, maar u moet dit broncodepakket niet "
+"gebruiken. Waarschijnlijk is het defect. Zie voor bijkomende informatie "
+"Debian-bug #868527."
+
+#. type: =head1
+#: ../dgit-user.7.pod:322
+msgid "INSTALLING"
+msgstr "INSTALLEREN"
+
+#. type: =head2
+#: ../dgit-user.7.pod:324
+msgid "Debian Stretch or newer"
+msgstr "Debian Stretch of later"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:328
+#, no-wrap
+msgid ""
+"    % sudo apt install ../libc6_*.deb\n"
+"\n"
+msgstr ""
+"    % sudo apt install ../libc6_*.deb\n"
+"\n"
+
+#. type: =head2
+#: ../dgit-user.7.pod:332
+msgid "Debian Jessie or older"
+msgstr "Debian Jessie of eerder"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:336
+#, no-wrap
+msgid ""
+"    % sudo dpkg -i ../libc6_*.deb\n"
+"\n"
+msgstr ""
+"    % sudo dpkg -i ../libc6_*.deb\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:340
+msgid ""
+"You can use C<dpkg -i> to install the .debs that came out of your package."
+msgstr ""
+"U kunt C<dpkg -i> gebruiken om de .deb-bestanden te installeren die uit uw "
+"pakket voortkwamen."
+
+#. type: textblock
+#: ../dgit-user.7.pod:343
+msgid ""
+"If the dependencies aren't installed, you will get an error, which can "
+"usually be fixed with C<apt-get -f install>."
+msgstr ""
+"Indien de vereisten niet geïnstalleerd zijn, zult u een foutmelding krijgen "
+"die gewoonlijk gerepareerd kan worden met C<apt-get -f install>."
+
+#. type: =head1
+#: ../dgit-user.7.pod:347
+msgid "Multiarch"
+msgstr "Multiarch"
+
+#. type: textblock
+#: ../dgit-user.7.pod:349
+msgid ""
+"If you're working on a library package and your system has multiple "
+"architectures enabled, you may see something like this:"
+msgstr ""
+"Indien u aan een bibliotheekpakket werkt en op uw systeem multi-"
+"architectuurondersteuning geactiveerd is, krijgt u mogelijk iets te zien als "
+"dit:"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:355
+#, no-wrap
+msgid ""
+"    dpkg: error processing package libpcre3-dev:amd64 (--configure):\n"
+"     package libpcre3-dev:amd64 2:8.39-3~3.gbp8f25f5 cannot be configured because libpcre3-dev:i386 is at a different version (2:8.39-2)\n"
+"\n"
+msgstr ""
+"    dpkg: fout bij verwerken van pakket libpcre3-dev:amd64 (--configure):\n"
+"     pakket libpcre3-dev:amd64 2:8.39-3~3.gbp8f25f5 kan niet geconfigureerd worden omdat libpcre3-dev:i386 een andere versie (2:8.39-2) heeft\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:360
+msgid ""
+"The multiarch system used by Debian requires each package which is present "
+"for multiple architectures to be exactly the same across all the "
+"architectures for which it is installed."
+msgstr ""
+"Het multi-architectuursysteem dat door Debian toegepast wordt, vereist dat "
+"elk pakket dat voor meerdere architecturen aanwezig is, exact hetzelfde is "
+"bij alle architecturen waarvoor het geïnstalleerd is."
+
+#. type: textblock
+#: ../dgit-user.7.pod:364
+msgid ""
+"The proper solution is to build the package for all the architectures you "
+"have enabled.  You'll need a chroot for each of the secondary "
+"architectures.  This is somewhat tiresome, even though Debian has excellent "
+"tools for managing chroots.  C<sbuild-debian-developer-setup> from the "
+"package of the same name and C<sbuild-createchroot> from the C<sbuild> "
+"package are good starting points."
+msgstr ""
+"De geëigende oplossing is om het pakket te bouwen voor alle architecturen "
+"die u geactiveerd heeft. U zult een chroot nodig hebben voor elk van de "
+"secundaire architecturen. Dit is enigszins vermoeiend, ook al beschikt "
+"Debian over uitstekende hulpmiddelen voor het beheren van chroots. Goede "
+"aanknopingspunten zijn C<sbuild-debian-developer-setup> uit het pakket met "
+"dezelfde naam en C<sbuild-createchroot> uit het pakket C<sbuild>."
+
+#. type: textblock
+#: ../dgit-user.7.pod:374
+msgid ""
+"Otherwise you could deinstall the packages of interest for those other "
+"architectures with something like C<dpkg --remove libpcre3:i386>."
+msgstr ""
+"Een andere mogelijkheid is dat u de betreffende pakketten bij de andere "
+"architecturen de-installeert met iets zoals C<dpkg --remove libpcre3:i386>."
+
+#. type: textblock
+#: ../dgit-user.7.pod:378
+msgid ""
+"If neither of those are an option, your desperate last resort is to try "
+"using the same version number as the official package for your own package.  "
+"(The version is controlled by C<debian/changelog> - see above.)  This is not "
+"ideal because it makes it hard to tell what is installed, and because it "
+"will mislead and confuse apt."
+msgstr ""
+"Indien geen van beide mogelijkheden een optie is, dan is een mogelijke "
+"laatste wanhoopsdaad, voor uw eigen pakket hetzelfde versienummer gebruiken "
+"als van het officiële pakket. Dit is niet ideaal omdat dit het moeilijk "
+"maakt om te weten wat geïnstalleerd is, en omdat het apt zal misleiden en in "
+"de war brengen."
+
+#. type: textblock
+#: ../dgit-user.7.pod:386
+msgid "With the \"same number\" approach you may still get errors like"
+msgstr ""
+"Met de \"hetzelfde-nummer\"-benadering kunt u nog steeds foutmeldingen "
+"krijgen zoals"
+
+#. type: textblock
+#: ../dgit-user.7.pod:390
+msgid ""
+"trying to overwrite shared '/usr/include/pcreposix.h', which is different "
+"from other instances of package libpcre3-dev"
+msgstr ""
+"poging tot overschrijven van gedeelde '/usr/include/pcreposix.h', welke "
+"verschilt van andere exemplaren van pakket libpcre3-dev"
+
+#. type: textblock
+#: ../dgit-user.7.pod:394
+msgid ""
+"but passing C<--force-overwrite> to dpkg will help - assuming you know what "
+"you're doing."
+msgstr ""
+"maar de optie C<--force-overwrite> meegeven aan dpkg zal helpen - in de "
+"veronderstelling dat u weet wat u doet."
+
+#. type: =head1
+#: ../dgit-user.7.pod:397
+msgid "SHARING YOUR WORK"
+msgstr "UW WERK DELEN"
+
+#. type: textblock
+#: ../dgit-user.7.pod:399
+msgid ""
+"The C<dgit/jessie,-security> branch (or whatever) is a normal git branch.  "
+"You can use C<git push> to publish it on any suitable git server."
+msgstr ""
+"De tak C<dgit/jessie,-security> (of wat dan ook) is een gewone git-tak. U "
+"kunt C<git push> gebruiken om hem te publiceren op elke geschikte git-server."
+
+#. type: textblock
+#: ../dgit-user.7.pod:402
+msgid ""
+"Anyone who gets that git branch from you will be able to build binary "
+"packages (.deb)  just as you did."
+msgstr ""
+"Iedereen die deze git-tak van u krijgt, zal in staat zijn om binaire "
+"pakketten (.deb) te bouwen, zoals u het deed."
+
+#. type: textblock
+#: ../dgit-user.7.pod:406
+msgid ""
+"If you want to contribute your changes back to Debian, you should probably "
+"send them as attachments to an email to the L<Debian Bug System|https://"
+"bugs.debian.org/> (either a followup to an existing bug, or a new bug).  "
+"Patches in C<git-format-patch> format are usually very welcome."
+msgstr ""
+"Indien u uw wijzigingen terug wilt bijdragen aan Debian, dan zult u ze "
+"wellicht als bijlage bij een e-mail moeten sturen naar het L<Debian "
+"Bugvolgsysteem|https://bugs.debian.org/> (ofwel als opvolging van een "
+"bestaande bug, of als een nieuwe bug). Patches in de indeling C<git-format-"
+"patch> zijn gewoonlijk erg welkom."
+
+#. type: =head2
+#: ../dgit-user.7.pod:413
+msgid "Source packages"
+msgstr "Broncodepakketten"
+
+#. type: textblock
+#: ../dgit-user.7.pod:415
+msgid ""
+"The git branch is not sufficient to build a source package the way Debian "
+"does.  Source packages are somewhat awkward to work with.  Indeed many "
+"plausible git histories or git trees cannot be converted into a suitable "
+"source package.  So I recommend you share your git branch instead."
+msgstr ""
+"De git-tak volstaat niet om een broncodepakket te bouwen volgens de manier "
+"van Debian. Broncodepakketten zijn wat lastig om ermee te werken. Vele "
+"aannemelijke git-geschiedenissen of git-bomen kunnen namelijk niet omgezet "
+"worden naar een geschikt broncodepakket. Dus beveel ik aan om in de plaats "
+"daarvan uw git-tak te delen."
+
+#. type: textblock
+#: ../dgit-user.7.pod:423
+msgid ""
+"If a git branch is not enough, and you need to provide a source package but "
+"don't care about its format/layout (for example because some software you "
+"have consumes source packages, not git histories)  you can use this recipe "
+"to generate a C<3.0 (native)> source package, which is just a tarball with "
+"accompanying .dsc metadata file:"
+msgstr ""
+"Indien een git-tak niet voldoende is en u een broncodepakket moet "
+"aanleveren, maar het formaat/de indeling ervan niet van belang is "
+"(bijvoorbeeld omdat u bepaalde software heeft die met broncodepakketten "
+"werkt en niet met git-geschiedenissen), kunt u deze methode gebruiken om een "
+"broncodepakket van het type C<3.0 (native)> te genereren. Dit is niet meer "
+"dan een tar-archief met een bijhorend .dsc-metadatabestand:"
+
+#. type: verbatim
+#: ../dgit-user.7.pod:434
+#, no-wrap
+msgid ""
+"    % echo '3.0 (native)' >debian/source/format\n"
+"    % git commit -m 'switch to native source format' debian/source/format\n"
+"    % dgit -wgf build-source\n"
+"\n"
+msgstr ""
+"    % echo '3.0 (native)' >debian/source/format\n"
+"    % git commit -m 'overgang naar de broncode-indeling native' debian/source/format\n"
+"    % dgit -wgf build-source\n"
+"\n"
+
+#. type: textblock
+#: ../dgit-user.7.pod:440
+msgid ""
+"If you need to provide a good-looking source package, be prepared for a lot "
+"more work.  You will need to read much more, perhaps starting with L<dgit-"
+"nmu-simple(7)>, L<dgit-sponsorship(7)> or L<dgit-maint-*(7)>"
+msgstr ""
+"Indien u een goed ogend broncodepakket moet aanleveren, dan zult u bereid "
+"moeten zijn er heel wat meer werk in te investeren. U zult heel wat meer "
+"moeten lezen, misschien te beginnen bij L<dgit-nmu-simple(7)>, L<dgit-"
+"sponsorship(7)> of L<dgit-maint-*(7)>"
+
+#. type: =head1
+#: ../dgit-user.7.pod:447
+msgid "INSTALLING NEWER DGIT ON OLDER DISTROS"
+msgstr "NIEUWERE DGIT INSTALLEREN OP OUDERE DISTRIBUTIES"
+
+#. type: textblock
+#: ../dgit-user.7.pod:449
+msgid ""
+"If dgit breaks with the source package you are working with, this might be "
+"due to a bug which would be fixed by upgrading."
+msgstr ""
+"Als dgit niet werkt met het bronpakket waarmee u werkt, kan dit te wijten "
+"zijn aan een bug. Deze kan worden verholpen door een upgrade."
+
+#. type: textblock
+#: ../dgit-user.7.pod:452
+msgid ""
+"You can probably directly C<apt install> the latest version of dgit.deb from "
+"Debian stable, or Debian testing."
+msgstr ""
+"U kunt waarschijnlijk rechtstreeks de nieuwste versie van dgit.deb "
+"installeren via C<apt install> vanuit Debian stable of Debian testing."
+
+#. type: textblock
+#: ../dgit-user.7.pod:457
+msgid ""
+"Versions of dgit from Debian 13 (trixie) onwards document their "
+"installability on old releases in the manpage.  For example, for current "
+"Debian testing, see L<https://manpages.debian.org/testing/dgit/"
+"dgit.1.en.html>, and look in the section SUPPORT ON OLD DISTRIBUTIONS."
+msgstr ""
+"Versies van dgit vanaf Debian 13 (trixie) documenteren hun "
+"installeerbaarheid op oude releases in de manpagina. Zie bijvoorbeeld "
+"L<https://manpages.debian.org/testing/dgit/dgit.1.en.html> voor het huidige "
+"Debian testing en kijk in de sectie ONDERSTEUNING OP OUDE DISTRIBUTIES.."
+
+#. type: textblock
+#: ../dgit-user.7.pod:465 ../dgit-maint-native.7.pod:127
+#: ../dgit-maint-gbp.7.pod:141
+msgid "dgit(1), dgit(7)"
+msgstr "dgit(1), dgit(7)"

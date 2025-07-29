@@ -1,0 +1,3029 @@
+#!/usr/bin/perl -w
+# git-debrebase
+# Script helping make fast-forwarding histories while still rebasing
+# upstream deltas when working on Debian packaging
+#
+# Copyright (C)2017-2020,2022-2023 Ian Jackson
+# Copyright (C)2019                Niko Tyni
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+END { $? = $Debian::Dgit::ExitStatus::desired // -1; };
+use Debian::Dgit::GDR;
+use Debian::Dgit::ExitStatus;
+use Debian::Dgit::I18n;
+
+use strict;
+
+use Debian::Dgit qw(:DEFAULT :playground);
+setup_sigwarn();
+
+use Memoize;
+use Carp;
+use POSIX;
+use Locale::gettext;
+use Data::Dumper;
+use Getopt::Long qw(:config posix_default gnu_compat bundling);
+use Dpkg::Version;
+use File::FnMatch qw(:fnmatch);
+use File::Copy;
+
+$debugcmd_when_debuglevel = 2;
+
+our ($usage_message) = i_ <<'END';
+usages:
+  git-debrebase [<options>] [--|-i <git rebase options...>]
+  git-debrebase [<options>] status
+  git-debrebase [<options>] prepush [--prose=...]
+  git-debrebase [<options>] quick|conclude
+  git-debrebase [<options>] new-upstream <new-version> [<details ...>]
+  git-debrebase [<options>] convert-from-* ...
+  ...
+See git-debrebase(1), git-debrebase(5), dgit-maint-debrebase(7) (in dgit).
+END
+
+our ($opt_force, $opt_noop_ok, $opt_merges_dummy, @opt_anchors);
+our ($opt_defaultcmd_interactive);
+
+our $us = qw(git-debrebase);
+
+our $wrecknoteprefix = 'refs/debrebase/wreckage';
+our $merge_cache_ref = 'refs/debrebase/merge-resolutions';
+
+$|=1;
+
+sub badusage ($) {
+    my ($m) = @_;
+    print STDERR f_ "%s: bad usage: %s\n", $us, $m;
+    finish 8;
+}
+
+sub getoptions_main {
+    my $m = shift;
+    local $SIG{__WARN__}; # GetOptions calls `warn' to print messages
+    GetOptions @_ or badusage $m;
+}
+sub getoptions {
+    my $sc = shift;
+    getoptions_main +(f_ "bad options follow \`git-debrebase %s'", $sc), @_;
+}
+
+sub cfg ($;$) {
+    my ($k, $optional) = @_;
+    local $/ = "\0";
+    my @cmd = qw(git config -z);
+    push @cmd, qw(--get-all) if wantarray;
+    push @cmd, $k;
+    my $out = cmdoutput_errok @cmd;
+    if (!defined $out) {
+	fail f_ "missing required git config %s", $k unless $optional;
+	return ();
+    }
+    my @l = split /\0/, $out;
+    return wantarray ? @l : $l[0];
+}
+
+memoize('cfg');
+
+sub dd ($) {
+    my ($v) = @_;
+    my $dd = new Data::Dumper [ $v ];
+    Terse $dd 1; Indent $dd 0; Useqq $dd 1;
+    return Dump $dd;
+}
+
+sub get_commit ($) {
+    my ($objid) = @_;
+    my $data = (git_cat_file $objid, 'commit');
+    $data =~ m/(?<=\n)\n/ or confess "$objid ($data) ?";
+    return ($`,$');
+}
+
+sub D_UPS ()      { 0x02; } # upstream files
+sub D_PAT_ADD ()  { 0x04; } # debian/patches/ extra patches at end
+sub D_PAT_OTH ()  { 0x08; } # debian/patches other changes
+sub D_DEB_CLOG () { 0x10; } # debian/changelog
+sub D_DEB_OTH ()  { 0x20; } # debian/ (not patches/ or changelog)
+sub DS_DEB ()     { D_DEB_CLOG | D_DEB_OTH; } # debian/ (not patches/)
+
+our $playprefix = 'debrebase';
+our $rd;
+our $workarea;
+
+our @dgit = qw(dgit);
+
+sub in_workarea ($) {
+    my ($sub) = @_;
+    changedir $workarea;
+    my $r = eval { $sub->(); };
+    { local $@; changedir $maindir; }
+    die $@ if $@;
+}
+
+sub fresh_workarea (;$) {
+    my ($subdir) = @_;
+    $subdir //= 'work';
+    $workarea = fresh_playground "$playprefix/$subdir";
+    in_workarea sub { playtree_setup };
+}
+
+sub run_ref_updates_now ($$) {
+    my ($mrest, $updates) = @_;
+    # @$updates is a list of lines for git-update-ref, without \ns
+
+    my @upd_cmd = (git_update_ref_cmd "debrebase: $mrest", qw(--stdin));
+    debugcmd '>|', @upd_cmd;
+    open U, "|-", @upd_cmd or confess "$!";
+    foreach (@$updates) {
+	printdebug ">= ", $_, "\n";
+	print U $_, "\n" or confess "$!";
+    }
+    printdebug ">\$\n";
+    close U or failedcmd @upd_cmd;
+}
+
+our $snags_forced = 0;
+our $snags_tripped = 0;
+our $snags_summarised = 0;
+our @deferred_updates;
+our @deferred_update_messages;
+
+sub merge_wreckage_cleaning ($) {
+    my ($updates) = @_;
+    git_for_each_ref("$wrecknoteprefix/*", sub {
+	my ($objid,$objtype,$fullrefname,$reftail) = @_;
+	push @$updates, "delete $fullrefname";
+    });
+}
+
+sub all_snags_summarised () {
+    $snags_forced + $snags_tripped == $snags_summarised;
+}
+sub run_deferred_updates ($) {
+    my ($mrest) = @_;
+
+    my $m = 'dangerous internal error';
+    confess $m.' - '.__ $m unless all_snags_summarised();
+
+    merge_wreckage_cleaning \@deferred_updates;
+    run_ref_updates_now $mrest, \@deferred_updates;
+    print $_, "\n" foreach @deferred_update_messages;
+
+    @deferred_updates = ();
+    @deferred_update_messages = ();
+}
+
+sub get_tree ($;$$) {
+    # tree object name => ([ $name, $info ], ...)
+    # where $name is the sort key, ie has / at end for subtrees
+    # $info is the LHS from git-ls-tree (<mode> <type> <hash>)
+    # without $precheck, will crash if $x does not exist, so don't do that;
+    # instead pass '' to get ().
+    my ($x, $precheck, $recurse) = @_;
+
+    return () if !length $x;
+
+    if ($precheck) {
+	my ($type, $dummy) = git_cat_file $x, [qw(tree missing)];
+	return () if $type eq 'missing';
+    }
+
+    $recurse = !!$recurse;
+
+    confess "get_tree needs object not $x ?" unless $x =~ m{^[0-9a-f]+\:};
+
+    our (@get_tree_memo, %get_tree_memo);
+    my $memo = $get_tree_memo{$recurse,$x};
+    return @$memo if $memo;
+
+    local $Debian::Dgit::debugcmd_when_debuglevel = 3;
+    my @l;
+    my @cmd = (qw(git ls-tree -z --full-tree));
+    push @cmd, qw(-r) if $recurse;
+    push @cmd, qw(--), $x;
+    my $o = cmdoutput @cmd;
+    $o =~ s/\0$//s;
+    my $last = '';
+    foreach my $l (split /\0/, $o) {
+	my ($i, $n) = split /\t/, $l, 2;
+	$n .= '/' if $i =~ m/^\d+ tree /;
+	push @l, [ $n, $i ];
+	confess "$x need $last < $n ?" unless $last lt $n;
+    }
+    $get_tree_memo{$recurse,$x} = \@l;
+    push @get_tree_memo, $x;
+    if (@get_tree_memo > 10) {
+	delete $get_tree_memo{ shift @get_tree_memo };
+    }
+    return @l;
+}
+
+sub trees_diff_walk ($$$;$) {
+    # trees_diff_walk [{..opts...},] $x, $y, sub {... }
+    # calls sub->($name, $ix, $iy) for each difference
+    # $x and $y are as for get_tree
+    # where $name, $ix, $iy are $name and $info from get_tree
+    # opts are   all       call even for names same in both
+    #            recurse   call even for names same in both
+    my $opts = shift @_ if @_>=4;
+    my ($x,$y,$call) = @_;
+    my $all = $opts->{all};
+    return if !$all and $x eq $y;
+    my @x = get_tree $x, 0, $opts->{recurse};
+    my @y = get_tree $y, 0, $opts->{recurse};
+    printdebug "trees_diff_walk(..$x,$y..) ".Dumper(\@x,\@y)
+	if $debuglevel >= 3;
+    while (@x || @y) {
+	my $cmp = !@x       <=> !@y          # eg @y empty? $cmp=-1, use x
+ 	     ||    $x[0][0] cmp  $y[0][0];   # eg, x lt y ? $cmp=-1, use x
+	my ($n, $ix, $iy);                   # all same? $cmp=0, use both
+	$ix=$iy='';
+	printdebug "trees_diff_walk $cmp : @{ $x[0]//[] } | @{ $y[0]//[] }\n"
+	    if $debuglevel >= 3;
+	($n, $ix) = @{ shift @x } if $cmp <= 0;
+	($n, $iy) = @{ shift @y } if $cmp >= 0;
+	next if !$all and $ix eq $iy;
+	printdebug sprintf
+	    "trees_diff_walk(%d,'%s','%s') call('%s','%s','%s')\n",
+	    !!$all,$x,$y, $n,$ix,$iy
+	    if $debuglevel >= 2;
+	$call->($n, $ix, $iy);
+    }
+}
+
+sub get_differs ($$) {
+    my ($x,$y) = @_;
+    # This does a similar job to quiltify_trees_differ, in dgit, a bit.
+    # But we don't care about modes, or dpkg-source-unrepresentable
+    # changes, and we don't need the plethora of different modes.
+    # Conversely we need to distinguish different kinds of changes to
+    # debian/ and debian/patches/.
+    # Also, here we have, and want to use, trees_diff_walk, because
+    # we may be calling this an awful lot and we want it to be fast.
+
+    my $differs = 0;
+    my @debian_info;
+
+    no warnings qw(exiting);
+
+    my $plain = sub { $_[0] =~ m{^(100|0*)644 blob }s; };
+
+    trees_diff_walk "$x:", "$y:", sub {
+	my ($n,$ix,$iy) = @_;
+
+	# analyse difference at the toplevel
+
+	if ($n ne 'debian/') {
+	    $differs |= D_UPS;
+	    next;
+	}
+	if ($n eq 'debian') {
+	    # one side has a non-tree for ./debian !
+	    $differs |= D_DEB_OTH;
+	    next;
+	}
+
+	my $xd = $ix && "$x:debian";
+	my $yd = $iy && "$y:debian";
+	trees_diff_walk $xd, $yd, sub {
+	    my ($n,$ix,$iy) = @_;
+	    
+	    # analyse difference in debian/
+
+	    if ($n eq 'changelog' && (!$ix || $plain->($ix))
+                                  &&          $plain->($iy) ) {
+		$differs |= D_DEB_CLOG;
+		next;
+	    }
+	    if ($n ne 'patches/') {
+		$differs |= D_DEB_OTH;
+		next;
+	    }
+
+	    my $xp = $ix && "$xd/patches";
+	    my $yp = $iy && "$yd/patches";
+	    trees_diff_walk { recurse=>1 }, $xp, $yp, sub {
+		my ($n,$ix,$iy) = @_;
+
+		# analyse difference in debian/patches
+
+		my $ok;
+		if ($n =~ m{/$}s) {
+		    # we are recursing; directories may appear and disappear
+		    $ok = 1;
+		} elsif ($n !~ m/\.series$/s && !$ix && $plain->($iy)) {
+		    $ok = 1;
+		} elsif ($n eq 'series' && $plain->($ix) && $plain->($iy)) {
+		    my $x_s = (git_cat_file "$xp/series", 'blob');
+		    my $y_s = (git_cat_file "$yp/series", 'blob');
+		    chomp $x_s;  $x_s .= "\n";
+		    $ok = $x_s eq substr($y_s, 0, length $x_s);
+		} else {
+		    # nope
+		}
+		$differs |= $ok ? D_PAT_ADD : D_PAT_OTH;
+	    };    
+	};
+    };
+
+    printdebug sprintf "get_differs %s %s = %#x\n", $x, $y, $differs;
+
+    return $differs;
+}
+
+sub commit_pr_info ($) {
+    my ($r) = @_;
+    return Data::Dumper->dump([$r], [qw(commit)]);
+}
+
+sub calculate_committer_authline () {
+    my $c = cmdoutput @git, qw(commit-tree --no-gpg-sign -m),
+	'DUMMY COMMIT (git-debrebase)', "HEAD:";
+    my ($h,$m) = get_commit $c;
+    $h =~ m/^committer .*$/m or confess "($h) ?";
+    return $&;
+}
+
+our @snag_force_opts;
+sub snag ($$;@) {
+    my ($tag,$msg) = @_; # ignores extra args, for benefit of keycommits
+    if (grep { $_ eq $tag } @snag_force_opts) {
+	$snags_forced++;
+	print STDERR f_ "%s: snag ignored (-f%s): %s\n", $us, $tag, $msg;
+    } else {
+	$snags_tripped++;
+	print STDERR f_ "%s: snag detected (-f%s): %s\n", $us, $tag, $msg;
+    }
+}
+
+# Important: all mainline code must call snags_maybe_bail after
+# any point where snag might be called, but before making changes
+# (eg before any call to run_deferred_updates).  snags_maybe_bail
+# may be called more than once if necessary (but this is not ideal
+# because then the messages about number of snags may be confusing).
+sub snags_maybe_bail () {
+    return if all_snags_summarised();
+    if ($snags_forced) {
+	print STDERR f_
+	    "%s: snags: %d overridden by individual -f options\n",
+	    $us, $snags_forced;
+    }
+    if ($snags_tripped) {
+	if ($opt_force) {
+	    print STDERR f_
+		"%s: snags: %d overridden by global --force\n",
+		$us, $snags_tripped;
+	} else {
+	    fail f_
+  "%s: snags: %d blocker(s) (you could -f<tag>, or --force)",
+		$us, $snags_tripped;
+	}
+    }
+    $snags_summarised = $snags_forced + $snags_tripped;
+}
+sub snags_maybe_bail_early () {
+    # useful to bail out early without doing a lot of work;
+    # not a substitute for snags_maybe_bail.
+    snags_maybe_bail() if $snags_tripped && !$opt_force;
+}
+sub any_snags () {
+    return $snags_forced || $snags_tripped;
+}
+
+sub ffq_prev_branchinfo () {
+    my $current = git_get_symref();
+    return gdr_ffq_prev_branchinfo($current);
+}
+
+sub record_gdrlast ($$;$) {
+    my ($gdrlast, $newvalue, $oldvalue) = @_;
+    $oldvalue ||= $git_null_obj;
+    push @deferred_updates, "update $gdrlast $newvalue $oldvalue";
+}
+
+sub fail_unprocessable ($) {
+    my ($msg) = @_;
+    changedir $maindir;
+    my ($ffqs, $ffqm, $symref, $ffq_prev, $gdrlast) = ffq_prev_branchinfo();
+
+    my $mangled = __ <<END;
+Branch/history seems mangled - no longer in gdr format.
+See ILLEGAL OPERATIONS in git-debrebase(5).
+END
+    chomp $mangled;
+
+    if (defined $ffqm) {
+	fail f_ <<END, $msg, $ffqm;
+%s
+Is this meant to be a gdr branch?  %s
+END
+    } elsif (git_get_ref $ffq_prev) {
+	fail f_ <<END, $msg, $mangled;
+%s
+%s
+Consider git-debrebase scrap, to throw away your recent work.
+END
+    } elsif (!git_get_ref $gdrlast) {
+	fail f_ <<END, $msg;
+%s
+Branch does not seem to be meant to be a git-debrebase branch?
+Wrong branch, or maybe you needed git-debrebase convert-from-*.
+END
+    } elsif (is_fast_fwd $gdrlast, git_rev_parse 'HEAD') {
+	fail <<END;
+$msg
+$mangled
+END
+    } else {
+	fail f_ <<END, $msg;
+%s
+Branch/history mangled, and diverged since last git-debrebase.
+Maybe you reset to, or rebased from, somewhere inappropriate.
+END
+    }
+};
+
+sub gbp_pq_export ($$$) {
+    my ($bname, $base, $tip) = @_;
+    # must be run in a workarea.  $bname and patch-queue/$bname
+    # ought not to exist.  Leaves you on patch-queue/$bname with
+    # the patches staged but not committed.
+    # returns 1 if there were any patches
+    printdebug "gbp_pq_export $bname $base $tip\n";
+    runcmd @git, qw(checkout -q -b), $bname, $base;
+    runcmd @git, qw(checkout -q -b), "patch-queue/$bname", $tip;
+    my @gbp_cmd = (qw(gbp pq export));
+    my $r = system shell_cmd 'exec >../gbp-pq-err 2>&1', @gbp_cmd;
+    if ($r) {
+	{ local ($!,$?); copy('../gbp-pq-err', \*STDERR); }
+	failedcmd @gbp_cmd;
+    }
+    return 0 unless stat_exists 'debian/patches';
+    runcmd @git, qw(add -f debian/patches);
+    return 1;
+}
+
+
+# MERGE-TODO allow merge resolution separately from laundering, before git merge
+
+# later/rework?
+#  use git-format-patch?
+#  our own patch identification algorithm?
+#  this is an alternative strategy
+
+sub merge_failed ($$;@) {
+    my ($wrecknotes, $emsg, @xmsgs) = @_;
+    my @m;
+    push @m, "Merge resolution failed: $emsg";
+    push @m, @xmsgs;
+
+    changedir $maindir;
+
+    my @updates;
+    merge_wreckage_cleaning \@updates;
+    run_ref_updates_now "merge failed", \@updates;
+
+    @updates = ();
+    keys %$wrecknotes;
+    while (my ($k,$v) = each %$wrecknotes) {
+	push @updates, "create $wrecknoteprefix/$k $v";
+    }
+    run_ref_updates_now "merge failed", \@updates;
+    push @m, "Wreckage left in $wrecknoteprefix/*.";
+
+    push @m, "See git-debrebase(5) section OTHER MERGES and file a bug.";
+
+    # use finish rather than fail, in case we are within an eval
+    # (that can happen inside walk!)
+    print STDERR "\n";
+    print STDERR "$us: $_\n" foreach @m;
+    finish 15;
+}
+
+sub mwrecknote ($$$) {
+    my ($wrecknotes, $reftail, $commitish) = @_;
+    confess unless defined $commitish;
+    printdebug "mwrecknote $reftail $commitish\n";
+    $wrecknotes->{$reftail} = $commitish;
+}
+
+sub merge_attempt_cmd {
+    my $wrecknotes = shift @_;
+    debugcmd '+', @_;
+    $!=0; $?=-1;
+    if (system @_) {
+	merge_failed $wrecknotes,
+	    failedcmd_waitstatus(),
+	    "failed command: @_";
+    }
+}
+
+sub merge_series_patchqueue_convert ($$$);
+
+sub merge_series ($$$;@) {
+    my ($newbase, $wrecknotes, $base_q, @input_qs) = @_;
+    # $base_q{SeriesBase}  $input_qs[]{SeriesBase}
+    # $base_q{SeriesTip}   $input_qs[]{SeriesTip}
+    # ^ specifies several patch series (currently we only support exactly 2)
+    # return value is a commit which is the result of
+    # merging the two versions of the same topic branch
+    #   $input_q[0] and $input_q[1]
+    # with respect to the old version
+    #   $base_q
+    # all onto $newbase.
+
+    # Creates, in *_q, a key MR for its private use
+
+    printdebug "merge_series newbase=$newbase\n";
+
+    $input_qs[$_]{MR}{S} = $_ foreach (0..$#input_qs);
+    $base_q->{MR}{S} = 'base';
+
+    my %prereq;
+    # $prereq{<patch filename>}{<possible prereq}{<S>} = 1 or absent
+    # $prereq{<patch filename>}{<possible prereq}  exists or not (later)
+    # $prereq{<patch filename>}               exists or not (even later)
+
+    my $merged_pq;
+
+    my $mwrecknote = sub { &mwrecknote($wrecknotes, @_); };
+
+    my $attempt_cmd = sub { &merge_attempt_cmd($wrecknotes, @_); };
+
+    local $workarea;
+    fresh_workarea "merge";
+    my $seriesfile = "debian/patches/series";
+    in_workarea sub {
+	playtree_setup();
+	foreach my $q ($base_q, reverse @input_qs) {
+	    my $s = $q->{MR}{S};
+	    my $any = gbp_pq_export "p-$s", $q->{SeriesBase}, $q->{SeriesTip};
+	    my @earlier;
+	    if ($any) {
+		open S, $seriesfile or confess "$seriesfile $!";
+		while (my $patch = <S>) {
+		    chomp $patch or confess "$!";
+		    $prereq{$patch} //= {};
+		    foreach my $earlier (@earlier) {
+			$prereq{$patch}{$earlier}{$s}++ and confess;
+		    }
+		    push @earlier, $patch;
+		    stat "debian/patches/$patch" or confess "$patch ?";
+		}
+		S->error and confess "$seriesfile $!";
+		close S;
+	    }
+	    read_tree_upstream $newbase, 1;
+	    my $pec = make_commit [ grep { defined } $base_q->{MR}{PEC} ], [
+                "Convert $s to patch queue for merging",
+                "[git-debrebase merge-innards patch-queue import:".
+                " $q->{SeriesTip}]"
+            ];
+	    printdebug "merge_series  pec $pec ";
+	    runcmd @git, qw(rm -q --ignore-unmatch --cached), $seriesfile;
+	    $pec = make_commit [ $pec ], [
+                "Drop series file from $s to avoid merge trouble",
+                "[git-debrebase merge-innards patch-queue prep:".
+                " $q->{SeriesTip}]"
+            ];
+
+	    read_tree_debian $newbase;
+	    if (@earlier) {
+		read_tree_subdir 'debian/patches', "$pec:debian/patches";
+	    } else {
+		rm_subdir_cached 'debian/patches';
+	    }
+	    $pec = make_commit [ $pec ], [
+ "Update debian/ (excluding patches) to final to avoid re-merging",
+ "debian/ was already merged and we need to just take that.",
+                "[git-debrebase merge-innards patch-queue packaging:".
+                " $q->{SeriesTip}]"
+            ];
+
+	    printdebug "pec' $pec\n";
+            runcmd @git, qw(reset -q --hard), $pec;
+	    $q->{MR}{PEC} = $pec;
+	    $mwrecknote->("$q->{LeftRight}-patchqueue", $pec);
+	}
+	# now, because of reverse, we are on $input_q->{MR}{OQC}
+	runcmd @git, qw(checkout -q -b merge);
+	printdebug "merge_series merging...\n";
+	my @mergecmd = (@git, qw(merge --quiet --no-edit), "p-1");
+
+	$attempt_cmd->(@mergecmd);
+
+	printdebug "merge_series merge ok, series...\n";
+	# We need to construct a new series file
+	# Firstly, resolve prereq
+	foreach my $f (sort keys %prereq) {
+	    printdebug "merge_series  patch\t$f\t";
+	    if (!stat_exists "debian/patches/$f") {
+		print DEBUG " drop\n" if $debuglevel;
+		# git merge deleted it; that's how we tell it's not wanted
+		delete $prereq{$f};
+		next;
+	    }
+	    print DEBUG " keep\n" if $debuglevel;
+	    foreach my $g (sort keys %{ $prereq{$f} }) {
+		my $gfp = $prereq{$f}{$g};
+		printdebug "merge_series  prereq\t$f\t-> $g\t";
+		if (!!$gfp->{0} == !!$gfp->{1}
+		    ? $gfp->{0}
+		    : !$gfp->{base}) {
+		    print DEBUG "\tkeep\n" if $debuglevel;
+		} else {
+		    print DEBUG "\tdrop\n" if $debuglevel;
+		    delete $prereq{$f}{$g};
+		}
+	    }
+	}
+
+	my $unsat = sub {
+	    my ($f) = @_;
+	    return scalar keys %{ $prereq{$f} };
+	};
+
+	my $nodate = time + 1;
+	my %authordate;
+	# $authordate{<patch filename>};
+	my $authordate = sub {
+	    my ($f) = @_;
+	    $authordate{$f} //= do {
+		open PF, "<", "debian/patches/$f" or confess "$f $!";
+		while (<PF>) {
+		    return $nodate if m/^$/;
+		    last if s{^Date: }{};
+		}
+		chomp;
+		return cmdoutput qw(date +%s -d), $_;
+	    };
+	};
+
+	open NS, '>', $seriesfile or confess "$!";
+
+	while (keys %prereq) {
+	    my $best;
+	    foreach my $try (sort keys %prereq) {
+		if ($best) {
+		    next if (
+			     $unsat->($try) <=> $unsat->($best) or
+			     $authordate->($try) <=> $authordate->($best) or
+			     $try cmp $best
+			    ) >= 0;
+		}
+		$best = $try;
+	    }
+	    printdebug "merge_series series next $best\n";
+	    print NS "$best\n" or confess "$!";
+	    delete $prereq{$best};
+	    foreach my $gp (values %prereq) {
+		delete $gp->{$best};
+	    }
+	}
+
+	runcmd @git, qw(add -f), $seriesfile;
+	runcmd @git, qw(commit --quiet -m), 'Merged patch queue form';
+	$merged_pq = git_rev_parse 'HEAD';
+	$mwrecknote->('merged-patchqueue', $merged_pq);
+    };
+    return merge_series_patchqueue_convert
+	    $wrecknotes, $newbase, $merged_pq;
+}
+
+sub merge_series_patchqueue_convert ($$$) {
+    my ($wrecknotes, $newbase, $merged_pq) = @_;
+
+    my $result;
+    in_workarea sub {
+	playtree_setup();
+	printdebug "merge_series series gbp pq import\n";
+	runcmd @git, qw(checkout -q -b mergec), $merged_pq;
+
+	merge_attempt_cmd($wrecknotes, qw(gbp pq import));
+	# MERGE-TODO consider git-format-patch etc. instead,
+	# since gbp pq doesn't always round-trip :-/
+
+	# OK now we are on patch-queue/merge, and we need to rebase
+	# onto the intended parent and drop the patches from each one
+
+	printdebug "merge_series series ok, building...\n";
+	my $build = $newbase;
+	my @lcmd = (@git, qw(rev-list --reverse mergec..patch-queue/mergec));
+	foreach my $c (grep /./, split /\n/, cmdoutput @lcmd) {
+	    my $commit = git_cat_file $c, 'commit';
+	    printdebug "merge_series series ok, building $c\n";
+	    read_tree_upstream $c, 0, $newbase;
+	    my $tree = cmdoutput @git, qw(write-tree);
+	    $commit =~ s{^parent (\S+)$}{parent $build}m or confess;
+	    $commit =~ s{^tree (\S+)$}{tree $tree}m      or confess;
+	    open C, ">", "../mcommit" or confess "$!";
+	    print C $commit or confess "$!";
+	    close C or confess "$!";
+	    $build = hash_commit '../mcommit';
+	}
+	$result = $build;
+	mwrecknote($wrecknotes, 'merged-result', $result);
+
+	runcmd @git, qw(update-ref refs/heads/result), $result;
+
+	runcmd @git, qw(checkout -q -b debug);
+	runcmd @git, qw(commit --allow-empty -q -m M-INDEX);
+	runcmd @git, qw(add .);
+	runcmd @git, qw(commit --allow-empty -q -m M-WORKTREE);
+	my $mdebug = git_rev_parse 'HEAD';
+	printdebug sprintf "merge_series done debug=%s\n", $mdebug;
+	mwrecknote($wrecknotes, 'merged-debug', $mdebug);
+    };
+    printdebug "merge_series returns $result\n";
+    return $result;
+}
+
+# classify returns an info hash like this
+#   CommitId => $objid
+#   Hdr => # commit headers, including 1 final newline
+#   Msg => # commit message (so one newline is dropped)
+#   Tree => $treeobjid
+#   Type => (see below)
+#   Parents = [ {
+#       Ix => $index # ie 0, 1, 2, ...
+#       CommitId
+#       Differs => return value from get_differs
+#       IsOrigin
+#       IsDggitImport => 'orig' 'tarball' 'unpatched' 'package' (as from dgit)
+#     } ...]
+#   NewMsg => # commit message, but with any [dgit import ...] edited
+#             # to say "[was: ...]"
+#
+# Types:
+#   Packaging
+#   Changelog
+#   Upstream
+#   AddPatches
+#   Mixed
+#
+#   Pseudomerge
+#     has additional entres in classification result
+#       Overwritten = [ subset of Parents ]
+#       Contributor = $the_remaining_Parent
+#
+#   DgitImportUnpatched
+#     has additional entry in classification result
+#       OrigParents = [ subset of Parents ]
+#
+#   Anchor
+#     has additional entry in classification result
+#       OrigParents = [ subset of Parents ]  # singleton list
+#
+#   TreatAsAnchor
+#
+#   BreakwaterStart
+#
+#   Unknown
+#     has additional entry in classification result
+#       Why => "prose"
+
+sub parsecommit ($;$) {
+    my ($objid, $p_ref) = @_;
+    # => hash with                   CommitId Hdr Msg Tree Parents
+    #    Parents entries have only   Ix CommitId
+    #    $p_ref, if provided, must be [] and is used as a base for Parents
+
+    $p_ref //= [];
+    confess if @$p_ref;
+
+    my ($h,$m) = get_commit $objid;
+
+    my ($t) = $h =~ m/^tree (\w+)$/m or confess $objid;
+    my (@ph) = $h =~ m/^parent (\w+)$/mg;
+
+    my $r = {
+	CommitId => $objid,
+	Hdr => $h,
+	Msg => $m,
+        Tree => $t,
+	Parents => $p_ref,
+    };
+
+    foreach my $ph (@ph) {
+	push @$p_ref, {
+            Ix => scalar @$p_ref,
+            CommitId => $ph,
+        };
+    }
+
+    return $r;
+}    
+
+sub classify ($) {
+    my ($objid) = @_;
+
+    my @p;
+    my $r = parsecommit($objid, \@p);
+    my $t = $r->{Tree};
+
+    foreach my $p (@p) {
+	$p->{Differs} = (get_differs $p->{CommitId}, $t),
+    }
+
+    printdebug "classify $objid \$t=$t \@p",
+	(map { sprintf " %s/%#x", $_->{CommitId}, $_->{Differs} } @p),
+	"\n";
+
+    my $classify = sub {
+	my ($type, @rest) = @_;
+	$r = { %$r, Type => $type, @rest };
+	if ($debuglevel) {
+	    printdebug " = $type ".(dd $r)."\n";
+	}
+	return $r;
+    };
+    my $unknown = sub {
+	my ($why) = @_;
+	$r = { %$r, Type => qw(Unknown), Why => $why };
+	printdebug " ** Unknown\n";
+	return $r;
+    };
+
+    if (grep { $_ eq $objid } @opt_anchors) {
+	return $classify->('TreatAsAnchor');
+    }
+
+    my @identical = grep { !$_->{Differs} } @p;
+    my ($stype, $series) = git_cat_file "$t:debian/patches/series";
+    my $haspatches = $stype ne 'missing' && $series =~ m/^\s*[^#\n\t ]/m;
+
+    if ($r->{Msg} =~ m{^\[git-debrebase anchor.*\]$}m) {
+	# multi-orig upstreams are represented with an anchor merge
+	# from a single upstream commit which combines the orig tarballs
+
+	# Every anchor tagged this way must be a merge.
+	# We are relying on the
+	#     [git-debrebase anchor: ...]
+	# commit message annotation in "declare" anchor merges (which
+	# do not have any upstream changes), to distinguish those
+	# anchor merges from ordinary pseudomerges (which we might
+	# just try to strip).
+	#
+	# However, the user is going to be doing git-rebase a lot.  We
+	# really don't want them to rewrite an anchor commit.
+	# git-rebase trips up on merges, so that is a useful safety
+	# catch.
+	#
+	# BreakwaterStart commits are also anchors in the terminology
+	# of git-debrebase(5), but they are untagged (and always
+	# manually generated).
+	#
+	# We cannot not tolerate any tagged linear commit (ie,
+	# BreakwaterStart commits tagged `[anchor:') because such a
+	# thing could result from an erroneous linearising raw git
+	# rebase of a merge anchor.  That would represent a corruption
+	# of the branch. and we want to detect and reject the results
+	# of such corruption before it makes it out anywhere.  If we
+	# reject it here then we avoid making the pseudomerge which
+	# would be needed to push it.
+
+	my $badanchor = sub {
+	    $unknown->(f_ "git-debrebase \`anchor' but %s", "@_");
+	};
+	@p == 2 or return $badanchor->(__ "has other than two parents");
+	$haspatches and return $badanchor->(__ "contains debian/patches");
+
+	# How to decide about l/r ordering of anchors ?  git
+	# --topo-order prefers to expand 2nd parent first.  There's
+	# already an easy rune to look for debian/ history anyway (git log
+	# debian/) so debian breakwater branch should be 1st parent; that
+	# way also there's also an easy rune to look for the upstream
+	# patches (--topo-order).
+
+	# Also this makes --first-parent be slightly more likely to
+	# be useful - it makes it provide a linearised breakwater history.
+
+	# Of course one can say something like
+	#  gitk -- ':/' ':!/debian'
+	# to get _just_ the commits touching upstream files, and by
+	# the TREESAME logic in git-rev-list this will leave the
+	# breakwater into upstream at the first anchor.  But that
+	# doesn't report debian/ changes at all.
+
+	# Other observations about gitk: by default, gitk seems to
+	# produce output in a different order to git-rev-list.  I
+	# can't seem to find this documented anywhere.  gitk
+	# --date-order DTRT.  But, gitk always seems to put the
+	# parents from left to right, in order, so it's easy to see
+	# which way round a pseudomerge is.
+
+	$p[0]{IsOrigin} and $badanchor->(__ "is an origin commit");
+	$p[1]{Differs} & ~DS_DEB and
+	    $badanchor->(__ "upstream files differ from left parent");
+	$p[0]{Differs} & ~D_UPS and
+	    $badanchor->(__ "debian/ differs from right parent");
+
+	return $classify->(qw(Anchor),
+			   OrigParents => [ $p[1] ]);
+    }
+
+    if (@p == 1) {
+	my $d = $r->{Parents}[0]{Differs};
+	if ($d == D_PAT_ADD) {
+	    return $classify->(qw(AddPatches));
+	} elsif ($d & (D_PAT_ADD|D_PAT_OTH)) {
+	    return $unknown->(__ "edits debian/patches");
+	} elsif ($d & DS_DEB and !($d & ~DS_DEB)) {
+	    my ($ty,$dummy) = git_cat_file "$p[0]{CommitId}:debian";
+	    if ($ty eq 'tree') {
+		if ($d == D_DEB_CLOG) {
+		    return $classify->(qw(Changelog));
+		} else {
+		    return $classify->(qw(Packaging));
+		}
+	    } elsif ($ty eq 'missing') {
+		return $classify->(qw(BreakwaterStart));
+	    } else {
+		return $unknown->(__ "parent's debian is not a directory");
+	    }
+	} elsif ($d == D_UPS) {
+	    return $classify->(qw(Upstream));
+	} elsif ($d & DS_DEB and $d & D_UPS and !($d & ~(DS_DEB|D_UPS))) {
+	    return $classify->(qw(Mixed));
+	} elsif ($d == 0) {
+	    return $unknown->(__ "no changes");
+	} else {
+	    confess "internal error $objid ?";
+	}
+    }
+    if (!@p) {
+	return $unknown->(__ "origin commit");
+    }
+
+    if (@p == 2 && @identical == 1) {
+	my @overwritten = grep { $_->{Differs} } @p;
+	confess "internal error $objid ?" unless @overwritten==1;
+	return $classify->(qw(Pseudomerge),
+			   Overwritten => [ $overwritten[0] ],
+			   Contributor => $identical[0]);
+    }
+    if (@p == 2 && @identical == 2) {
+	my $get_t = sub {
+	    my ($ph,$pm) = get_commit $_[0]{CommitId};
+	    $ph =~ m/^committer .* (\d+) [-+]\d+$/m
+		or confess "$_->{CommitId} ?";
+	    $1;
+	};
+	my @bytime = @p;
+	my $order = $get_t->($bytime[0]) <=> $get_t->($bytime[1]);
+	if ($order > 0) { # newer first
+	} elsif ($order < 0) {
+	    @bytime = reverse @bytime;
+	} else {
+	    # same age, default to order made by -s ours
+	    # that is, commit was made by someone who preferred L
+	}
+	return $classify->(qw(Pseudomerge),
+			   SubType => qw(Ambiguous),
+			   Contributor => $bytime[0],
+			   Overwritten => [ $bytime[1] ]);
+    }
+    foreach my $p (@p) {
+	my ($p_h, $p_m) = get_commit $p->{CommitId};
+	$p->{IsOrigin} = $p_h !~ m/^parent \w+$/m;
+	($p->{IsDgitImport},) = $p_m =~ m/^\[dgit import ([0-9a-z]+) .*\]$/m;
+    }
+    my @orig_ps = grep { ($_->{IsDgitImport}//'X') eq 'orig' } @p;
+    my $m2 = $r->{Msg};
+    if (!(grep { !$_->{IsOrigin} } @p) and
+	(@orig_ps >= @p - 1) and
+	$m2 =~ s{^\[(dgit import unpatched .*)\]$}{[was: $1]}m) {
+	$r->{NewMsg} = $m2;
+	return $classify->(qw(DgitImportUnpatched),
+			   OrigParents => \@orig_ps);
+    }
+
+    if (@p == 2 and
+	$r->{Msg} =~ m{^\[git-debrebase merged-breakwater.*\]$}m) {
+	return $classify->("MergedBreakwaters");
+    }
+    if ($r->{Msg} =~ m{^\[(git-debrebase|dgit)[: ].*\]$}m) {
+	return $unknown->(f_ "unknown kind of merge from %s", $1);
+    }
+    if (@p > 2) {
+	return $unknown->(__ "octopus merge");
+    }
+
+    return $classify->("VanillaMerge");
+}
+
+sub keycommits ($;$$$$$);
+
+sub mergedbreakwaters_anchor ($) {
+    my ($cl) = @_;
+    my $best_anchor;
+    foreach my $p (@{ $cl->{Parents} }) {
+	my ($panchor, $pbw) = keycommits $p->{CommitId},
+	    undef,undef,undef,undef, 1;
+	$best_anchor = $panchor
+	    if !defined $best_anchor
+	    or is_fast_fwd $best_anchor, $panchor;
+	fail f_ "inconsistent anchors in merged-breakwaters %s",
+	    $p->{CommitId}
+	    unless is_fast_fwd $panchor, $best_anchor;
+    }
+    return $best_anchor;
+}
+
+sub keycommits ($;$$$$$) {
+    my ($head, $furniture, $unclean, $trouble, $fatal, $claimed_bw) = @_;
+    # => ($anchor, $breakwater)
+
+    # $furniture->("unclean-$tagsfx", $msg, $cl)
+    # $unclean->("unclean-$tagsfx", $msg, $cl)
+    #   is called for each situation or commit that
+    #   wouldn't be found in a laundered branch
+    # $furniture is for furniture commits such as might be found on an
+    #   interchange branch (pseudomerge, d/patches, changelog)
+    # $trouble is for things whnich prevent the return of
+    #   anchor and breakwater information; if that is ignored,
+    #   then keycommits returns (undef, undef) instead.
+    # $fatal is for unprocessable commits, and should normally cause
+    #    a failure.  If ignored, agaion, (undef, undef) is returned.
+    #
+    # If $claimed_bw, this is supposed to be a breakwater commit.
+    #
+    # If a callback is undef, fail is called instead.
+    # If a callback is defined but false, the situation is ignored.
+    # Callbacks may say:
+    #   no warnings qw(exiting); last;
+    # if the answer is no longer wanted.
+
+    my ($anchor, $breakwater);
+    $breakwater = $head if $claimed_bw;
+    my $clogonly;
+    my $cl;
+    my $found_pm;
+    $fatal //= sub { fail_unprocessable $_[1]; };
+    my $x = sub {
+	my ($cb, $tagsfx, $mainwhy, $xwhy) = @_;
+	my $why = $mainwhy.$xwhy;
+	my $m = f_ "branch needs laundering (run git-debrebase): %s", $why;
+	fail $m unless defined $cb;
+	return unless $cb;
+	$cb->("unclean-$tagsfx", $why, $cl, $mainwhy);
+    };
+    my $found_anchor = sub {
+	($anchor) = @_;
+	$breakwater //= $clogonly;
+	$breakwater //= $head;
+	no warnings qw(exiting);
+	last;
+    };
+    for (;;) {
+	$cl = classify $head;
+	my $ty = $cl->{Type};
+	if ($ty eq 'Packaging') {
+	    $breakwater //= $clogonly;
+	    $breakwater //= $head;
+	} elsif ($ty eq 'Changelog') {
+	    # this is going to count as the tip of the breakwater
+	    # only if it has no upstream stuff before it
+	    $clogonly //= $head;
+	} elsif ($ty eq 'Anchor' or
+		 $ty eq 'TreatAsAnchor' or
+		 $ty eq 'BreakwaterStart') {
+	    $found_anchor->($head);
+	} elsif ($ty eq 'Upstream') {
+	    $x->($unclean, 'ordering',
+ (f_ "packaging change (%s) follows upstream change", $breakwater),
+		 (f_ " (eg %s)", $head))
+		if defined $breakwater;
+	    $clogonly = undef;
+	    $breakwater = undef;
+	} elsif ($ty eq 'Mixed') {
+	    $x->($unclean, 'mixed',
+		 (__ "found mixed upstream/packaging commit"),
+		 (f_ " (%s)", $head));
+	    $clogonly = undef;
+	    $breakwater = undef;
+	} elsif ($ty eq 'Pseudomerge' or
+		 $ty eq 'AddPatches') {
+	    my $found_pm = 1;
+	    $x->($furniture, (lc $ty),
+		 (f_ "found interchange bureaucracy commit (%s)", $ty),
+		 (f_ " (%s)", $head));
+	} elsif ($ty eq 'DgitImportUnpatched') {
+	    if ($found_pm) {
+		$x->($trouble, 'dgitimport',
+		     (__ "found dgit dsc import"),
+		     (f_ " (%s)", $head));
+		return (undef,undef);
+	    } else {
+		$x->($fatal, 'unprocessable',
+		     (__ "found bare dgit dsc import with no prior history"),
+		     (f_ " (%s)", $head));
+		return (undef,undef);
+	    }
+	} elsif ($ty eq 'VanillaMerge') {
+	    $x->($trouble, 'vanillamerge',
+		 (__ "found vanilla merge"),
+		 (f_ " (%s)", $head));
+	    return (undef,undef);
+	} elsif ($ty eq 'MergedBreakwaters') {
+	    $found_anchor->(mergedbreakwaters_anchor $cl);
+	} else {
+	    $x->($fatal, 'unprocessable',
+		 (f_ "found unprocessable commit, cannot cope: %s",
+		     $cl->{Why}),
+		 (f_ " (%s)", $head));
+	    return (undef,undef);
+	}
+	$head = $cl->{Parents}[0]{CommitId};
+    }
+    return ($anchor, $breakwater);
+}
+
+sub treated_anchor_msg () {
+    __ 'old anchor is recognised due to --anchor, cannot check upstream'
+}
+
+sub walk ($;$$$);
+sub walk ($;$$$) {
+    my ($input,
+	$nogenerate,$report, $report_lprefix) = @_;
+    # => ($tip, $breakwater_tip, $last_anchor)
+    # (or nothing, if $nogenerate)
+
+    printdebug "*** WALK $input ".($nogenerate//0)." ".($report//'-')."\n";
+    $report_lprefix //= '';
+
+    # go through commits backwards
+    # we generate two lists of commits to apply:
+    # breakwater branch and upstream patches
+    my (@brw_cl, @upp_cl, @processed);
+    my %found;
+    my $upp_limit;
+    my @pseudomerges;
+
+    my $cl;
+    my $xmsg = sub {
+	my ($prose, $info) = @_;
+	# We deliberately do not translate $prose, since this mostly
+	# appears in commits in Debian and they should be in English.
+	my $ms = $cl->{Msg};
+	chomp $ms;
+	confess unless defined $info;
+	$ms .= "\n\n[git-debrebase $info: $prose]\n";
+	return (Msg => $ms);
+    };
+    my $rewrite_from_here = sub {
+	my ($cl) = @_;
+	my $sp_cl = { SpecialMethod => 'StartRewrite' };
+	push @$cl, $sp_cl;
+	push @processed, $sp_cl;
+    };
+    my $cur = $input;
+
+    my $prdelim = "";
+    my $prprdelim = sub { print $report $prdelim if $report; $prdelim=""; };
+
+    my $prline = sub {
+	return unless $report;
+	print $report $prdelim, $report_lprefix, @_;
+	$prdelim = "\n";
+    };
+
+    my $bomb = sub { # usage: return $bomb->();
+	print $report " Unprocessable" if $report;
+	print $report " ($cl->{Why})" if $report && defined $cl->{Why};
+	$prprdelim->();
+	if ($nogenerate) {
+	    return (undef,undef);
+	}
+	my $d =
+	    join ' ',
+	    map { sprintf "%#x", $_->{Differs} }
+	    @{ $cl->{Parents} };
+	fail_unprocessable f_ +(defined $cl->{Why}
+ ? i_ 'found unprocessable commit, cannot cope; %3$s: (commit %1$s) (d.%2$s)'
+ : i_ 'found unprocessable commit, cannot cope: (commit %1$s) (d.%2$s)'),
+                                   $cur, $d, $cl->{Why};
+    };
+
+    my $build;
+    my $breakwater;
+
+    my $build_start = sub {
+	my ($msg, $parent) = @_;
+	$prline->(" $msg");
+	$build = $parent;
+	no warnings qw(exiting); last;
+    };
+
+    my $nomerge = sub {
+	my ($emsg) = @_;
+	merge_failed $cl->{MergeWreckNotes}, $emsg;
+    };
+
+    my $mwrecknote = sub { &mwrecknote($cl->{MergeWreckNotes}, @_); };
+
+    my $last_anchor;
+
+    for (;;) {
+	$cl = classify $cur;
+	$cl->{MergeWreckNotes} //= {};
+	my $ty = $cl->{Type};
+	my $st = $cl->{SubType};
+	$prline->("$cl->{CommitId} $cl->{Type}");
+	$found{$ty. ( defined($st) ? "-$st" : '' )}++;
+	push @processed, $cl;
+	my $p0 = @{ $cl->{Parents} }==1 ? $cl->{Parents}[0]{CommitId} : undef;
+	if ($ty eq 'AddPatches') {
+	    $cur = $p0;
+	    $rewrite_from_here->(\@upp_cl);
+	    next;
+	} elsif ($ty eq 'Packaging' or $ty eq 'Changelog') {
+	    push @brw_cl, $cl;
+	    $cur = $p0;
+	    next;
+	} elsif ($ty eq 'BreakwaterStart') {
+            $last_anchor = $cur;
+	    $build_start->('FirstPackaging', $cur);
+	} elsif ($ty eq 'Upstream') {
+	    push @upp_cl, $cl;
+	    $cur = $p0;
+	    next;
+	} elsif ($ty eq 'Mixed') {
+	    my $queue = sub {
+		my ($q, $wh) = @_;
+		my $cls = { %$cl, $xmsg->("mixed commit: $wh part",'split') };
+		push @$q, $cls;
+	    };
+	    $queue->(\@brw_cl, "debian");
+	    $queue->(\@upp_cl, "upstream");
+	    $rewrite_from_here->(\@brw_cl);
+	    $cur = $p0;
+	    next;
+	} elsif ($ty eq 'Pseudomerge') {
+	    my $contrib = $cl->{Contributor}{CommitId};
+	    print $report " Contributor=$contrib" if $report;
+	    push @pseudomerges, $cl;
+	    $rewrite_from_here->(\@upp_cl);
+	    $cur = $contrib;
+	    next;
+	} elsif ($ty eq 'Anchor' or $ty eq 'TreatAsAnchor') {
+            $last_anchor = $cur;
+	    $build_start->("Anchor", $cur);
+	} elsif ($ty eq 'DgitImportUnpatched') {
+	    my $pm = $pseudomerges[-1];
+	    if (defined $pm) {
+		# To an extent, this is heuristic.  Imports don't have
+		# a useful history of the debian/ branch.  We assume
+		# that the first pseudomerge after an import has a
+		# useful history of debian/, and ignore the histories
+		# from later pseudomerges.  Often the first pseudomerge
+		# will be the dgit import of the upload to the actual
+		# suite intended by the non-dgit NMUer, and later
+		# pseudomerges may represent in-archive copies.
+		my $ovwrs = $pm->{Overwritten};
+		printf $report " PM=%s \@Overwr:%d",
+		    $pm->{CommitId}, (scalar @$ovwrs)
+		    if $report;
+		if (@$ovwrs != 1) {
+                    printdebug "*** WALK BOMB DgitImportUnpatched\n";
+		    return $bomb->();
+		}
+		my $ovwr = $ovwrs->[0]{CommitId};
+		printf $report " Overwr=%s", $ovwr if $report;
+		# This import has a tree which is just like a
+		# breakwater tree, but it has the wrong history.  It
+		# ought to have the previous breakwater (which the
+		# pseudomerge overwrote) as an ancestor.  That will
+		# make the history of the debian/ files correct.  As
+		# for the upstream version: either it's the same as
+		# was ovewritten (ie, same as the previous
+		# breakwater), in which case that history is precisely
+		# right; or, otherwise, it was a non-gitish upload of a
+		# new upstream version.  We can tell these apart by
+		# looking at the tree of the supposed upstream.
+		push @brw_cl, {
+		    %$cl,
+		    SpecialMethod => 'DgitImportDebianUpdate',
+                    $xmsg->("debian changes", 'convert dgit import')
+		}, {
+		    %$cl,
+		    SpecialMethod => 'DgitImportUpstreamUpdate',
+                    $xmsg->("convert dgit import: upstream update",
+			    "anchor")
+		};
+		$prline->(" Import");
+		$rewrite_from_here->(\@brw_cl);
+		$upp_limit //= $#upp_cl; # further, deeper, patches discarded
+		$cur = $ovwr;
+		next;
+	    } else {
+		# Everything is from this import.  This kind of import
+		# is already nearly in valid breakwater format, with the
+		# patches as commits.  Unfortunately it contains
+		# debian/patches/.
+		printdebug "*** WALK BOMB bare dgit import\n";
+		$cl->{Why} = __ "bare dgit dsc import";
+		return $bomb->();
+	    }
+	    confess "$ty ?";
+	} elsif ($ty eq 'MergedBreakwaters') {
+	    $last_anchor = mergedbreakwaters_anchor $cl;
+	    $build_start->(' MergedBreakwaters', $cur);
+	    last;
+	} elsif ($ty eq 'VanillaMerge') {
+	    # User may have merged unstitched branch(es).  We will
+	    # have now lost what ffq-prev was then (since the later
+	    # pseudomerge may introduce further changes).  The effect
+	    # of resolving such a merge is that we may have to go back
+	    # further in history to find a merge base, since the one
+	    # which was reachable via ffq-prev is no longer findable.
+	    # This is suboptimal, but if it all works we'll have done
+	    # the right thing.
+	    # MERGE-TODO we should warn the user in the docs about this
+
+	    my $ok=1;
+	    my $best_anchor;
+	    # We expect to find a dominating anchor amongst the
+	    # inputs' anchors.  That will be the new anchor.
+	    #
+	    # More complicated is finding a merge base for the
+	    # breakwaters.  We need a merge base that is a breakwater
+	    # commit.  The ancestors of breakwater commits are more
+	    # breakwater commits and possibly upstream commits and the
+	    # ancestors of those upstream.  Upstreams might have
+	    # arbitrary ancestors.  But any upstream commit U is
+	    # either included in both anchors, in which case the
+	    # earlier anchor is a better merge base than any of U's
+	    # ancestors; or U is not included in the older anchor, in
+	    # which case U is not an ancestor of the vanilla merge at
+	    # all.  So no upstream commit, nor any ancestor thereof,
+	    # is a best merge base.  As for non-breakwater Debian
+	    # commits: these are never ancestors of any breakwater.
+	    #
+	    # So any best merge base as found by git-merge-base
+	    # is a suitable breakwater anchor.  Usually there will
+	    # be only one.
+
+	    printdebug "*** MERGE\n";
+
+	    my @bwbcmd = (@git, qw(merge-base));
+	    my @ibcmd = (@git, qw(merge-base --all));
+	    my $might_be_in_bw = 1;
+
+	    my $ps = $cl->{Parents};
+
+	    $mwrecknote->('vanilla-merge', $cl->{CommitId});
+
+	    foreach my $p (@$ps) {
+		$prline->(" VanillaMerge ".$p->{Ix});
+		$prprdelim->();
+		my ($ptip, $pbw, $panchor) =
+		    walk $p->{CommitId}, 0, $report,
+		         $report_lprefix.'  ';
+		$p->{Laundered} = $p->{SeriesTip} = $ptip;
+		$p->{Breakwater} = $p->{SeriesBase} = $pbw;
+		$p->{Anchor} = $panchor;
+
+		my $lr = $p->{LeftRight} = (qw(left right))[$p->{Ix}];
+		$mwrecknote->("$lr-input", $p->{CommitId});
+
+		my $mwrecknote_parent = sub {
+		    my ($which) = @_;
+		    $mwrecknote->("$lr-".(lc $which), $p->{$which});
+		};
+		$mwrecknote_parent->('Laundered');
+		$mwrecknote_parent->('Breakwater');
+		$mwrecknote_parent->('Anchor');
+
+		$best_anchor = $panchor if
+		    !defined $best_anchor or
+		    is_fast_fwd $best_anchor, $panchor;
+
+		printdebug " MERGE BA best=".($best_anchor//'-').
+		    " p=$panchor\n";
+	    }
+
+	    $mwrecknote->('result-anchor', $best_anchor);
+
+	    foreach my $p (@$ps) {
+		$prline->(" VanillaMerge ".$p->{Ix});
+		if (!is_fast_fwd $p->{Anchor}, $best_anchor) {
+		    $nomerge->('divergent anchors');
+		} elsif ($p->{Anchor} eq $best_anchor) {
+		    print $report " SameAnchor" if $report;
+		} else {
+		    print $report " SupersededAnchor" if $report;
+		}
+		if ($p->{Breakwater} eq $p->{CommitId}) {
+		    # this parent commit was its own breakwater,
+		    # ie it is part of the breakwater
+		    print $report " Breakwater" if $report;
+		} else {
+		    $might_be_in_bw = 0;
+		}
+		push @bwbcmd, $p->{Breakwater};
+		push @ibcmd, $p->{CommitId};
+	    }
+
+	    if ($ok && $might_be_in_bw) {
+		# We could rewrite this to contaion the metadata
+		# declaring it to be MergedBreakwaters, but
+		# unnecessarily rewriting a merge seems unhelpful.
+		$prline->(" VanillaMerge MergedBreakwaters");
+		$last_anchor = $best_anchor;
+		$build_start->('MergedBreakwaters', $cur);
+	    }
+
+	    my $bwb = cmdoutput @bwbcmd;
+
+	    # OK, now we have a breakwater base, but we need the merge
+	    # base for the interchange branch because we need the delta
+	    # queue.
+	    #
+	    # This a the best merge base of our inputs which has the
+	    # breakwater merge base as an ancestor.
+
+	    my @ibs =
+		grep /./,
+		split /\n/,
+		cmdoutput @ibcmd;
+
+            @ibs or confess 'internal error, expected anchor at least ?';
+
+	    my $ib;
+	    my $ibleaf;
+	    foreach my $tibix (0..$#ibs) {
+		my $tib = $ibs[$tibix];
+		my $ff = is_fast_fwd $bwb, $tib;
+		my $ok = !$ff ? 'rej' : $ib ? 'extra' : 'ok';
+		my $tibleaf = "interchange-mbcand-$ok-$tibix";
+		$mwrecknote->($tibleaf, $tib);
+		next unless $ff;
+		next if $ib;
+		$ib = $tib;
+		$ibleaf = $tibleaf;
+	    }
+
+	    $ib or $nomerge->("no suitable interchange merge base");
+
+	    $prline->("  VanillaMerge Base");
+	    $prprdelim->();
+	    my ($btip, $bbw, $banchor) = eval {
+		walk $ib, 0, $report, $report_lprefix.'  ';
+	    };
+	    $nomerge->("walking interchange branch merge base ($ibleaf):\n".
+		       $@)
+		if length $@;
+
+	    $mwrecknote->("mergebase-laundered", $btip);
+	    $mwrecknote->("mergebase-breakwater", $bbw);
+	    $mwrecknote->("mergebase-anchor", $banchor);
+
+	    my $ibinfo = { SeriesTip => $btip,
+			   SeriesBase => $bbw,
+			   Anchor => $banchor,
+			   LeftRight => 'mergebase' };
+
+	    $bbw eq $bwb
+		or $nomerge->("interchange merge-base ($ib)'s".
+			      " breakwater ($bbw)".
+			      " != breakwaters' merge-base ($bwb)");
+
+	    grep { $_->{Anchor} eq $ibinfo->{Anchor} } @$ps
+		 or $nomerge->("interchange merge-base ($ib)'s".
+			       " anchor ($ibinfo->{SeriesBase})".
+			       " != any merge input's anchor (".
+			       (join ' ', map { $_->{Anchor} } @$ps).
+			       ")");
+
+	    $cl->{MergeInterchangeBaseInfo} = $ibinfo;
+	    $cl->{MergeBestAnchor} = $best_anchor;
+	    push @brw_cl, {
+                %$cl,
+                SpecialMethod => 'MergeCreateMergedBreakwaters',
+                $xmsg->('constructed from vanilla merge',
+			'merged-breakwater'),
+            };
+	    push @upp_cl, {
+                %$cl,
+                SpecialMethod => 'MergeMergeSeries',
+            };
+	    $build_start->('MergeBreakwaters', $cur);
+        } else {
+            printdebug "*** WALK BOMB unrecognised\n";
+	    return $bomb->();
+	}
+    }
+    $prprdelim->();
+
+    printdebug "*** WALK prep done cur=$cur".
+        " brw $#brw_cl upp $#upp_cl proc $#processed pm $#pseudomerges\n";
+
+    return if $nogenerate;
+
+    # Now we build it back up again
+
+    fresh_workarea();
+
+    my $rewriting = 0;
+
+    $#upp_cl = $upp_limit if defined $upp_limit;
+ 
+    my $committer_authline = calculate_committer_authline();
+
+    printdebug "WALK REBUILD $build ".(scalar @processed)."\n";
+
+    confess __ "internal error" unless $build eq (pop @processed)->{CommitId};
+
+    in_workarea sub {
+	mkdir $rd or $!==EEXIST or confess "$!";
+	my $current_method;
+	my $want_debian = $build;
+	my $want_upstream = $build;
+
+	my $read_tree_upstream = sub { ($want_upstream) = @_; };
+	my $read_tree_debian = sub { ($want_debian) = @_; };
+
+	foreach my $cl (qw(Debian), (reverse @brw_cl),
+			{ SpecialMethod => 'RecordBreakwaterTip' },
+			qw(Upstream), (reverse @upp_cl)) {
+	    if (!ref $cl) {
+		$current_method = $cl;
+		next;
+	    }
+	    my $method = $cl->{SpecialMethod} // $current_method;
+	    my @parents = ($build);
+	    my $cltree = $cl->{CommitId};
+	    printdebug "WALK BUILD ".($cltree//'undef').
+		" $method (rewriting=$rewriting)\n";
+	    if ($method eq 'Debian') {
+		$read_tree_debian->($cltree);
+	    } elsif ($method eq 'Upstream') {
+		$read_tree_upstream->($cltree);
+	    } elsif ($method eq 'StartRewrite') {
+		$rewriting = 1;
+		next;
+	    } elsif ($method eq 'RecordBreakwaterTip') {
+		$breakwater = $build;
+		next;
+	    } elsif ($method eq 'DgitImportDebianUpdate') {
+		$read_tree_debian->($cltree);
+	    } elsif ($method eq 'DgitImportUpstreamUpdate') {
+ 		confess unless $rewriting;
+		my $differs = (get_differs $build, $cltree);
+		next unless $differs & D_UPS;
+		$read_tree_upstream->($cltree);
+		push @parents, map { $_->{CommitId} } @{ $cl->{OrigParents} };
+	    } elsif ($method eq 'MergeCreateMergedBreakwaters') {
+		print "Found a general merge, will try to tidy it up.\n";
+		$rewriting = 1;
+		$read_tree_upstream->($cl->{MergeBestAnchor});
+		$read_tree_debian->($cltree);
+		@parents = map { $_->{Breakwater} } @{ $cl->{Parents} };
+	    } elsif ($method eq 'MergeMergeSeries') {
+		my $cachehit = reflog_cache_lookup
+		    $merge_cache_ref, "vanilla-merge $cl->{CommitId}";
+		if ($cachehit) {
+		    print "Using supplied resolution for $cl->{CommitId}...\n";
+		    $build = $cachehit;
+		    $mwrecknote->('cached-resolution', $build);
+		} else {
+		    print "Running merge resolution for $cl->{CommitId}...\n";
+		    $mwrecknote->('new-base', $build);
+		    $build = merge_series
+			$build, $cl->{MergeWreckNotes},
+			$cl->{MergeInterchangeBaseInfo},
+			@{ $cl->{Parents} };
+		}
+		$last_anchor = $cl->{MergeBestAnchor};
+
+		# Check for mismerges:
+		my $check = sub {
+		    my ($against, $allow, $what) = @_;
+		    my $differs = get_differs $build, $against;
+		    $nomerge->(sprintf
+       "merge misresolved: %s are not the same (%s %s d.%#x)",
+			       $what, $against, $build, $differs)
+			if $differs & ~($allow | D_PAT_ADD);
+		};
+
+		# Breakwater changes which were in each side of the
+		# merge will have been incorporated into the
+		# MergeCreateMergedBreakwaters output.  Because the
+		# upstream series was rebased onto the new breakwater,
+		# so should all of the packaging changes which were in
+		# the input.
+		$check->($input, D_UPS, 'debian files');
+
+		# Upstream files are merge_series, which ought to
+		# have been identical to the original merge.
+		$check->($cl->{CommitId}, DS_DEB, 'upstream files');
+
+		print "Merge resolution successful.\n";
+		next;
+	    } else {
+		confess "$method ?";
+	    }
+	    if (!$rewriting) {
+		my $procd = (pop @processed) // 'UNDEF';
+		if ($cl ne $procd) {
+		    $rewriting = 1;
+		    printdebug "WALK REWRITING NOW cl=$cl procd=$procd\n";
+		}
+	    }
+	    if ($rewriting) {
+		read_tree_upstream $want_upstream, 0, $want_debian;
+
+		my $newtree = cmdoutput @git, qw(write-tree);
+		my $ch = $cl->{Hdr};
+		$ch =~ s{^tree .*}{tree $newtree}m or confess "$ch ?";
+		$ch =~ s{^parent .*\n}{}mg;
+		$ch =~ s{(?=^author)}{
+		    join '', map { "parent $_\n" } @parents
+		}me or confess "$ch ?";
+		if ($rewriting) {
+		    $ch =~ s{^committer .*$}{$committer_authline}m
+			or confess "$ch ?";
+		}
+		my $cf = "$rd/m$rewriting";
+		open CD, ">", $cf or confess "$!";
+		print CD $ch, "\n", $cl->{Msg} or confess "$!";
+		close CD or confess "$!";
+		my @cmd = (@git, qw(hash-object));
+		push @cmd, qw(-w) if $rewriting;
+		push @cmd, qw(-t commit), $cf;
+		my $newcommit = cmdoutput @cmd;
+		confess "$ch ?" unless $rewriting
+		    or $newcommit eq $cl->{CommitId};
+		$build = $newcommit;
+	    } else {
+		$build = $cl->{CommitId};
+		trees_diff_walk "$want_upstream:", "$build:", sub {
+		    my ($n) = @_;
+		    no warnings qw(exiting);
+		    next if $n eq 'debian/';
+		    confess f_ "mismatch %s ?", "@_";
+		};
+		trees_diff_walk "$want_debian:debian", "$build:debian", sub {
+		    confess f_ "mismatch %s ?", "@_";
+		};
+		my @old_parents = map { $_->{CommitId} } @{ $cl->{Parents} };
+		confess f_ "mismatch %s != %s ?", "@parents", "@old_parents"
+		    unless "@parents" eq "@old_parents";
+	    }
+            if (grep { $method eq $_ } qw(DgitImportUpstreamUpdate)) {
+                $last_anchor = $cur;
+            }
+	}
+    };
+
+    my $final_check = get_differs $build, $input;
+    confess f_ "internal error %#x %s %s", $final_check, $input, $build
+	if $final_check & ~D_PAT_ADD;
+
+    my @r = ($build, $breakwater, $last_anchor);
+    printdebug "*** WALK RETURN @r\n";
+    return @r
+}
+
+sub get_head () {
+    git_check_unmodified();
+    return git_rev_parse qw(HEAD);
+}
+
+sub update_head ($$$) {
+    my ($old, $new, $mrest) = @_;
+    push @deferred_updates, "update HEAD $new $old";
+    run_deferred_updates $mrest;
+}
+
+sub update_head_checkout ($$$) {
+    my ($old, $new, $mrest) = @_;
+    update_head $old, $new, $mrest;
+    runcmd @git, qw(reset --hard);
+}
+
+sub update_head_postlaunder ($$$) {
+    my ($old, $tip, $reflogmsg) = @_;
+    return if $tip eq $old && !@deferred_updates;
+    print f_ "%s: laundered (head was %s)\n", $us, $old;
+    update_head $old, $tip, $reflogmsg;
+    # no tree changes except debian/patches
+    runcmd @git, qw(rm --quiet --ignore-unmatch -rf debian/patches);
+}
+
+sub currently_rebasing() {
+    foreach (qw(rebase-merge rebase-apply)) {
+	return 1 if stat_exists "$maindir_gitdir/$_";
+    }
+    return 0;
+}
+
+sub bail_if_rebasing() {
+    fail __ "you are in the middle of a git-rebase already"
+	if currently_rebasing();
+}
+
+sub do_launder_head ($) {
+    my ($reflogmsg) = @_;
+    my $old = get_head();
+    record_ffq_auto();
+    my ($tip,$breakwater) = walk $old;
+    snags_maybe_bail();
+    update_head_postlaunder $old, $tip, $reflogmsg;
+    return ($tip,$breakwater);
+}
+
+sub cmd_launder_v0 () {
+    # =item git-debrebase launder-v0
+    # 
+    # Launders the branch without recording anything in ffq-prev.
+    # Then prints some information about the current branch.
+    # Do not use this operation;
+    # it will be withdrawn soon.
+    #
+    # (docs removed from manual and placed here in dgit 10.6;
+    # the code is retained for information)
+
+    badusage "no arguments to launder-v0 allowed" if @ARGV;
+    my $old = get_head();
+    my ($tip,$breakwater,$last_anchor) = walk $old;
+    update_head_postlaunder $old, $tip, 'launder';
+    printf "# breakwater tip\n%s\n", $breakwater;
+    printf "# working tip\n%s\n", $tip;
+    printf "# last anchor\n%s\n", $last_anchor;
+}
+
+sub defaultcmd_rebase () {
+    push @ARGV, @{ $opt_defaultcmd_interactive // [] };
+    my ($tip,$breakwater) = do_launder_head __ 'launder for rebase';
+    runcmd @git, qw(rebase), @ARGV, $breakwater if @ARGV;
+}
+
+sub cmd_analyse () {
+    badusage __ "analyse does not support any options"
+	if @ARGV and $ARGV[0] =~ m/^-/;
+    badusage __ "too many arguments to analyse" if @ARGV>1;
+    my ($old) = @ARGV;
+    if (defined $old) {
+	$old = git_rev_parse $old;
+    } else {
+	$old = git_rev_parse 'HEAD';
+    }
+    my ($dummy,$breakwater) = walk $old, 1,*STDOUT;
+    STDOUT->error and confess "$!";
+}
+
+sub ffq_check ($;$$) {
+    # calls $ff and/or $notff zero or more times
+    # then returns either (status,message) where status is
+    #    exists
+    #    detached
+    #    weird-symref
+    #    notbranch
+    # or (undef,undef, $ffq_prev,$gdrlast)
+    # $ff and $notff are called like this:
+    #   $ff->("message for stdout\n");
+    #   $notff->('snag-name', $message);
+    # normally $currentval should be HEAD
+    my ($currentval, $ff, $notff) =@_;
+
+    $ff //= sub { print $_[0] or confess "$!"; };
+    $notff //= \&snag;
+
+    my ($status, $message, $current, $ffq_prev, $gdrlast)
+	= ffq_prev_branchinfo();
+    return ($status, $message) unless $status eq 'branch';
+
+    my $exists = git_get_ref $ffq_prev;
+    return ('exists', f_ "%s already exists", $ffq_prev) if $exists;
+
+    return ('not-branch', __ 'HEAD symref is not to refs/heads/')
+	unless $current =~ m{^refs/heads/};
+    my $branch = $';
+
+    my @check_specs = split /\;/, (cfg "branch.$branch.ffq-ffrefs",1) // '*';
+    my %checked;
+
+    printdebug "ffq check_specs @check_specs\n";
+
+    my $check = sub {
+	my ($lrref, $desc) = @_;
+	printdebug "ffq might check $lrref ($desc)\n";
+	my $invert;
+	for my $chk (@check_specs) {
+	    my $glob = $chk;
+	    $invert = $glob =~ s{^[!^]}{};
+	    last if fnmatch $glob, $lrref;
+	}
+	return if $invert;
+	my $lrval = git_get_ref $lrref;
+	return unless length $lrval;
+
+	if (is_fast_fwd $lrval, $currentval) {
+	    $ff->(f_ "OK, you are ahead of %s\n", $lrref);
+	    $checked{$lrref} = 1;
+	} elsif (is_fast_fwd $currentval, $lrval) {
+	    $checked{$lrref} = -1;
+	    $notff->('behind', f_ "you are behind %s, divergence risk",
+		                  $lrref);
+	} else {
+	    $checked{$lrref} = -1;
+	    $notff->('diverged', f_ "you have diverged from %s", $lrref);
+	}
+    };
+
+    my $merge = cfg "branch.$branch.merge",1;
+    if (defined $merge and $merge =~ m{^refs/heads/}) {
+	my $rhs = $';
+	printdebug "ffq merge $rhs\n";
+	my $check_remote = sub {
+	    my ($remote, $desc) = @_;
+	    printdebug "ffq check_remote ".($remote//'undef')." $desc\n";
+	    return unless defined $remote;
+	    $check->("refs/remotes/$remote/$rhs", $desc);
+	};
+	$check_remote->((scalar cfg "branch.$branch.remote",1),
+			'remote fetch/merge branch');
+	$check_remote->((scalar cfg "branch.$branch.pushRemote",1) //
+			(scalar cfg "branch.$branch.pushDefault",1),
+			'remote push branch');
+    }
+    if ($branch =~ m{^dgit/}) {
+	$check->("refs/remotes/dgit/$branch",
+		 __ 'remote dgit branch');
+    } elsif ($branch =~ m{^master$}) {
+	$check->("refs/remotes/dgit/dgit/sid",
+		 __ 'remote dgit branch for sid');
+    }
+    return (undef, undef, $ffq_prev, $gdrlast);
+}
+
+sub record_ffq_prev_deferred () {
+    # => ('status', "message")
+    # 'status' may be
+    #    deferred          message is undef
+    #    exists
+    #    detached
+    #    weird-symref
+    #    notbranch
+    # if not ff from some branch we should be ff from, is an snag
+    # if "deferred", will have added something about that to
+    #   @deferred_update_messages, and also maybe printed (already)
+    #   some messages about ff checks
+    bail_if_rebasing();
+    my $currentval = get_head();
+
+    my ($status,$message, $ffq_prev,$gdrlast) = ffq_check $currentval;
+    return ($status,$message) if defined $status;
+
+    snags_maybe_bail();
+
+    push @deferred_updates, "update $ffq_prev $currentval $git_null_obj";
+    push @deferred_updates, "delete $gdrlast";
+    push @deferred_update_messages,
+	__ "Recorded previous head for preservation";
+    return ('deferred', undef);
+}
+
+sub record_ffq_auto () {
+    my ($status, $message) = record_ffq_prev_deferred();
+    if ($status eq 'deferred' || $status eq 'exists') {
+    } else {
+	snag $status, f_ "could not record ffq-prev: %s", $message;
+	snags_maybe_bail();
+    }
+}
+
+sub ffq_prev_info () {
+    bail_if_rebasing();
+    # => ($ffq_prev, $gdrlast, $ffq_prev_commitish)
+    my ($status, $message, $current, $ffq_prev, $gdrlast)
+	= ffq_prev_branchinfo();
+    if ($status ne 'branch') {
+	snag $status, f_ "could not check ffq-prev: %s", $message;
+	snags_maybe_bail();
+    }
+    my $ffq_prev_commitish = $ffq_prev && git_get_ref $ffq_prev;
+    return ($ffq_prev, $gdrlast, $ffq_prev_commitish);
+}
+
+sub stitch ($$$$$) {
+    my ($old_head, $ffq_prev, $gdrlast, $ffq_prev_commitish, $prose) = @_;
+
+    push @deferred_updates, "delete $ffq_prev $ffq_prev_commitish";
+
+    if (is_fast_fwd $old_head, $ffq_prev_commitish) {
+	my $differs = get_differs $old_head, $ffq_prev_commitish;
+	unless ($differs & ~D_PAT_ADD) {
+	    # ffq-prev is ahead of us, and the only tree changes it has
+	    # are possibly addition of things in debian/patches/.
+	    # Just wind forwards rather than making a pointless pseudomerge.
+	    record_gdrlast $gdrlast, $ffq_prev_commitish;
+	    update_head_checkout $old_head, $ffq_prev_commitish,
+		sprintf "stitch (%s)", __ 'fast forward';
+	    return;
+	}
+    }
+    fresh_workarea();
+    # We make pseudomerges with L as the contributing parent.
+    # This makes git rev-list --first-parent work properly.
+    my $new_head = make_commit [ $old_head, $ffq_prev ], [
+        # we translate this against the time when this same code is
+        # used outside Debian, for downstreams and users
+	(__ 'Declare fast forward / record previous work'),
+        "[git-debrebase pseudomerge: $prose]",
+    ];
+    record_gdrlast $gdrlast, $new_head;
+    update_head $old_head, $new_head, "stitch: $prose";
+}
+
+sub do_stitch ($;$) {
+    my ($prose, $unclean) = @_;
+
+    my ($ffq_prev, $gdrlast, $ffq_prev_commitish) = ffq_prev_info();
+    if (!$ffq_prev_commitish) {
+	fail __ "No ffq-prev to stitch." unless $opt_noop_ok;
+	return;
+    }
+    my $dangling_head = get_head();
+
+    keycommits $dangling_head, $unclean,$unclean,$unclean;
+    snags_maybe_bail();
+
+    stitch($dangling_head, $ffq_prev, $gdrlast, $ffq_prev_commitish, $prose);
+}
+
+sub cmd_new_upstream () {
+    # automatically and unconditionally launders before rebasing
+    # if rebase --abort is used, laundering has still been done
+
+    my %pieces;
+
+    badusage __ "need NEW-VERSION [UPS-COMMITTISH]" unless @ARGV >= 1;
+
+    # parse args - low commitment
+    my $spec_version = shift @ARGV;
+    my $new_version = (new Dpkg::Version $spec_version, check => 1);
+    fail f_ "bad version number \`%s'", $spec_version
+	unless defined $new_version;
+    if ($new_version->is_native()) {
+	$new_version = (new Dpkg::Version "$spec_version-1", check => 1);
+    }
+
+    my $new_upstream = (@ARGV && $ARGV[0] !~ m{^-}) ? shift @ARGV : undef;
+    my $new_upstream_version = upstreamversion $new_version;
+    my $new_upstream_version_show = stripepoch $new_upstream_version;
+    my $new_upstream_used;
+    ($new_upstream, $new_upstream_used) =
+	resolve_upstream_version $new_upstream, $new_upstream_version;
+
+    record_ffq_auto();
+
+    my $piece = sub {
+        my ($n, @x) = @_; # may be ''
+        my $pc = $pieces{$n} //= {
+    	    Name => $n,
+	    Desc => ($n ? (f_ "upstream piece \`%s'", $n)
+		        : (__ "upstream (main piece")),
+	};
+	while (my $k = shift @x) { $pc->{$k} = shift @x; }
+        $pc;
+    };
+
+    my @newpieces;
+    my $newpiece = sub {
+	my ($n, @x) = @_; # may be ''
+	my $pc = $piece->($n, @x, NewIx => (scalar @newpieces));
+	push @newpieces, $pc;
+    };
+
+    $newpiece->('',
+        OldIx => 0,
+        New => $new_upstream,
+    );
+    while (@ARGV && $ARGV[0] !~ m{^-}) {
+	my $n = shift @ARGV;
+
+        badusage __ "for each EXTRA-UPS-NAME need EXTRA-UPS-COMMITISH"
+            unless @ARGV && $ARGV[0] !~ m{^-};
+
+	my $c = git_rev_parse shift @ARGV;
+	confess unless $n =~ m/^$extra_orig_namepart_re$/;
+	$newpiece->($n, New => $c);
+    }
+
+    # now we need to investigate the branch this generates the
+    # laundered version but we don't switch to it yet
+    my $old_head = get_head();
+    my ($old_laundered_tip,$old_bw,$old_anchor) = walk $old_head;
+
+    my $old_bw_cl = classify $old_bw;
+    my $old_anchor_cl = classify $old_anchor;
+    my $old_upstream;
+    if (!$old_anchor_cl->{OrigParents}) {
+	snag 'anchor-treated', treated_anchor_msg();
+    } else {
+	$old_upstream = parsecommit
+	    $old_anchor_cl->{OrigParents}[0]{CommitId};
+	$piece->('', Old => $old_upstream->{CommitId});
+    }
+
+    if ($old_upstream && $old_upstream->{Msg} =~ m{^\[git-debrebase }m) {
+	if ($old_upstream->{Msg} =~
+ m{^\[git-debrebase upstream-combine (\.(?: $extra_orig_namepart_re)+)\:.*\]$}m
+	   ) {
+	    my @oldpieces = (split / /, $1);
+	    my $old_n_parents = scalar @{ $old_upstream->{Parents} };
+	    if ($old_n_parents != @oldpieces &&
+		$old_n_parents != @oldpieces + 1) {
+		snag 'upstream-confusing', f_
+		    "previous upstream combine %s".
+		    " mentions %d pieces (each implying one parent)".
+		    " but has %d parents".
+		    " (one per piece plus maybe a previous combine)",
+		    $old_upstream->{CommitId},
+		    (scalar @oldpieces),
+		    $old_n_parents;
+	    } elsif ($oldpieces[0] ne '.') {
+		snag 'upstream-confusing', f_
+		    "previous upstream combine %s".
+		    " first piece is not \`.'",
+		    $oldpieces[0];
+	    } else {
+		$oldpieces[0] = '';
+		foreach my $i (0..$#oldpieces) {
+		    my $n = $oldpieces[$i];
+		    my $hat = 1 + $i + ($old_n_parents - @oldpieces);
+		    $piece->($n, Old => $old_upstream->{CommitId}.'^'.$hat);
+		}
+	    }
+	} else {
+	    snag 'upstream-confusing', f_
+		"previous upstream %s is from".
+               " git-debrebase but not an \`upstream-combine' commit",
+	       $old_upstream->{CommitId};
+	}
+    }
+
+    foreach my $pc (values %pieces) {
+	if (!$old_upstream) {
+	    # we have complained already
+	} elsif (!$pc->{Old}) {
+	    snag 'upstream-new-piece',
+		f_ "introducing upstream piece \`%s'", $pc->{Name};
+	} elsif (!$pc->{New}) {
+	    snag 'upstream-rm-piece',
+		f_ "dropping upstream piece \`%s'", $pc->{Name};
+	} elsif (!is_fast_fwd $pc->{Old}, $pc->{New}) {
+	    snag 'upstream-not-ff',
+		f_ "not fast forward: %s %s",
+		   $pc->{Name}, "$pc->{Old}..$pc->{New}";
+	}
+    }
+
+    printdebug "%pieces = ", (dd \%pieces), "\n";
+    printdebug "\@newpieces = ", (dd \@newpieces), "\n";
+
+    snags_maybe_bail();
+
+    my $new_bw;
+
+    fresh_workarea();
+    in_workarea sub {
+	my @upstream_merge_parents;
+
+	if (!any_snags()) {
+	    push @upstream_merge_parents, $old_upstream->{CommitId};
+	}
+
+	foreach my $pc (@newpieces) { # always has '' first
+	    if ($pc->{Name}) {
+		read_tree_subdir $pc->{Name}, $pc->{New};
+	    } else {
+		runcmd @git, qw(read-tree), $pc->{New};
+	    }
+	    push @upstream_merge_parents, $pc->{New};
+	}
+
+	# index now contains the new upstream
+
+	if (@newpieces > 1) {
+	    # need to make the upstream subtree merge commit
+            $new_upstream = make_commit \@upstream_merge_parents,
+                [ "Combine upstreams for $new_upstream_version_show",
+ ("[git-debrebase upstream-combine . ".
+ (join " ", map { $_->{Name} } @newpieces[1..$#newpieces]).
+ ": new upstream]"),
+                ];
+	}
+
+	# $new_upstream is either the single upstream commit, or the
+	# combined commit we just made.  Either way it will be the
+	# "upstream" parent of the anchor merge.
+
+	read_tree_subdir 'debian', "$old_bw:debian";
+
+	# index now contains the anchor merge contents
+        $new_bw = make_commit [ $old_bw, $new_upstream ],
+            [ "Update to upstream $new_upstream_version_show",
+ "[git-debrebase anchor: new upstream $new_upstream_version, merge]",
+            ];
+
+	# Now we have to add a changelog stanza so the Debian version
+	# is right.  We use debchange to do this.  Invoking debchange
+	# here is a bit fiddly because it has a lot of optional
+	# exciting behaviours, some of which will break stuff, and
+	# some of which won't work in a playtree.
+
+	# Make debchange use git's idea of the user's identity.
+	# That way, if the user never uses debchange et al, configuring
+	# git is enough.
+	my $usetup = sub {
+	    my ($e, $k) = @_;
+	    my $v = cfg $k, 1;
+	    defined $v or return;
+	    $ENV{$e} = $v;
+	};
+	$usetup->('DEBEMAIL',    'user.email');
+	$usetup->('DEBFULLNAME', 'user.name');
+
+	my @dch = (qw(debchange
+		      --allow-lower-version .*
+		      --no-auto-nmu
+		      --preserve
+		      --vendor=Unknown-Vendor
+		      --changelog debian/changelog
+		      --check-dirname-level 0
+		      --release-heuristic=changelog
+		      -v), $new_version,
+                "Update to new upstream version $new_upstream_version_show.");
+
+	runcmd @git, qw(checkout -q debian/changelog);
+	runcmd @dch;
+	runcmd @git, qw(update-index --add --replace), 'debian/changelog';
+
+	# Now we have the final new breakwater branch in the index
+        $new_bw = make_commit [ $new_bw ],
+            [ "Update changelog for new upstream $new_upstream_version_show",
+              "[git-debrebase changelog: new upstream $new_upstream_version]",
+            ];
+    };
+
+    # we have constructed the new breakwater. we now need to commit to
+    # the laundering output, because git-rebase can't easily be made
+    # to make a replay list which is based on some other branch
+
+    update_head_postlaunder $old_head, $old_laundered_tip,
+        'launder for new upstream';
+
+    my @cmd = (@git, qw(rebase --onto), $new_bw, $old_bw, @ARGV);
+    local $ENV{GIT_REFLOG_ACTION} = git_reflog_action_msg
+	"debrebase new-upstream $new_version: rebase";
+    runcmd @cmd;
+    # now it's for the user to sort out
+}
+
+sub cmd_record_ffq_prev () {
+    badusage "no arguments allowed" if @ARGV;
+    my ($status, $msg) = record_ffq_prev_deferred();
+    if ($status eq 'exists' && $opt_noop_ok) {
+	print __ "Previous head already recorded\n" or confess "$!";
+    } elsif ($status eq 'deferred') {
+	run_deferred_updates 'record-ffq-prev';
+    } else {
+	fail f_ "Could not preserve: %s", $msg;
+    }
+}
+
+sub cmd_anchor () {
+    badusage __ "no arguments allowed" if @ARGV;
+    my ($anchor, $bw) = keycommits +(git_rev_parse 'HEAD'), 0,0;
+    print "$anchor\n" or confess "$!";
+}
+
+sub cmd_breakwater () {
+    badusage __ "no arguments allowed" if @ARGV;
+    my ($anchor, $bw) = keycommits +(git_rev_parse 'HEAD'), 0,0;
+    print "$bw\n" or confess "$!";
+}
+
+sub cmd_status () {
+    badusage __ "no arguments allowed" if @ARGV;
+
+    # todo: gdr status should print divergence info
+    # todo: gdr status should print upstream component(s) info
+    # todo: gdr should leave/maintain some refs with this kind of info ?
+
+    my $oldest = { Badness => 0 };
+    my $newest;
+    my $note = sub {
+	my ($badness, $ourmsg, $snagname, $dummy, $cl, $kcmsg) = @_;
+	if ($oldest->{Badness} < $badness) {
+	    $oldest = $newest = undef;
+	}
+	$oldest = {
+		   Badness => $badness,
+		   CommitId => $cl->{CommitId},
+		   OurMsg => $ourmsg,
+		   KcMsg => $kcmsg,
+		  };
+	$newest //= $oldest;
+    };
+    my ($anchor, $bw) = keycommits +(git_rev_parse 'HEAD'),
+	sub { $note->(1, __ 'branch contains furniture (not laundered)',@_); },
+	sub { $note->(2, __ 'branch is unlaundered', @_); },
+	sub { $note->(3, __ 'branch needs laundering', @_); },
+	sub { $note->(4, __ 'branch not in git-debrebase form', @_); };
+
+    my $prcommitinfo = sub {
+	my ($cid) = @_;
+	flush STDOUT or confess "$!";
+	runcmd @git, qw(--no-pager log -n1),
+	    '--pretty=format:    %h %s%n',
+	    $cid;
+    };
+
+    print __ "current branch contents, in git-debrebase terms:\n";
+    if (!$oldest->{Badness}) {
+	print __ "  branch is laundered\n";
+    } else {
+	print "  $oldest->{OurMsg}\n";
+	my $printed = '';
+	foreach my $info ($oldest, $newest) {
+	    my $cid = $info->{CommitId};
+	    next if $cid eq $printed;
+	    $printed = $cid;
+	    print "  $info->{KcMsg}\n";
+	    $prcommitinfo->($cid);
+	}
+    }
+
+    my $prab = sub {
+	my ($cid, $what) = @_;
+	if (!defined $cid) {
+	    print f_ "  %s is not well-defined\n", $what;
+	} else {
+	    print "  $what\n";
+	    $prcommitinfo->($cid);
+	}
+    };
+    print __ "key git-debrebase commits:\n";
+    $prab->($anchor, __ 'anchor');
+    $prab->($bw, __ 'breakwater');
+    if (defined $anchor) {
+	print "  upstream\n";
+	my $cl = classify $anchor;
+	my $ops = $cl->{OrigParents};
+	if ($ops) {
+	    $prcommitinfo->($ops->[0]{CommitId});
+	} else {
+	    printf "    %s\n", treated_anchor_msg();
+	}
+    }
+
+    my ($ffqstatus, $ffq_msg, $current, $ffq_prev, $gdrlast) =
+	ffq_prev_branchinfo();
+
+    print __ "branch and ref status, in git-debrebase terms:\n";
+    if ($ffq_msg) {
+	print "  $ffq_msg\n";
+    } else {
+	$ffq_prev = git_get_ref $ffq_prev;
+	$gdrlast = git_get_ref $gdrlast;
+	if ($ffq_prev) {
+	    print __ "  unstitched; previous tip was:\n";
+	    $prcommitinfo->($ffq_prev);
+	} elsif (!$gdrlast) {
+	    print __ "  stitched? (no record of git-debrebase work)\n";
+	} elsif (is_fast_fwd $gdrlast, 'HEAD') {
+	    print __ "  stitched\n";
+	} else {
+	    print __ "  not git-debrebase (diverged since last stitch)\n"
+	}
+    }
+    print __ "you are currently rebasing\n" if currently_rebasing();
+}
+
+sub cmd_stitch () {
+    my $prose = 'stitch';
+    getoptions("stitch",
+	       'prose=s', \$prose);
+    badusage __ "no arguments allowed" if @ARGV;
+    do_stitch $prose, 0;
+}
+sub cmd_prepush () {
+    $opt_noop_ok = 1;
+    cmd_stitch();
+}
+
+sub cmd_quick () {
+    badusage __ "no arguments allowed" if @ARGV;
+    do_launder_head __ 'launder for git-debrebase quick';
+    do_stitch 'quick';
+}
+
+sub cmd_conclude () {
+    my ($ffq_prev, $gdrlast, $ffq_prev_commitish) = ffq_prev_info();
+    if (!$ffq_prev_commitish) {
+	fail __ "No ongoing git-debrebase session." unless $opt_noop_ok;
+	return;
+    }
+    my $dangling_head = get_head();
+    
+    badusage "no arguments allowed" if @ARGV;
+    do_launder_head __ 'launder for git-debrebase quick';
+    do_stitch 'quick';
+}
+
+sub cmd_scrap () {
+    if (currently_rebasing()) {
+	runcmd @git, qw(rebase --abort);
+	push @deferred_updates, 'verify HEAD HEAD';
+	# noop, but stops us complaining that scrap was a noop
+    }
+    badusage __ "no arguments allowed" if @ARGV;
+    my ($ffq_prev, $gdrlast, $ffq_prev_commitish) = ffq_prev_info();
+    my $scrapping_head;
+    if ($ffq_prev_commitish) {
+	$scrapping_head = get_head();
+	push @deferred_updates,
+	    "update $gdrlast $ffq_prev_commitish $git_null_obj",
+	    "update $ffq_prev $git_null_obj $ffq_prev_commitish";
+    }
+    if (git_get_ref $merge_cache_ref) {
+	push @deferred_updates,
+	    "delete $merge_cache_ref";
+    }
+    if (!@deferred_updates) {
+	fail __ "No ongoing git-debrebase session." unless $opt_noop_ok;
+	finish 0;
+    }
+    snags_maybe_bail();
+    if ($scrapping_head) {
+	update_head_checkout $scrapping_head, $ffq_prev_commitish, "scrap";
+    } else {
+	run_deferred_updates "scrap";
+    }
+}
+
+sub make_patches_staged ($) {
+    my ($head) = @_;
+    # Produces the patches that would result from $head if it were
+    # laundered.
+    my ($secret_head, $secret_bw, $last_anchor) = walk $head;
+    fresh_workarea();
+    my $any;
+    in_workarea sub {
+	$any = gbp_pq_export 'bw', $secret_bw, $secret_head;
+    };
+    return $any;
+}
+
+sub make_patches ($) {
+    my ($head) = @_;
+    keycommits $head, 0, \&snag;
+    my $any = make_patches_staged $head;
+    my $out;
+    in_workarea sub {
+	my $ptree = !$any ? undef :
+	    cmdoutput @git, qw(write-tree --prefix=debian/patches/);
+	runcmd @git, qw(read-tree), $head;
+	if ($ptree) {
+	    read_tree_subdir 'debian/patches', $ptree;
+	} else {
+	    rm_subdir_cached 'debian/patches';
+	}
+	$out = make_commit [$head], [
+            (__ 'Commit patch queue (exported by git-debrebase)'),
+            '[git-debrebase make-patches: export and commit patches]',
+        ];
+    };
+    return $out;
+}
+
+sub cmd_make_patches () {
+    my $opt_quiet_would_amend;
+    getoptions("make-patches",
+	       'quiet-would-amend!', \$opt_quiet_would_amend);
+    badusage __ "no arguments allowed" if @ARGV;
+    bail_if_rebasing();
+    my $old_head = get_head();
+    my $new = make_patches $old_head;
+    my $d = get_differs $old_head, $new;
+    if ($d == 0) {
+	fail __ "No (more) patches to export." unless $opt_noop_ok;
+	return;
+    } elsif ($d == D_PAT_ADD) {
+	snags_maybe_bail();
+	update_head_checkout $old_head, $new, 'make-patches';
+    } else {
+	print STDERR failmsg f_
+	    "Patch export produced patch amendments".
+	    " (abandoned output commit %s).".
+	    "  Try laundering first.",
+	    $new
+	    unless $opt_quiet_would_amend;
+	finish 7;
+    }
+}
+
+sub check_series_has_all_patches ($) {
+    my ($head) = @_;
+    my $seriesfn = 'debian/patches/series';
+    my ($dummy, $series) = git_cat_file "$head:$seriesfn",
+	[qw(blob missing)];
+    $series //= '';
+    my %series;
+    our $comments_snagged;
+    foreach my $f (grep /\S/, grep {!m/^\s\#/} split /\n/, $series) {
+	if ($f =~ m/^\s*\#/) {
+	    snag 'series-comments', f_
+		"%s contains comments, which will be discarded",
+		$seriesfn
+		unless $comments_snagged++;
+	    next;
+	}
+	fail f_ "patch %s repeated in %s !", $f, $seriesfn if $series{$f}++;
+    }
+    foreach my $patchfile (get_tree "$head:debian/patches", 1,1) {
+	my ($f,$i) = @$patchfile;
+	next if $series{$f};
+	next if $f eq 'series';
+	snag 'unused-patches', f_
+	    "Unused patch file %s will be discarded", $f;
+    }
+}
+
+sub begin_convert_from () {
+    my $head = get_head();
+    my ($ffqs, $ffqm, $symref, $ffq_prev, $gdrlast) = ffq_prev_branchinfo();
+
+    fail __ "ffq-prev exists, this is already managed by git-debrebase!"
+	if $ffq_prev && git_get_ref $ffq_prev;
+
+    my $gdrlast_obj = $gdrlast && git_get_ref $gdrlast;
+    snag 'already-converted', __
+	"ahead of debrebase-last, this is already managed by git-debrebase!"
+	if $gdrlast_obj && is_fast_fwd $gdrlast_obj, $head;
+    return ($head, { LastRef => $gdrlast, LastObj => $gdrlast_obj });
+}
+
+sub complete_convert_from ($$$$) {
+    my ($old_head, $new_head, $gi, $mrest) = @_;
+    snags_maybe_bail();
+    ffq_check $new_head;
+    record_gdrlast $gi->{LastRef}, $new_head, $gi->{LastObj}
+	if $gi->{LastRef};
+    snags_maybe_bail();
+    update_head_checkout $old_head, $new_head, $mrest;
+}
+
+sub cmd_convert_from_unapplied () { cmd_convert_from_gbp(); }
+sub cmd_convert_from_gbp () {
+    badusage __ "want only 1 optional argument, the upstream git commitish"
+	unless @ARGV<=1;
+
+    my $clogp = parsechangelog();
+    my $version = $clogp->{'Version'}
+	// fail __ "missing Version from changelog\n";
+
+    my ($upstream_spec) = @ARGV;
+
+    my $upstream_version = upstreamversion $version;
+    my ($upstream, $upstream_used) =
+	resolve_upstream_version($upstream_spec, $upstream_version);
+
+    my ($old_head, $gdrlastinfo) = begin_convert_from();
+
+    my $upsdiff = get_differs $upstream, $old_head;
+    if ($upsdiff & D_UPS) {
+	runcmd @git, qw(--no-pager diff --stat),
+	    $upstream, $old_head,
+	    qw( -- :!/debian :/);
+	fail f_ <<END, $upstream_used, $upstream;
+upstream (%s) and HEAD are not
+identical in upstream files.  See diffstat above, or run
+  git diff %s HEAD -- :!/debian :/
+END
+    }
+
+    if (!is_fast_fwd $upstream, $old_head) {
+	snag 'upstream-not-ancestor',
+	    f_ "upstream (%s) is not an ancestor of HEAD", $upstream;
+    } else {
+	my $wrong = cmdoutput
+	    (@git, qw(rev-list --ancestry-path), "$upstream..HEAD",
+	     qw(-- :/ :!/debian));
+	if (length $wrong) {
+	    snag 'unexpected-upstream-changes', f_
+		"history between upstream (%s) and HEAD contains direct changes to upstream files - are you sure this is a gbp (patches-unapplied) branch?",
+		$upstream_used;
+	    print STDERR f_ "list expected changes with:  %s\n", 
+ "git log --stat --ancestry-path $upstream..HEAD -- :/ ':!/debian'";
+	}
+    }
+
+    if ((git_cat_file "$upstream:debian")[0] ne 'missing') {
+	snag 'upstream-has-debian',
+	    f_ "upstream (%s) contains debian/ directory", $upstream;
+    }
+
+    check_series_has_all_patches $old_head;
+
+    my $previous_dgit_view = eval {
+	my @clogcmd = qw(dpkg-parsechangelog --format rfc822 -n2);
+	my ($lvsn, $suite);
+	parsechangelog_loop \@clogcmd, 'debian/changelog', sub {
+	    my ($stz, $desc) = @_;
+	    no warnings qw(exiting);
+	    printdebug 'CHANGELOG ', Dumper($desc, $stz);
+	    next unless $stz->{Date};
+	    next unless $stz->{Distribution} ne 'UNRELEASED';
+	    $lvsn = $stz->{Version};
+	    $suite = $stz->{Distribution};
+	    last;
+	};
+	die __ "neither of the first two changelog entries are released\n"
+	    unless defined $lvsn;
+	print "last finished-looking changelog entry: ($lvsn) $suite\n";
+	my $mtag_pat = debiantag_maintview $lvsn, '*';
+	my $mtag = cmdoutput @git, qw(describe --always --abbrev=0 --match),
+	    $mtag_pat;
+	die f_ "could not find suitable maintainer view tag %s\n", $mtag_pat
+	    unless $mtag =~ m{/};
+	is_fast_fwd $mtag, 'HEAD' or
+	    die f_ "HEAD is not FF from maintainer tag %s!", $mtag;
+	my $dtag = "archive/$mtag";
+	git_get_ref "refs/tags/$dtag" or
+	    die f_ "dgit view tag %s not found\n", $dtag;
+	is_fast_fwd $mtag, $dtag or
+	    die f_ "dgit view tag %s is not FF from maintainer tag %s\n",
+	           $dtag, $mtag;
+	print f_ "will stitch in dgit view, %s\n", $dtag;
+	git_rev_parse $dtag;
+    };
+    if (!$previous_dgit_view) {
+	$@ =~ s/^\n+//;
+	chomp $@;
+	print STDERR f_ <<END, "$@";
+Cannot confirm dgit view: %s
+Failed to stitch in dgit view (see messages above).
+dgit --trust-changelog will be needed on the first dgit push after conversion.
+END
+    }
+
+    snags_maybe_bail_early();
+
+    my $work;
+
+    fresh_workarea();
+    in_workarea sub {
+	runcmd @git, qw(checkout -q -b gdr-internal), $old_head;
+	# make a branch out of the patch queue - we'll want this in a mo
+	runcmd qw(gbp pq import);
+	# strip the patches out
+	runcmd @git, qw(checkout -q gdr-internal~0);
+	rm_subdir_cached 'debian/patches';
+	$work = make_commit ['HEAD'], [
+ 'git-debrebase convert-from-gbp: drop patches from tree',
+ 'Delete debian/patches, as part of converting to git-debrebase format.',
+ '[git-debrebase convert-from-gbp: drop patches from tree]'
+			      ];
+	# make the anchor merge
+	# the tree is already exactly right
+	$work = make_commit [$work, $upstream], [
+ 'git-debrebase import: declare upstream',
+ 'First breakwater merge.',
+ '[git-debrebase anchor: declare upstream]'
+			      ];
+
+	# rebase the patch queue onto the new breakwater
+	runcmd @git, qw(reset --quiet --hard patch-queue/gdr-internal);
+	runcmd @git, qw(rebase --quiet --onto), $work, qw(gdr-internal);
+	$work = git_rev_parse 'HEAD';
+
+	if ($previous_dgit_view) {
+	    $work = make_commit [$work, $previous_dgit_view], [
+ 'git-debrebase import: declare ff from dgit archive view',
+ '[git-debrebase pseudomerge: import-from-gbp]',
+            ];
+	}
+    };
+
+    complete_convert_from $old_head, $work, $gdrlastinfo, 'convert-from-gbp';
+    print f_ <<END, $us or confess "$!";
+%s: converted from patched-unapplied (gbp) branch format, OK
+END
+}
+
+sub cmd_convert_to_gbp () {
+    badusage "no arguments allowed" if @ARGV;
+    my $head = get_head();
+    my (undef, undef, undef, $ffq, $gdrlast) = ffq_prev_branchinfo();
+    my ($anchor, $breakwater) = keycommits $head, 0;
+    my $out = $breakwater;
+    my $any = make_patches_staged $head;
+    if ($any) {
+	in_workarea sub {
+	    $out = make_commit [$out], [
+		'Commit patch queue (converted from git-debrebase format)',
+		'[git-debrebase convert-to-gbp: commit patches]',
+	    ];
+	};
+    } else {
+	# in this case, it can be fast forward
+	$out = $head;
+    }
+    if (defined $ffq) {
+	push @deferred_updates, "delete $ffq";
+	push @deferred_updates, "delete $gdrlast";
+    }
+    snags_maybe_bail();
+    update_head_checkout $head, $out, "convert to gbp (v0)";
+    print f_ <<END, $us,$us,$us or confess "$!";
+%s: converted to git-buildpackage branch format
+%s: WARNING: do not now run "git-debrebase" any more
+%s: WARNING: doing so would drop all upstream patches!
+END
+}
+
+sub cmd_convert_from_dgit_view () { 
+    my $clogp = parsechangelog();
+
+    my $bpd = (cfg 'dgit.default.build-products-dir',1) // '..';
+    my $do_origs = 1;
+    my $do_tags = 1;
+    my $always = 0;
+    my $diagnose = 0;
+
+    getoptions("convert-from-dgit-view",
+	       'diagnose!', \$diagnose,
+	       'build-products-dir:s', \$bpd,
+	       'origs!', \$do_origs,
+	       'tags!', \$do_tags,
+	       'always-convert-anyway!', \$always);
+    fail __ "takes 1 optional argument, the upstream commitish" if @ARGV>1;
+
+    my @upstreams;
+
+    if (@ARGV) {
+	my $spec = shift @ARGV;
+	my $commit = git_rev_parse "$spec^{commit}";
+	push @upstreams, { Commit => $commit,
+			   Source => (f_ "%s, from command line", $spec),
+			   Only => 1,
+			 };
+    }
+
+    my ($head, $gdrlastinfo) = begin_convert_from();
+
+    if (!$always) {
+	my $troubles = 0;
+	my $trouble = sub { $troubles++; };
+	keycommits $head, sub{}, sub{}, $trouble, $trouble;
+	printdebug "troubles=$troubles\n";
+	if (!$troubles) {
+	    print STDERR f_ <<END, $us,$us,$us;
+%s: Branch already seems to be in git-debrebase format!
+%s: --always-convert-anyway would do the conversion operation anyway
+%s: but is probably a bad idea.  Probably, you wanted to do nothing.
+END
+	    fail __ "Branch already in git-debrebase format."
+		unless $opt_noop_ok;
+	    finish 0;
+	}
+    }
+
+    check_series_has_all_patches $head;
+
+    snags_maybe_bail_early();
+
+    my $version = upstreamversion $clogp->{Version};
+    print STDERR __
+	"Considering possible commits corresponding to upstream:\n";
+
+    if (!@upstreams) {
+	if ($do_tags) {
+	    my @tried;
+	    my ($ups_tag, $ups_rev) =
+	        upstream_commitish_search $version, \@tried;
+	    if ($ups_rev) {
+		my $this = f_ "git tag %s", $ups_tag;
+		push @upstreams, { Commit => "$ups_rev~0",
+				   Source => $this,
+				 };
+	    } else {
+		print STDERR f_
+		    " git tag: no suitable tag found (tried %s)\n",
+		    "@tried";
+	    }
+	}
+	if ($do_origs) {
+	    my $p = $clogp->{'Source'};
+	    # we do a quick check to see if there are plausible origs
+	    my $something=0;
+	    if (!opendir BPD, $bpd) {
+		die f_ "opendir build-products-dir %s: %s", $bpd, $!
+		    unless $!==ENOENT;
+	    } else {
+		while ($!=0, my $f = readdir BPD) {
+		    next unless is_orig_file_of_p_v $f, $p, $version;
+		    print STDERR f_
+			" orig: found what looks like a .orig, %s\n",
+			"$bpd/$f";
+		    $something=1;
+		    last;
+		}
+		confess "read $bpd: $!" if $!;
+		closedir BPD;
+	    }
+	    if ($something) {
+		my $tree = cmdoutput
+		    @dgit, qw(--build-products-dir), $bpd,
+		    qw(print-unapplied-treeish);
+		fresh_workarea();
+		in_workarea sub {
+		    runcmd @git, qw(reset --quiet), $tree, qw(-- .);
+		    rm_subdir_cached 'debian';
+		    $tree = cmdoutput @git, qw(write-tree);
+		    my $ups_synth = make_commit [], [ <<END, <<END,
+Import effective orig tree for upstream version $version
+END
+This includes the contents of the .orig(s), minus any debian/ directory.
+
+[git-debrebase convert-from-dgit-view upstream-import-convert: $version]
+END
+						    ];
+		    push @upstreams, { Commit => $ups_synth,
+				       Source => "orig(s) imported via dgit",
+				     };
+		}
+	    } else {
+		print STDERR f_
+		    " orig: no suitable origs found (looked for %s in %s)\n",
+		    "${p}_".(stripepoch $version)."...", $bpd;
+	    }
+	}
+    }
+
+    my $some_patches = stat_exists 'debian/patches/series';
+
+    print STDERR __
+	"Evaluating possible commits corresponding to upstream:\n";
+
+    my $result;
+    foreach my $u (@upstreams) {
+	my $work = $head;
+	fresh_workarea();
+	in_workarea sub {
+	    runcmd @git, qw(reset --quiet), $u->{Commit}, qw(-- .);
+	    runcmd @git, qw(checkout), $u->{Commit}, qw(-- .);
+	    runcmd @git, qw(clean -xdff);
+	    runcmd @git, qw(checkout), $head, qw(-- debian);
+	    if ($some_patches) {
+		rm_subdir_cached 'debian/patches';
+		$work = make_commit [ $work ], [
+ 'git-debrebase convert-from-dgit-view: drop upstream changes from breakwater',
+ "Drop upstream changes, and delete debian/patches, as part of converting\n".
+ "to git-debrebase format.  Upstream changes will appear as commits.",
+ '[git-debrebase convert-from-dgit-view drop-patches]'
+					   ];
+	    }
+	    $work = make_commit [ $work, $u->{Commit} ], [
+ 'git-debrebase convert-from-dgit-view: declare upstream',
+ '(Re)constructed breakwater merge.',
+ '[git-debrebase anchor: declare upstream]'
+							 ];
+	    runcmd @git, qw(checkout --quiet -b mk), $work;
+	    if ($some_patches) {
+		runcmd @git, qw(checkout), $head, qw(-- debian/patches);
+		runcmd @git, qw(reset --quiet);
+		# We deliberately run with dirty patches, so want --ignore-new
+		# but it isn't available everywhere
+		playtree_write_gbp_conf('true');
+		my @gbp_cmd = (qw(gbp pq import));
+		if (!$diagnose) {
+		    my $gbp_err = "../gbp-pq-err";
+		    @gbp_cmd = shell_cmd "exec >$gbp_err 2>&1", @gbp_cmd;
+		}
+		my $r = system @gbp_cmd;
+		playtree_write_gbp_conf();
+		if ($r) {
+		    print STDERR f_
+			" %s: couldn't apply patches: gbp pq %s",
+			$u->{Source}, waitstatusmsg();
+		    return;
+		}
+	    }
+	    my $work = git_rev_parse qw(HEAD);
+	    my $diffout = cmdoutput @git, qw(diff-tree --stat HEAD), $work;
+	    if (length $diffout) {
+		print STDERR f_
+		    " %s: applying patches gives different tree\n",
+		    $u->{Source};
+		print STDERR $diffout if $diagnose;
+		return;
+	    }
+	    # OMG!
+	    $u->{Result} = $work;
+	    $result = $u;
+	};
+	last if $result;
+    }
+
+    if (!$result) {
+	fail __ <<END;
+Could not find or construct a suitable upstream commit.
+Rerun adding --diagnose after convert-from-dgit-view, or pass a
+upstream commit explicitly or provide suitable origs.
+END
+    }
+
+    print STDERR f_ "Yes, will base new branch on %s\n", $result->{Source};
+
+    my $out_diff = get_differs $result->{Result}, $head;
+    if ($out_diff & (D_UPS | DS_DEB)) {
+	print STDERR "\n", f_ <<END, $result->{Result};
+Result of applying debian/patches/ onto the upstream is not the same as HEAD.
+(Applying patches gave the commit %s)
+Perhaps the upstream is not right, or not all of the delta is in d/patches.
+END
+	runcmd @git, qw(--no-pager diff --stat),
+	    $result->{Result}, $head,
+	    qw( -- :!/debian/patches :/);
+	snag 'conversion-mismatch',
+	  __ "Output of conversion does not match input!";
+    }
+
+    complete_convert_from $head, $result->{Result}, $gdrlastinfo,
+	'convert-from-dgit-view';
+}
+
+sub cmd_forget_was_ever_debrebase () {
+    badusage __ "forget-was-ever-debrebase takes no further arguments"
+	if @ARGV;
+    my ($ffqstatus, $ffq_msg, $current, $ffq_prev, $gdrlast) =
+	ffq_prev_branchinfo();
+    fail f_ "Not suitable for recording git-debrebaseness anyway: %s",
+	    $ffq_msg
+	if defined $ffq_msg;
+    push @deferred_updates, "delete $ffq_prev";
+    push @deferred_updates, "delete $gdrlast";
+    snags_maybe_bail();
+    run_deferred_updates "forget-was-ever-debrebase";
+}
+
+sub cmd_record_resolved_merge_experimental () {
+    # This is almost impossible to use and therefore almost impossible
+    # to document.
+
+    badusage "record-resolved-merge takes no further arguments" if @ARGV;
+    # MERGE-TODO needs documentation
+    my $new = get_head();
+    my $method;
+
+    print "Checking how you have resolved the merge problem\n";
+    my $nope = sub { print "Not $method: @_"; 0; };
+
+    my $maybe = sub { print "Seems to be $method.\n"; };
+    my $yes = sub {
+	my ($key, $ref) = @_;
+	reflog_cache_insert $merge_cache_ref, $key, $ref;
+	print "OK.  You can switch branches and try git-debrebase again.\n";
+	1;
+    };
+
+    fresh_workarea 'merge';
+    sub {
+	$method = 'vanilla-merge patchqueue';
+	my $vanilla = git_get_ref "$wrecknoteprefix/vanilla-merge";
+	$vanilla or return $nope->("wreckage was not of vanilla-merge");
+	foreach my $lr (qw(left right)) {
+	    my $n = "$wrecknoteprefix/$lr-patchqueue";
+	    my $lrpq = git_get_ref $n;
+	    $lrpq or return $nope->("wreckage did not contain patchqueues");
+	    is_fast_fwd $lrpq, $new or return $nope->("HEAD not ff of $n");
+	}
+	$maybe->();
+	my $newbase = git_get_ref "$wrecknoteprefix/new-base"
+	    or die "wreckage element $wrecknoteprefix/new-base missing";
+	my $result = merge_series_patchqueue_convert
+	    {}, $newbase, $new;
+	$yes->("vanilla-merge $vanilla", $result);
+	1;
+    }->() or sub {
+	fail "No resolved merge method seems applicable.\n";
+    }->();
+}
+
+sub cmd_downstream_rebase_launder_v0 () {
+    badusage "needs 1 argument, the baseline" unless @ARGV==1;
+    my ($base) = @ARGV;
+    $base = git_rev_parse $base;
+    my $old_head = get_head();
+    my $current = $old_head;
+    my $topmost_keep;
+    for (;;) {
+	if ($current eq $base) {
+	    $topmost_keep //= $current;
+	    print " $current BASE stop\n";
+	    last;
+	}
+	my $cl = classify $current;
+	print " $current $cl->{Type}";
+	my $keep = 0;
+	my $p0 = $cl->{Parents}[0]{CommitId};
+	my $next;
+	if ($cl->{Type} eq 'Pseudomerge') {
+	    print " ^".($cl->{Contributor}{Ix}+1);
+	    $next = $cl->{Contributor}{CommitId};
+	} elsif ($cl->{Type} eq 'AddPatches' or
+		 $cl->{Type} eq 'Changelog') {
+	    print " strip";
+	    $next = $p0;
+	} else {
+	    print " keep";
+	    $next = $p0;
+	    $keep = 1;
+	}
+	print "\n";
+	if ($keep) {
+	    $topmost_keep //= $current;
+	} else {
+	    die "to-be stripped changes not on top of the branch\n"
+		if $topmost_keep;
+	}
+	$current = $next;
+    }
+    if ($topmost_keep eq $old_head) {
+	print "unchanged\n";
+    } else {
+	print "updating to $topmost_keep\n";
+	update_head_checkout
+	    $old_head, $topmost_keep,
+	    'downstream-rebase-launder-v0';
+    }
+}
+
+setlocale(LC_MESSAGES, "");
+textdomain("git-debrebase");
+
+getoptions_main
+          (__ "bad options\n",
+	   "D+" => \$debuglevel,
+	   'noop-ok!',
+	   'f=s' => \@snag_force_opts,
+	   'anchor=s' => \@opt_anchors,
+	   '--dgit=s' => \($dgit[0]),
+	   'force!',
+	   'experimental-merge-resolution!', \$opt_merges_dummy,
+	   '-i:s' => sub {
+	       my ($opt,$val) = @_;
+	       badusage f_ "%s: with git-debrebase, get-rebase -i option may only be followed by more options (as separate arguments)", $us
+		   if length $val;
+	       confess if $opt_defaultcmd_interactive; # should not happen
+	       $opt_defaultcmd_interactive = [ qw(-i) ];
+	       # This access to @ARGV is excessive familiarity with
+	       # Getopt::Long, but there isn't another sensible
+	       # approach.  '-i=s{0,}' does not work with bundling.
+	       push @$opt_defaultcmd_interactive, @ARGV;
+	       @ARGV=();
+	   },
+	   'help' => sub { print __ $usage_message or confess "$!"; finish 0; },
+	   );
+
+initdebug('git-debrebase ');
+enabledebug if $debuglevel;
+
+changedir_git_toplevel();
+
+$rd = fresh_playground "$playprefix/misc";
+
+@opt_anchors = map { git_rev_parse $_ } @opt_anchors;
+
+if (!@ARGV || $opt_defaultcmd_interactive || $ARGV[0] =~ m{^-}) {
+    defaultcmd_rebase();
+} else {
+    my $cmd = shift @ARGV;
+    my $cmdfn = $cmd;
+    $cmdfn =~ y/-/_/;
+    $cmdfn = ${*::}{"cmd_$cmdfn"};
+
+    $cmdfn or badusage f_ "unknown git-debrebase sub-operation %s", $cmd;
+    $cmdfn->();
+}
+
+finish 0;

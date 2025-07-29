@@ -1,0 +1,625 @@
+# SOME DESCRIPTIVE TITLE
+# Copyright (C) YEAR Free Software Foundation, Inc.
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2019-03-01 16:59+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. type: =head1
+#: ../dgit.1:3 ../dgit.7:2 ../dgit-user.7.pod:1 ../dgit-nmu-simple.7.pod:1
+#: ../dgit-maint-native.7.pod:1 ../dgit-maint-merge.7.pod:1
+#: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
+#: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
+#: ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#, no-wrap
+msgid "NAME"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:1253 ../dgit-downstream-dsc.7.pod:150
+#, no-wrap
+msgid "CONFIGURATION"
+msgstr ""
+
+#. type: =item
+#: ../dgit.1:1267 ../dgit-downstream-dsc.7.pod:286
+#, no-wrap
+msgid "B<dgit-suite.>I<suite>B<.distro> I<distro>"
+msgstr ""
+
+#. type: =item
+#: ../dgit.1:1320 ../dgit-downstream-dsc.7.pod:242
+#, no-wrap
+msgid "B<dgit-distro.>I<distro>B<.upload-host>"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:1470 ../dgit.7:23 ../dgit-user.7.pod:447
+#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:126
+#: ../dgit-maint-merge.7.pod:491 ../dgit-maint-gbp.7.pod:136
+#: ../dgit-maint-debrebase.7.pod:747 ../dgit-downstream-dsc.7.pod:352
+#: ../dgit-sponsorship.7.pod:321 ../git-debrebase.1.pod:619
+#: ../git-debrebase.5.pod:678
+#, no-wrap
+msgid "SEE ALSO"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-user.7.pod:5 ../dgit-maint-native.7.pod:5
+#: ../dgit-maint-merge.7.pod:5 ../dgit-maint-gbp.7.pod:5
+#: ../dgit-maint-debrebase.7.pod:5 ../dgit-downstream-dsc.7.pod:5
+#: ../git-debrebase.1.pod:10 ../git-debrebase.5.pod:5
+msgid "INTRODUCTION"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:3
+msgid "dgit-downstream-dsc - setting up dgit push for a new distro"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:7
+msgid ""
+"This document is aimed at downstreams of Debian.  It explains how you can "
+"publish your packages' source code both as traditional Debian source "
+"packages, and as git branches, using B<dgit push>.  Your users will be able "
+"to get the source with B<dgit clone>, or with traditional tools such as "
+"B<apt-get source>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:16
+msgid ""
+"Note that often it is unnecessary to publish traditional source packages.  "
+"Debian-format source packages can be complex, idiosyncratic and difficult to "
+"work with.  You should avoid them if you can.  If you do not need to publish "
+"source packages, you can work as a Debian downstream purely using git "
+"branches, (using dgit to get the source from Debian in git form).  You can "
+"build binaries directly from git, and push package source code as a git "
+"branch to an ordinary git server.  See L<dgit-user(7)>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:28
+msgid ""
+"Not every option is covered here.  L<dgit(1)> has a mostly-complete list of "
+"config options, although not always with useful descriptions."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-downstream-dsc.7.pod:32
+msgid "NAMES"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:34
+msgid "You need to choose some names."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:38
+msgid "I<distro> name"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:40
+msgid ""
+"dgit understands each thing it interacts with as a B<distro>.  So in dgit "
+"terms, you are setting up a distro."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:43
+msgid ""
+"You need a name for yourself (ie for your distro).  The name will appear in "
+"the git tags made by your tools, and in configuration settings.  It must be "
+"globally unique across all people and institutions who use dgit."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:49
+msgid ""
+"You could choose your organisation's domain name, or a part of it if you "
+"think that is going to be very unique."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:52
+msgid ""
+"The distro name may contain ascii alphanumerics and B<. + ->, although B<-> "
+"may be confusing and is probably best avoided.  Try to avoid uppercase "
+"letters (and underscore): you will be typing this name a lot."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:57
+msgid ""
+"For example, if you were the Free Software Foundation Europe (fsfe.org)  you "
+"might call your distro fsfe or fsfe.org.  In the rest of this document we "
+"will write I<distro> for your distro name."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:63
+msgid "I<suite> names"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:65
+msgid ""
+"In dgit and Debian archive terminology, a B<suite> is a line of development, "
+"and/or a Debian release.  For example, at the time of writing, Debian has "
+"suites like B<sid> aka B<unstable>, B<buster> aka B<testing>, and B<stretch> "
+"aka B<stable>.  There are also ancillary suites like B<stretch-security>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:72
+msgid ""
+"If your releases align with Debian's releases, then your suites should "
+"contain the Debian suite names.  B<Do not> use just the Debian names.  That "
+"will cause confusion.  Instead, prepend your organisation's name and a "
+"hyphen.  For example, FSFE might end up with suites like fsfe-stretch."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:79
+msgid ""
+"Suite names end up in git ref and branch names, and on dgit command lines.  "
+"Suite names can contain alphanumerics and C<->.  Other characters may work "
+"but are not recommended."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-downstream-dsc.7.pod:86
+msgid "SERVICES"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:88
+msgid "You will need to run two parallel services:"
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:92
+msgid "git server"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:94
+msgid "This will hold the git branches accessed by dgit."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:96
+msgid ""
+"Everyone who will use dgit push needs to be able to update B<refs/dgit/"
+">I<suite> (note, not B<refs/heads/dgit/>I<suite>) on that server, and to "
+"make tags I<distro>B</>I<version> and B<archive/>I<distro>B</>I<version>.  "
+"Normally this would be done over ssh."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:103
+msgid ""
+"The server may host other branches and tags too.  So this might be your "
+"ordinary git server, or an instance of a git hosting system."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:107
+msgid ""
+"Everyone who obtains one of your source packages, or who will run B<dgit "
+"clone> and B<dgit fetch>, needs to have at least read access to the git "
+"server.  Ideally everything would be published via the git smart https "
+"protocol."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:113
+msgid ""
+"The git server name, and public git url structure, should be chosen so they "
+"will not need to change in the future.  Best is to give the git server a DNS "
+"name of its own."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:117
+msgid ""
+"Debian's dgit git server has special access control rules, implemented in "
+"B<dgit-repos-server> and B<dgit-repos-policy-debian> in the package B<dgit-"
+"infrastructure>.  but in most installations this is not needed.  If there is "
+"no or little distinction between (i) developers who are entitled to upload "
+"(push) and (ii) repository administrators, then it is sufficient to provide "
+"a git server with a unix account for each user who will be pushing, perhaps "
+"using ssh restricted commands."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:128
+msgid "Debian-format archive (repository)"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:130
+msgid ""
+"This holds the source packages.  You will probably use the same archive to "
+"host your binaries, and point your B<apt> at it."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:134
+msgid "dgit uses the term B<archive> for this."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:136
+msgid ""
+"There are a variety of tools for creating and managing a Debian-format "
+"archive.  In this document we will assume you are using B<reprepro>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:140
+msgid ""
+"Setting up reprepro is not covered in this tutorial.  Instead, we assume you "
+"already have reprepro working."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:143
+msgid ""
+"You should also write appropriate dput configuration, since dgit uses dput "
+"to upload packages to the archive.  This will involve choosing a dput host "
+"name.  That's probably your distro name, I<distro>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:152
+msgid ""
+"When you have all of the above set up, you are ready to explain to dgit how "
+"to access your systems."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:155
+msgid ""
+"dgit is configured via git's configuration system, so this is done with git "
+"configuration.  See L<git-config(1)>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:159
+msgid ""
+"Below, each heading is one or more git config keys.  B<bold> is literal text "
+"and I<italics> is things that vary.  In the descriptions of the effects of "
+"config settings, we refer to the config values C<like this>."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:167
+msgid "B<dgit-distro.>I<distro>B<.git-url>, B<.git-url-suffix>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:169
+msgid ""
+"Specify the publicly accessible git URLs for your dgit git server.  The urls "
+"generated are C<git-url>B</>I<package>C<git-url-suffix>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:173
+msgid ""
+"The url should be stable, and publicly accessible, because its name is "
+"published in .dsc files.  (Note that if you make modified versions of "
+"packages from Debian, the copyleft licences used for Free Software often "
+"require you to permit your users, employees, and downstreams to further "
+"distribute your modified source code.)"
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:181
+msgid "B<dgit-distro.>I<distro>B</push.git-host>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:183
+msgid "The domain name of your git server's ssh interface."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:185
+msgid ""
+"B<dgit-distro.>I<distro>B</push.git-user-force> B<dgit-distro.>I<distro>B</"
+"push.username>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:187
+msgid ""
+"Some git hosting systems expect everyone to connect over ssh as the same "
+"user, often B<git>.  If this is the case, set C<git-user-force> to that user."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:191
+msgid ""
+"If you have a normal git over ssh arrangement, where people ssh as "
+"themselves, leave C<git-user-force> unset.  If a user wishes to override the "
+"username (for example, if their local username is not the same as on the "
+"server)  they can set C<username>."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:198
+msgid "B<dgit-distro.>I<distro>B</push.git-url>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:200
+msgid ""
+"Set this to the empty string.  This will arrange that push accesses to the "
+"ssh server will use C</push.git-host>, etc."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:204
+msgid "B<dgit-distro.>I<distro>B</push.git-proto> B<git+ssh://>"
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:206
+msgid "C<dgit-distro.>I<distro>B</push.git-path>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:208
+msgid ""
+"The path to your repositories.  dgit push will try to push to C<git-"
+"proto>[C<git-user-force>|C<username>B<@>]C<git-path>B</>I<package>B<.git>"
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:212
+msgid "B<dgit-distro.>I<distro>B<.git-check>, B<.git-check-suffix>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:214
+msgid ""
+"dgit clone needs to be able to tell whether there is yet a git repository "
+"for a particular package."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:217
+msgid ""
+"If you always have a git repository for every package in your archive, "
+"perhaps because you never use dput/dupload, and always dgit push, set C<git-"
+"check> to B<true>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:221
+msgid ""
+"Otherwise, set C<git-check> to a url prefix - ideally, https.  dgit clone "
+"will try to fetch C<git-check>B</>I<package>C<git-check-suffix> and expect "
+"to get either some successful fetch (it doesn't matter what)  or a file not "
+"found error (http 404 status code).  Other outcomes are fatal errors."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:228
+msgid ""
+"If your git server runs cgit, then you can set C<git-check> to the same as "
+"C<git-url>, and C<git-check-suffix> to B</info/refs>."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:232
+msgid "B<dgit-distro.>I<distro>B</push.git-check>, B</push.git-create>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:234
+msgid "dgit push also needs to be able to check whether the repo exists."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:236
+msgid ""
+"You can set both of these to B<ssh-cmd>, which will use an ssh shell command "
+"to test repository existence.  Or leave them unset, and dgit push will use "
+"the readonly details.  If repositories are created automatically on push, "
+"somehow, you can set C<git-create> to B<true>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:244
+msgid "What I<host> value to pass to dput, to upload."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:246
+msgid ""
+"This is a nickname, not the real host name.  You need to provide everyone "
+"who will push with an appropriate dput configuration.  See L<dput.cf(5)>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:251
+msgid "A good nickname for your upload host is your distro name I<distro>."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:253
+msgid "B<dgit-distro.>I<distro>B<.mirror>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:255
+msgid ""
+"Set this to the url of your source package archive.  This is the same string "
+"as appears in the 2nd field of each B<sources.list> entry."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:259
+msgid "B<dgit-distro.>I<distro>B<.archive-query>, B<.archive-query-url>"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:261
+msgid ""
+"If you have a smallish distro, set C<archive-query> to B<aptget:> (with a "
+"colon)."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:264
+msgid ""
+"If your distro is large (eg, if it contains a substantial fraction of "
+"Debian)  then this will not be very efficient: with this setting, dgit often "
+"needs to download and update Sources files."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:270
+msgid ""
+"For large distros, it is better to implement the Debian archive ftpmaster "
+"API.  See L<https://api.ftp-master.debian.org/>, and set C<archive-query> to "
+"B<ftpmasterapi:> (with a colon)  and C<archive-query-url> to your API base "
+"URL.  dgit uses these queries: B<suites>, B<dsc_in_suite/>I<isuite>B</"
+">I<package> and B<file_in_archive/>I<pat> (so you need not implement "
+"anything else)."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:281
+msgid ""
+"Alternatively, if your system supports the rmadison protocol, you can set "
+"C<archive-query> to B<madison:>[I<madison-distro>].  dgit will invoke "
+"B<rmadison> -uI<madison-distro>."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:288
+msgid ""
+"Set this for every one of your suites.  You will have to update this when "
+"new suites are created.  If you forget, your users can explicitly specify B<-"
+"d> I<distro> to dgit."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-downstream-dsc.7.pod:295
+msgid "TEMPLATE GIT REPOSITORY"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:297
+msgid ""
+"When dgit push is used for I<package> for the first time, it must create a "
+"git repository on the git server."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:300
+msgid ""
+"If C<git-create> is set to B<ssh-cmd>, dgit will use the user's shell access "
+"to the server to B<cp -a _template.git> I<package>B<.git>.  So you should "
+"create B<_template.git> with suitable contents."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:305
+msgid ""
+"Note that the ssh rune invoked by dgit does not do any locking.  So if two "
+"people dgit push the same package at the same time, there will be lossage.  "
+"Either don't do that, or set up B<dgit-repos-server>."
+msgstr ""
+
+#. type: =head1
+#: ../dgit-downstream-dsc.7.pod:310
+msgid "SSH COMMANDS"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:312
+msgid ""
+"When a user who can push runs dgit, dgit uses ssh to access the git server."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:315
+msgid ""
+"To make use of ssh restricted command easier, and for the benefit of dgit-"
+"repos-server, dgit's ssh commands each start with a parseable commentish "
+"rune."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:320
+msgid "The ssh commands used by dgit are these:"
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:324
+msgid "B<: dgit> I<distro> B<git-check> I<package> B<;>..."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:326
+msgid ""
+"Test whether I<package> has a git repo on the server already.  Should print "
+"B<0> or B<1> and a newline, and exit status zero in either case.  The rest "
+"of the command, after B<;>, is a shell implementation of this test.  Used "
+"when C<git-check> is set to B<ssh-cmd>."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:333
+msgid "B<: dgit> I<distro> B<git-create> I<package> B<;>..."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:335
+msgid ""
+"Create the git repository for I<package> on the server.  See L</TEMPLATE GIT "
+"REPOSITORY>, above.  The rest of the command is an appropriate invocation of "
+"cd and cp.  Used when C<git-create> is set to B<ssh-cmd>."
+msgstr ""
+
+#. type: =item
+#: ../dgit-downstream-dsc.7.pod:340
+msgid "B<git-receive-pack>..., B<git-upload-pack>..."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:342
+msgid ""
+"dgit invokes git to access the repository; git then runs these commands.  "
+"Note that dgit push will first do a git fetch over ssh, so you must provide "
+"upload-pack as well as receive-pack."
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:349
+msgid "(There are also other ssh commands which are historical or obscure.)"
+msgstr ""
+
+#. type: textblock
+#: ../dgit-downstream-dsc.7.pod:354
+msgid "dgit(1)"
+msgstr ""

@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-skip-suite,buster
+t-dependencies autopkgtest netcat-openbsd
+
+t-t2u-settings
+
+# Here we test the Oracle qua daemon -- forking, signals etc..
+# The real tests of its functionality are in tests/tests/t2u*.
+# This test is deliberately not named tests/tests/t2u-oracled because
+# it isn't likely to be helpful when hacking on actual tag2upload
+# functionality, and because it tests the daemon qua daemon, it is
+# named after, precisely, the tested daemon.
+
+t-drs
+
+t2u_oracled_response_scripts=('
+
+# (1)  Test it wants a proper greeting.
+
+echo "t2u-manager-not-ready"
+read response
+test "${response:0:19}" = "protocol-violation "
+
+' '
+# (2)  Test it restarts the worker that complained about our greeting.
+
+echo "t2u-manager-ready"
+read version
+test "$version" = "t2u-oracle-version 4"
+
+# (3)  Check ayt/ack works.
+
+read worker_id
+echo ayt
+read response
+test "$response" = ack
+
+')
+
+t-t2u-interact-t2u-oracled --worker-restart-timeout=4
+
+# (4)  Fatal signals tested by t2u-fake-manager.
+
+test "x$(ls worker-cwd)" = xw0
+
+t-ok

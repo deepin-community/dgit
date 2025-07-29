@@ -1,0 +1,16 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-git-only
+
+cd $root
+
+set +e
+git grep -q -i 'ps[u]edo'
+rc=$?
+set -e
+
+test $rc = 1
+
+t-ok

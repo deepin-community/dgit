@@ -1,0 +1,40 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+t-buildproductsdir-config
+
+t-prep-newpackage example 1.0
+
+cd $p
+git config --global dgit.default.push-subcmd source
+
+t-refs-same-start
+t-ref-head
+
+t-dgit push --new
+
+t-pushed-good master
+t-push-was-source-only
+
+# If dep14tag already exists (eg, sponsorship)
+
+v=1.1
+t-dch-commit -v $v -m sponsor
+t-dch-commit-r
+
+t-sponsee-dep14tag
+t-expect-fail E:'existing DEP-14 tag.*unsuitable.*verification failed' \
+t-dgit push --dep14tag-verify
+
+t-sponsee-dep14tag-sign -f
+
+t-refs-same-start
+t-ref-head
+t-dgit push --dep14tag-verify
+t-pushed-good master
+
+t-sponsee-dep14tag-check-kept
+
+t-ok

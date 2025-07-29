@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-skip-suite,bullseye
+t-restrict x-dgit-skip-suite,buster
+t-dependencies T2U
+
+t-t2u-settings
+t-debpolicy
+
+t-t2u-native-prep
+
+t-t2u-setup-repo
+
+tagname=test-dummy/$v
+
+t-t2u-test
+t-t2u-succeeded
+t-pushed-good master
+
+# The git tagger has address <dgit-test@debian.example.net>;
+# check that Senatus was CCed as the key's owner.
+t-grep-mpat E:"^CC: .+ spqr@example\.com" $tmp/sendmail.last
+
+# Prepare for another upload.
+rm -rf $tmp/t2u
+t-archive-process-incoming sid 1.0-1
+
+v=1.0-2
+t-dch-commit -v $v -m bump
+t-dch-commit-r
+
+tagname=test-dummy/$v
+
+# Make Senatus the tagger for this second upload.
+git config --local user.name "Senatus Romanus"
+git config --local user.email "spqr@example.com"
+
+t-refs-same-start
+t-ref-head
+t-t2u-test
+
+# This time Senatus should be in To and *not* in CC.
+t-grep-mpat E:"^To: .+ <spqr@example\.com>$" $tmp/sendmail.last
+grep -v "^CC:.*spqr@example\.com" $tmp/sendmail.last
+
+t-ok

@@ -1,0 +1,109 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+
+t-dependencies NO-DGIT GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp-noarchive
+
+cd $p
+
+: 'upstream hat'
+
+t-gdr-prep-new-upstream 2.1
+
+: 'maintainer hat'
+
+git branch startpoint
+v=2.1-1
+
+git checkout master
+
+t-expect-fail F:'Could not determine appropriate upstream commitish' \
+t-git-debrebase new-upstream $v
+
+git tag v2.1 upstream
+
+git branch before-new-upstream
+
+clog-check-1 () {
+	before=$1
+	date=$(git log --format=%aD -n1 debian/changelog)
+	date=$(date -R -d "$date")
+	git show $before:debian/changelog >../clog.before
+	m="  * Update to new upstream version ${v%-*}."
+	e="dgit test git user <dgit-test@debian.example.net>  $date"
+}
+clog-check-2 () {
+	diff -u ../clog.expected debian/changelog
+}
+
+: ----- ordinary new upstream test -----
+
+t-git-debrebase new-upstream ${v%-*}
+
+clog-check-1 before-new-upstream
+cat - <<END ../clog.before >../clog.expected
+example ($v) UNRELEASED; urgency=medium
+
+$m
+
+ -- $e
+
+END
+clog-check-2
+
+t-gdr-good laundered
+git reflog | egrep 'debrebase new-upstream.*checkout'
+
+t-git-debrebase stitch
+t-gdr-good stitched
+
+git branch ordinary
+
+: ----- 'with --anchor' -----
+
+git checkout -b with-anchor startpoint
+
+t-git-debrebase analyse >../anal.anch
+anchor=$(perl <../anal.anch -ne '
+	next unless m/^(\w+) Anchor\s/;
+	print $1,"\n";
+	exit;
+')
+
+GIT_REFLOG_ACTION='STUNT-RLA' \
+t-git-debrebase --anchor=$anchor -fanchor-treated new-upstream $v upstream
+t-gdr-good laundered
+git reflog | egrep 'STUNT-RLA: debrebase new-upstream'
+git reflog | egrep 'STUNT-RLA: debrebase: launder for new upstream'
+
+t-git-debrebase stitch
+t-gdr-good stitched
+
+git diff --quiet ordinary
+
+: ----- with pre-existing changes -----
+
+git checkout -b with-preexisting before-new-upstream
+
+t-dch-commit drivel-in-changelog
+git branch before-new-upstream-with-changes
+
+t-git-next-date
+
+t-git-debrebase new-upstream ${v%-*}
+
+clog-check-1 before-new-upstream-with-changes
+perl -pe <../clog.before >../clog.expected '
+	BEGIN { ($m,$e,@ARGV) = @ARGV; }
+	next unless 1..m/^ --/;
+	s/\([^()]+\)/('$v')/ if m/^example /;
+	$_ .= "$m\n" if m/^  \* drivel-in-changelog/;
+	$_ = " -- $e\n" if m/^ -- /;
+' "$m" "$e"
+clog-check-2
+
+t-ok

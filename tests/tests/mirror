@@ -1,0 +1,78 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-mirror
+
+t-dependencies rsync
+
+t-drs
+
+: ---- "basic test" ----
+
+t-tstunt-parsechangelog
+t-prep-newpackage example 1.0
+
+t-mirror-setup
+
+cd $p
+revision=1
+t-dgit build
+t-dgit push-built --new
+
+t-check-mirrored
+
+: ---- "stunt ssh test" ----
+
+sentinel=$tmp/stunt-ssh-sentinel
+
+cat <<END >$tmp/stunt-ssh
+#!/bin/sh
+set -ex
+: $sentinel
+cat >&2 $sentinel
+shift # eat HOST
+export SSH_ORIGINAL_COMMAND="\$*"
+exec \${DGIT_MIRROR_SSH_WRAP_TEST-dgit-mirror-ssh-wrap} \
+	'$tmp/git-mirror/' .git --
+END
+chmod +x $tmp/stunt-ssh
+
+t-mirror-set rsyncssh=$tmp/stunt-ssh
+t-mirror-set remoterepos=HOST:$reposmirror
+
+# mirror should fail due to lack of stunt-ssh-sentinel
+
+t-commit-build-push-expect-log "stunt ssh test" \
+	E:'mirror hook failed: .*exited'
+
+ls -al $queuedir/$p.a
+t-check-not-mirrored
+
+touch $sentinel
+
+t-mirror-hook backlog
+t-check-mirrored
+
+: ----- "stall timeout test" -----
+
+rm -f $sentinel
+t-mkfifo $sentinel
+
+t-mirror-set hooktimeout=5
+
+t-commit-build-push-expect-log "stall timeout test" \
+	E:'mirror hook failed: .*timeout'
+
+t-check-not-mirrored
+
+exec 3<>$sentinel
+exec 3>&-
+
+poll1-lock-removed () {
+	if ! test -f $queuedir/$p.lock; then t-poll-done; fi
+}
+t-poll-loop 10 poll1-lock-removed
+
+t-check-mirrored
+
+t-ok

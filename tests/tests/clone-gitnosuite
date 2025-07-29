@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import http-git-check
+
+t-archive pari-extra 3-1
+t-git-none
+cp -a $tmp/git/_template $dgitrepo
+
+t-dgit clone $p
+
+t-ok

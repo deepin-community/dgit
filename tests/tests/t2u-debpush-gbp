@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+# Test git-debpush client-side only (faster and simpler than with t2u)
+# but we can't test the *effect* of a tag.
+#
+# This test caes involves gbp.
+
+t-dependencies NO-DGIT DEBPUSH git-buildpackage
+
+# dependencies we need because of things we do in the tests
+t-dependencies bc liblocale-gettext-perl libjson-perl
+
+t-setup-import gbp
+t-debpush-settings
+
+cd $p
+t-t2u-setup-repo
+
+t-git-debpush --quilt=gbp
+
+t-ok
+

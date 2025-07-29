@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive-none example
+t-git-none
+t-worktree 1.0
+
+cd $p
+
+: '----- construct an unpatched branch with patches -----'
+
+git checkout patch-queue/quilt-tip
+gbp pq export
+: 'now on quilt-tip'
+git add debian/patches
+git commit -m 'Commit patch queue'
+
+: '----- construct an upstream branch -----'
+
+git checkout --orphan upstream
+git reset --hard
+git clean -xdf
+
+tar --strip-components=1 -xf $troot/pkg-srcs/${p}_1.0.orig.tar.gz
+
+mkdir docs
+cd docs
+tar --strip-components=1 -xf $troot/pkg-srcs/${p}_1.0.orig-docs.tar.gz
+cd ..
+
+git add -Af .
+git commit -m 'Import 1.0'
+git tag upstream/1.0
+
+git checkout quilt-tip
+t-git-pseudo-merge -m 'gbp-orig pseudomerge' upstream
+
+v=1.0-1
+
+git checkout -B master
+
+cd ..
+
+t-setup-done 'v' "$(echo $p*) git mirror aq" '
+	t-select-package example
+	t-git-next-date
+'

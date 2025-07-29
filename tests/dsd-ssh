@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+set -${DGIT_TEST_NDEBUG-x}
+: '(((((((((((((((((((((((((((((((((((((((('
+
+tmp=$DGIT_TEST_TMP
+cd /
+userhost="$1"; shift
+export SSH_ORIGINAL_COMMAND="$*"
+
+# We might be "ssh"ing from the t2u oracle, in which case we want
+# to go back to your usual set of keyrings and keys.
+export GNUPGHOME=$tmp/gnupg
+
+# undoes PERLLIB so that we rely on dgit-ssh-dispatch setting it
+# we have to compensate with -I so that dgit-ssh-dispatch finds Dgit.pm
+unset PERLLIB
+${DGIT_TEST_INTREE+perl -I}$DGIT_TEST_INTREE \
+${DGIT_SSH_DISPATCH_TEST-dgit-ssh-dispatch} ${DGIT_TEST_NDEBUG- -D} $tmp
+
+: '))))))))))))))))))))))))))))))))))))))))'

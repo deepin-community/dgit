@@ -1,0 +1,85 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-dependencies dput-ng
+
+t-git-config dgit.default.dep14tag no
+
+t-dsd
+t-policy dgit-repos-policy-trusting
+t-prep-newpackage example 1.0
+
+cd $p
+revision=1
+git tag start
+
+t-dgit push-source --new
+
+t-rm-dput-dropping
+
+t-commit 'Prep v1.1 which will be rewound'
+t-dgit push-source
+
+git checkout $tagpfx/1.0
+t-dgit push-source --deliberately-fresh-repo --force-reusing-version
+
+remote="`git config dgit-distro.test-dummy.git-url`/$p.git"
+
+t-expect-push-fail 'Replay of previously-rewound upload' \
+git push "$remote" \
+	$tagpfx/1.1 \
+	$tagpfx/1.1~0:refs/dgit/sid
+
+git checkout master
+
+
+: "More subtle replay prevention checks"
+
+prepare-replay () {
+	delib=$1
+
+	# We have to stop the pushes succeeding because if they work they
+	# record the tag, which prevents the replays.  We are simulating
+	# abortive pushes (since we do want to avoid a situation where
+	# dangerous old signed tags can exist).
+	t-policy-nonexist
+
+	t-commit "request with $delib that we will replay"
+	t-dgit build
+	t-expect-push-fail 'system: No such file or directory' \
+	t-dgit -cdgit-distro.test-dummy.policy-query-supported-ssh=false \
+		push-source $delib
+
+	t-policy dgit-repos-policy-trusting
+
+	replayv=$v
+}
+
+attempt-replay () {
+	local mpat=$1
+	git show $tagpfx/$replayv | grep -e $delib
+	t-expect-push-fail "$mpat" \
+	git push "$remote" \
+		$tagpfx/$replayv \
+		+$tagpfx/$replayv~0:refs/dgit/sid
+}
+
+prepare-replay --deliberately-fresh-repo
+
+# simulate some other thing that we shouldn't delete
+git push $dgitrepo +master:refs/heads/for-testing
+
+attempt-replay 'does not declare previously heads/for-testing'
+
+prepare-replay --deliberately-not-fast-forward
+
+t-commit 'later version to stop not fast forward rewinding'
+t-dgit push-source
+
+attempt-replay "does not declare previously tags/$tagpfx/$v"
+
+
+t-ok

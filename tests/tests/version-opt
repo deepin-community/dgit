@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+# NOT t-tstunt-parsechangelog
+# because that doesn't honour the perl option corresponding to -v
+
+t-debpolicy
+t-prep-newpackage example 1.0
+
+cd $p
+revision=1
+git tag start
+t-dgit setup-mergechangelogs
+
+t-dgit push-source --new --overwrite
+
+t-archive-process-incoming sid
+
+for v in 1.1 1.2; do
+	dch -v $v -D unstable -m "Update to version $v"
+
+	git add debian/changelog
+	git commit -m "Commit changelog for $v"
+
+	t-dgit build-source
+done
+
+fgrep 'Update to version 1.1' ../${p}_${v}_source.changes
+
+t-ok

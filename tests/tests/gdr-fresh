@@ -1,0 +1,46 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+. $troot/lib-gdr
+
+t-dependencies GDR
+
+t-gdr-gbp-import-core
+
+t-git-next-date
+
+# leaves us on upstream
+git rm debian/rules
+git commit -m 'strip upstream rules'
+git tag -f v1.0
+
+git branch -m master master.old
+git checkout -b master
+
+t-git-next-date
+
+git checkout quilt-tip debian
+git commit -m 'initial debianisation'
+
+t-make-orig example 1.0
+
+dgit-quilt-fixup-uses-dgit-linear () {
+	t-git-next-date
+
+	DGIT_TEST_DEBUG=-DD t-dgit quilt-fixup 2>&1 |tee ../fixup.out
+	grep '^branch_is_gdr  .* unmarked BreakwaterStart NO$' ../fixup.out
+
+	t-dgit --quilt=nofix quilt-fixup
+}
+
+dgit-quilt-fixup-uses-dgit-linear
+
+git checkout --detach patch-queue/quilt-tip
+git rebase master
+git push . HEAD:master
+git checkout master
+
+dgit-quilt-fixup-uses-dgit-linear
+
+t-ok

@@ -1,0 +1,51 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp
+
+cd $p
+
+git checkout upstream/2.0
+echo '*patch*' >>.gitignore
+git commit -m nasty .gitignore
+git tag v2.1
+t-make-orig $p 2.1
+
+git checkout master
+t-git-debrebase new-upstream 2.1-1
+
+t-some-changes for-rebase-fixup m
+
+t-git-debrebase
+t-git-debrebase make-patches
+
+t-some-changes for-dgit-fixup m
+
+t-git-debrebase
+
+t-expect-fail 'dgit: failed command: false' \
+t-dgit -wgf --git-debrebase=false quilt-fixup
+
+git branch before-gdr-true
+t-dgit -wgf --git-debrebase=true quilt-fixup
+
+git reset --hard before-gdr-true
+t-dgit -wgf --git-debrebase=no-such-command-exists quilt-fixup
+
+t-some-changes for-make-patches-fails-then-dgit-fixup m
+
+t-expect-fail 'Patch export produced patch amendments' \
+t-git-debrebase make-patches
+
+t-dgit -wgf quilt-fixup
+
+t-refs-same-start
+t-ref-head
+t-dgit -wg quilt-fixup
+t-ref-head
+
+t-ok

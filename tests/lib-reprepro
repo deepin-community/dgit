@@ -1,0 +1,96 @@
+# -*- bash -*-
+
+t-reprepro () {
+
+ t_archive_method=reprepro
+
+ t-reprepro-cfg
+}
+
+t-reprepro-cfg () {
+ local rrinst=$1
+ local rrdistro=${2:-test-dummy}
+
+ local etcapt=$tmp/${rrinst}etc-apt
+ local mir=$tmp/${rrinst}mirror
+
+ t-git-config dgit-distro.$rrdistro.archive-query aptget:
+ t-git-config dgit-distro.$rrdistro.mirror file://$mir/
+
+ mkdir $etcapt
+ cat >$etcapt/conf <<END
+Dir::Etc "$etcapt";
+END
+ export APT_CONFIG=$etcapt/conf
+ mkdir $etcapt/{trusted.gpg.d,apt.conf.d}
+ gpg --export --armor Hannibal >$etcapt/trusted.gpg.d/han.asc
+}
+
+t-archive-none-reprepro () { # hook called by t-archive-none
+	t-reprepro-setup
+	t-reprepro-regen
+	local rrinst=
+}
+t-archive-query-reprepro () { # hook called by t-archive-query
+	local suite=$1
+	local p=$2
+	local v=$3
+	local dscf=$4
+	local rrinst=
+	t-reprepro-includedsc $suite $tmp/mirror/pool/$dscf "$rrinst"
+}
+
+t-reprepro-setup () {
+	local rrinst=$1
+
+	local mir=$tmp/${rrinst}mirror
+	local rrc=$mir/conf
+	mkdir -p $rrc
+	mkdir -p $mir/pool/main
+
+	exec 3>$rrc/distributions
+
+	local arch; arch=`dpkg --print-architecture`
+
+	for suitespec in $suitespecs; do
+		local suite=${suitespec%%:*}
+		local sname=${suitespec#*:}
+
+		mkdir -p $mir/dists
+		if [ $sname != $suite ]; then
+			rm -f $mir/dists/$sname
+			ln -s $suite $mir/dists/$sname
+		fi
+
+		cat >&3 <<END
+Suite: $sname
+Codename: $suite
+Components: main
+Architectures: source binary-$arch
+SignWith: Hannibal
+
+END
+	done
+}
+
+t-reprepro-includedsc () {
+	local suite=$1
+	local dscf=$2
+	local rrinst=$3
+	t-reprepro--run includedsc $suite $dscf
+}
+
+t-reprepro--run () {
+	# caller is supposed to have set rrinst
+	local mir=$tmp/${rrinst}mirror
+	reprepro \
+		--outdir $mir \
+		--basedir $mir \
+		"$@"
+}
+
+t-reprepro-regen () {
+	local rrinst=$1
+
+	t-reprepro--run export
+}

@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-git-only
+
+mkdir $tmp/dgit
+cd $root
+git ls-files -z |xargs -0 cp --parents -t $tmp/dgit
+cd $tmp/dgit
+
+dpkg-buildpackage -nc -uc -b
+
+echo ok.

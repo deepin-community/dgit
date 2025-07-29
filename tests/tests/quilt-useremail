@@ -1,0 +1,27 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+t-archive example 1.0-1
+t-worktree 1.0
+t-git-none
+
+cd $p
+
+git checkout quilt-tip-2
+
+t-dgit -wgf fetch
+
+oe=other.email@example.com
+on='Hannibal Barca'
+
+git config --local user.email "$oe"
+git config --local user.name  "$on"
+
+t-dgit -wgf --quilt=smash quilt-fixup
+
+git show | fgrep "$oe"
+git show | fgrep "$on"
+
+t-ok

@@ -1,0 +1,50 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-drs
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+cd $p
+
+git tag common-ancestor
+
+revision=1
+t-dgit build
+t-dgit push-built --new
+
+push_and_check () {
+	git push $dgitrepo $1
+
+	oldmaster=`cd $dgitrepo && t-git-get-ref refs/heads/master`
+
+	t-refs-same-start
+	git checkout master
+	t-commit 'Empty update'
+	t-dgit build
+	t-dgit push-built --new
+
+	t-pushed-good master
+}
+
+t-check-master-undisturbed () {
+	local master; master=`t-git-get-ref refs/heads/master`
+	if [ x$master != x$oldmaster ]; then fail "bad update to master"; fi
+}
+
+t_check_pushed_master=t-check-master-undisturbed
+
+git checkout -b divergent common-ancestor
+git commit --allow-empty -m 'Has common ancestor'
+git push $dgitrepo HEAD:master
+
+push_and_check HEAD:master
+
+git checkout --orphan newroot
+git commit --allow-empty -m 'Has no common ancestor'
+
+push_and_check +HEAD:master
+
+t-ok

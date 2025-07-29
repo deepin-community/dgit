@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+t-prep-newpackage example 1.0
+
+cd $p
+revision=1
+t-dgit push-source --new
+
+tagref=`t-v-tag`
+tagname=${tagref#refs/tags/}
+
+(set -e
+ cd $dgitrepo
+ git tag -m UNWANTED unwanted dgit/sid)
+
+fetch-check () {
+	t-dgit fetch
+	t-ref-same-exact $tagref
+	t-refs-notexist refs/tags/unwanted
+}
+
+t-ref-same-exact $tagref
+fetch-check
+
+git tag -d $tagname
+fetch-check
+
+git tag -f -m BOGUS $tagname HEAD
+t-refs-same-start
+t-ref-same-exact $tagref
+fetch-check
+
+t-ok

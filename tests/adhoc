@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# usage:
+#  after tests/tests/some-test has been run (and maybe failed)
+#   cd tests/tmp/some-test/blah
+#   ../../adhoc ../../../dgit some options
+# or
+#  after tests/tests/some-test has been run (and maybe failed)
+#   cd tests/tmp/some-test/blah
+#   ../../adhoc some rune run by some piece of infrastructure
+#
+# effects:
+#   directly sets the env variables which arrange to use
+#   programs etc. from the working tree
+
+ourname=adhoc
+
+case $0 in
+*/$ourname)
+	: ${DGIT_TEST_INTREE:=$(realpath "${0%/$ourname}/..")}
+	;;
+*)
+	echo >&2 "$ourname must be invoked as .../$ourname not $0"
+	exit 127
+	;;
+esac
+
+export DGIT_TEST_INTREE
+
+. $DGIT_TEST_INTREE/tests/lib-core
+
+t-set-intree
+
+pwd=$(realpath "$(pwd)")
+basis=$DGIT_TEST_INTREE/tests/tmp
+case "$pwd" in
+"$basis" | "$basis"/*)
+	testname=${pwd/"$basis/"/}
+	testname=${testname%%/*}
+	tmp="$basis/$testname"
+	;;
+*)
+	fail "$ourname pwd must be inside some test (in $basis), not $pwd"
+	;;
+esac
+
+export ADTTMP=$tmp
+
+t-set-using-tmp
+
+exec "$@"

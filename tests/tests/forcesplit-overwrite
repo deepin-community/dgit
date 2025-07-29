@@ -1,0 +1,36 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+# This tests a native package with split view, including that the
+# pseudomerges end up in the right place.
+
+t-setup-import examplegit
+
+cd $p
+
+suite=stable
+
+t-commit 'No changes, just send to stable' '' stable
+
+t-refs-same-start
+t-ref-head
+
+try () {
+	t-dgit -wgf --split-view "$@" --dgit-view-save=split.p \
+		push-source stable
+}
+
+t-expect-fail E:'maintainer view tag.*not fast forward' \
+try
+
+t-expect-fail F:'debian/changelog does not mention 1.2' \
+try --overwrite
+
+try --overwrite=1.2
+git branch -f split.b split.p
+
+t-ref-head
+t-split-unchanged-pushed-good $suite
+
+t-ok

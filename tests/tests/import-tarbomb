@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-import-chk
+
+t-tstunt-parsechangelog
+
+mangle1 () {
+	rm -f ${1}_*
+	t-import-chk1 "$@"
+	cd $tmp/mirror/pool/main
+	dpkg-source -x ${p}_${v}.dsc td
+	orig=${p}_${v%-*}.orig.tar.gz
+	tar zxf $orig
+	rm $orig ${p}_${v}.*
+	cd $p
+	mkdir urk
+	echo urk >urk/urk
+	export GZIP=-1
+}
+mangle2 () {
+	cd ..
+	dpkg-source -b td
+	rm -rf $p td
+	cd $tmp
+	t-archive-none $p
+	t-archive-query
+	t-import-chk2
+}
+
+# 3.0 (quilt), multiple patches, tarbomb orig
+mangle1 example 1.0-1
+tar zvcf ../$orig *
+mangle2
+
+# 3.0 (quilt), multiple patches, tarbomb orig with dot
+mangle1 example 1.0-1
+tar zvcf ../$orig .
+mangle2
+
+# 3.0 (quilt), multiple patches, tarbomb orig with dot and .git and .pc
+mangle1 example 1.0-1
+git init
+mkdir .pc
+echo SPONG >.pc/SPONG
+tar zvcf ../$orig .
+mangle2
+
+t-ok

@@ -1,0 +1,139 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-skip-suite,bullseye
+t-restrict x-dgit-skip-suite,buster
+t-dependencies T2U mpack
+
+t-t2u-settings
+t-debpolicy
+export DGIT_TEST_MUNPACK=munpack
+export TAG2UPLOAD_LINE_LENGTH_LIMIT=200
+
+t-t2u-native-prep
+
+t-t2u-setup-repo
+
+tagname=test-dummy/$v
+
+export DGIT_TEST_DEBUG=
+export DGIT_TEST_DEBPUSH_DEBUG=
+export DGIT_DRS_DEBUG=0
+export DGIT_TEST_NDEBUG=
+
+t-t2u-test
+t-t2u-succeeded
+t-pushed-good master
+
+cd ..
+
+t-template-expect sendmail.last <<'END'
+    ???
+    sendmail -oee -odb -oi -t -fnoreply@example.org
+    From: test-dummy t2u service <noreply@example.org>
+    Subject: [tag2upload fake-job] uploaded example 1.0-1
+    MIME-Version: 1.0
+    Content-Type: multipart/mixed; boundary=???
+    Content-Transfer-Encoding: 8bit
+    X-Debian-Tag2upload-Distro: test-dummy
+    X-Debian-Tag2upload-JobId: fake-job
+    X-Debian-Tag2upload-Url: ???/fake_https_dir/gitlab.test-dummy.example.org/example.git
+    X-Debian-Tag2upload-Status: uploaded
+    X-Debian-Tag2upload-Package: example
+    To: dgit test git user <dgit-test@debian.example.net>
+    CC: copies@example.org, spqr@example.com
+    Reply-To: reply-to@example.org, dgit test git user <dgit-test@debian.example.net>
+
+    --???
+    Content-Type: text/plain; charset="UTF-8"
+    Content-Transfer-Encoding: quoted-printable
+    Content-Disposition: inline
+
+ *  ???
+    --???
+    Content-Type: text/plain; charset="UTF-8"
+    Content-Transfer-Encoding: quoted-printable
+    Content-Disposition: inline; filename="t2u_fake-job_log.txt"
+    Content-Description: processing log
+
+ +  ???
+    --???
+    Content-Type: text/plain; charset="UTF-8"
+    Content-Transfer-Encoding: quoted-printable
+    Content-Disposition: attachment; filename="t2u_fake-job_tag.txt"
+    Content-Description: input git tag
+
+ *  ???
+    --???--
+END
+
+t-template-expect sendmail.munpack/part1 <<'END'
+    job id: fake-job
+    url: ???/fake_https_dir/gitlab.test-dummy.example.org/example.git
+    tag: test-dummy/1.0-1
+    preparing
+    tag signature verified
+    tag parsed ok
+    source: example
+    version: 1.0-1
+    tag signer authorised for package
+    source code fetched
+    changelog parsed ok
+    target: test-dummy unstable
+    package is new in this suite
+    no upstream tag/commit specified, not considering orig(s)
+    processing successful
+    Uploaded to unstable
+END
+
+t-template-expect sendmail.munpack/t2u_fake-job_tag.txt <<'END'
+    object f68f0a55d4bba3833727b96b135ee8b66a049a77
+    type commit
+    tag test-dummy/1.0-1
+    tagger dgit test git user <dgit-test@debian.example.net> 1530000000 +0100
+
+    example release 1.0-1 for unstable
+
+    [dgit distro=test-dummy split]
+    [dgit please-upload source=example version=1.0-1]
+    -----BEGIN PGP SIGNATURE-----
+
+ +  ???
+    -----END PGP SIGNATURE-----
+END
+
+t-template-expect sendmail.munpack/t2u_fake-job_log.txt <<'END'
+    # builder: oracle$ ???ssh??? 'builder@t2u-b' 'env ...'
+
+    builder:work$ git fetch origin --no-tags refs/tags/test-dummy/1.0-1:refs/tags/test-dummy/1.0-1
+    From ???/fake_https_dir/gitlab.test-dummy.example.org/example
+     * [new tag]         test-dummy/1.0-1 -> test-dummy/1.0-1
+    # [ok]
+
+    builder:work$ git checkout -q refs/tags/test-dummy/1.0-1
+    # [ok]
+    # source code fetched
+    # changelog parsed ok
+    # target: test-dummy unstable
+
+    builder:work$ ???/dgit -wn -pexample --build-products-dir=../bpd --for-push fetch unstable
+    canonical suite name for unstable is sid
+    no version available from the archive
+    dgit: source package example does not exist in suite unstable
+    # [new]
+    # package is new in this suite
+    # no upstream tag/commit specified, not considering orig(s)
+
+    oracle$ ???/dgit -wn -pexample --build-products-dir=../bpd --force-uploading-source-only --ssh=???ssh??? --ssh:-oBatchMode=yes --dgit=env --dgit:???/dgit -k52400D7C6342821C0D2B588E108F924D8FECF890 --dput:-u --package=example --expect-suite=unstable --expect-version=1.0-1 --tag2upload-builder-mode --split-view=always --new --trust-changelog '--dsc-control-add=Git-Tag-Tagger=dgit test git user <dgit-test@debian.example.net>' '--dsc-control-add=Git-Tag-Info=tag=??? fp=bcd22cd83243b79d3dfac33ea3dbcbc039b13d8a' '--ch-control-add=Git-Tag-Tagger=dgit test git user <dgit-test@debian.example.net>' '--ch-control-add=Git-Tag-Info=tag=??? fp=bcd22cd83243b79d3dfac33ea3dbcbc039b13d8a' rpush-source 'builder@t2u-b:???/work'
+
+    canonical suite name for unstable is sid
+##  Don't insist on particular output from dgit rpush.
+ *  ???
+    dgit (build host) ok: pushed and uploaded 1.0-1
+    # [ok]
+    # processing successful
+    # Uploaded to unstable
+END
+
+t-ok

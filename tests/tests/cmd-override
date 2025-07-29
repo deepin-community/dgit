@@ -1,0 +1,59 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+t-setup-import gdr-convert-gbp
+
+false_program=$(type -Pp false)
+ln -s -- "$false_program" false2
+
+cd example
+
+t-expect-fail E:'^dgit: failed command: false --no-source-only-changes ' \
+t-dgit 	--quilt=nofix				\
+	--sbuild=false 				\
+	--sbuild!:--no-source 			\
+	sbuild
+
+t-expect-fail E:'^dgit: failed command: false 88 -d unstable ' \
+t-dgit 	--quilt=nofix					\
+	-cdgit-distro.test-dummy.opts-sbuild=88		\
+	--sbuild=false 					\
+	--sbuild!:--no-source 				\
+	--sbuild!:--no-source-only-changes		\
+	sbuild
+
+t-expect-fail \
+    E:'^dgit: failed command: false no-such-host '\''spoons --stuff ' \
+t-dgit --ssh=false --dgit=spoons --dgit:--stuff rpush-source no-such-host:$tmp
+
+t-expect-fail E:'^dgit: failed command: false .* -I\.git 77 -b ' \
+t-dgit 								\
+	-cdgit-distro.test-dummy.cmd-dpkg-source=false		\
+	-cdgit-distro.test-dummy.opts-dpkg-source=77		\
+	build
+
+# ---- tests that try to invoke git-debrebase ----
+
+unset DGIT_GITDEBREBASE_TEST
+# ^ this stops t-dgit adding a --git-debrebase=... argument
+
+t-expect-fail E:'^dgit: failed command: false 12 99 --noop-ok ' \
+t-dgit \
+	-cdgit-distro.test-dummy.opts-git-debrebase=12 \
+	-cdgit-distro.test-dummy.cmd-git-debrebase=false \
+	--git-debrebase:99 \
+	quilt-fixup
+
+t-expect-fail E:'^dgit: failed command: false 42 66 --noop-ok ' \
+t-dgit \
+	-cdgit-distro.test-dummy.opts-git-debrebase=42 \
+	-cdgit-distro.test-dummy.cmd-git-debrebase=$tmp/false2 \
+	--git-debrebase=false \
+	--git-debrebase:66 \
+	quilt-fixup
+
+# ---- don't add new tests here: `unset DGIT_GITDEBREBASE_TEST` above ----
+
+t-ok

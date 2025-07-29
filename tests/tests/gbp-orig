@@ -1,0 +1,47 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import gbp
+
+cd $p
+
+t-tstunt-parsechangelog
+t-tstunt-debuild
+t-tstunt-lintian
+
+git config --global diff.noprefix true
+
+: '----- let gbp build a .orig for comparison -----'
+
+gbp buildpackage --git-notify=off --git-no-sign-tags -us -uc
+
+mkdir ../gbp-output
+mv ../*1.0* ../gbp-output/.
+rm -f ../*.changes
+
+: '----- now do it ourselves -----'
+
+t-dgit -wgf --dgit-view-save=split.b gbp-build --git-ignore-branch
+
+t-dgit -wgf --quilt=gbp clean # gbp leaves dirty trees :-/
+
+t-dgit -wgf --dgit-view-save=split.p --quilt=gbp push-built --new
+
+t-gbp-pushed-good
+
+: '----- check .origs are the same -----'
+
+# if gbp weren't weird about .gitignore we could just debdiff the .dscs
+
+for d in . gbp-output; do
+	cd $tmp/$d
+	mkdir tar-x
+	cd tar-x
+	tar zxf ../${p}_${v%-*}.orig.tar.gz
+done
+
+cd $tmp
+diff -ruN gbp-output/tar-x tar-x
+
+t-ok

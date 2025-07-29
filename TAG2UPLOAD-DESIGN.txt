@@ -1,0 +1,327 @@
+TAG-TO-UPLOAD - DEBIAN - SERVICE DESIGN / DEPLOYMENT PLAN
+=========================================================
+
+Overall structure and dataflow
+------------------------------
+
+ * Uploader (DD or DM) makes signed git tag (containing metadata
+   forming instructions to tag2upload service)
+
+ * Uploader pushes said tag to salsa. [1]
+
+ * salsa sends webhook to tag2upload service.
+
+ * tag2upload service
+    : provides an HTTPS service accessible to salsa
+    : fishes url and tag name out of webhook json
+    : checks to see if the tag is at all relevant
+    : retrieves tag data (git shallow clone)
+    ! verifies signature on the tag
+    ! parses the tag metadata
+    ! checks that salsa repo url is basically sane
+    ! checks to see if signed by DD, or DM for appropriate package
+    - obtains relevant git history
+    - obtains, if applicable, orig tarball from archive
+    - makes source package
+    # signs source package and "canonical view" git tag
+    - pushes history and both tags to dgit-repos git server
+    - uploads source package to archive
+    ! reports activities by email
+    : shows status of package building to enquirers via www
+
+ * archive publishes package as normal
+
+[1] In principle other git servers would be possible but it would have
+to be restricted to ones where we can either avoid, or stop, them
+being used as a channel for a DoS attack against the tag2upload
+service.
+
+Privsep
+-------
+
+The tag2upload service will have to have a signing key that can upload
+source packages to the archive.
+
+We do not want that signing key to be abused.  In particular, even
+though it will be in a hardware token we want to avoid giving
+unrestricted access to use that key, to code which itself has a large
+attack surface.  In particular, source package construction is very
+complex.
+
+So there will be a privilege separation arrangement, as described
+above.  Different tasks run in a different security context:
+
+    : runs on the Manager, which is web-accessible and
+      not trusted very much
+
+    ! is fully trusted and has access to the signing key
+
+    - runs in the discardable VM or container, controlled by `!'
+
+    # is achieved by the `dgit rpush' protocol, where the trusted
+      (invoking, signing) part offers a restricted signing oracle to
+      the less-trusted (building) part.
+
+      The signing oracle will check that the files to be signed are
+      roughly in the right form and that they name the right source
+      package.  It will construct the "canonical view" git tag itself
+      from metadata provided by the building part.
+
+      The signing oracle has the information from the now-verified git
+      tag (since it operating in the context of a particular request)
+      and will only sign for the same source package and version.
+
+Service architecture
+--------------------
+
+I propose the following architecture for the tag2upload service.
+
+There are three systems involved:
+
+I. Manager (`:`)
+
+Hardly trusted.
+
+ * Database (sqlite) containing queue, and historical data.
+
+ * Conventional webserver offering TLS and using Let's Encrypt.
+
+ * Manager daemon.
+
+Manager daemon has the following tasks:
+
+ * Web-service-style "application server" written in some scripting
+   language listens on a local TCP port, handles HTTP connections
+   proxied by the webserver.
+
+ * Receives webbook requests.
+   Checks that the calling IP address is salsa.
+   Parses the JSON.  Checks tag name to see if it seems of interest.
+   If so, fetches the actual tag data (git shallow clone)
+   and sees if it looks plausible, and if so, stores it in the db.
+   If an Oracle client is waiting, feeds it the tag and url.
+
+ * Server for very simple protocol, used by Oracle to obtain work to do.
+   Accessed via ssh with restricted key (`ssh ... nc`).
+
+ * Manager daemon web service also offers basic query API
+   and web pages showing recent activity, for human tracking.
+   (To all comers.)
+
+II. Oracle (`!`)
+
+Trusted to use the signing key.  (Key itself is in a hardware token.)
+Not exposed to source package contents.   Not exposed to the web.
+Not exposed via the git protocol, not even as a client.
+
+ * Uses ssh to connect to manager's simple Oracle protocol port.
+   Manager sends Oracle the signed tag, and repository URL.
+
+ * Sends an email saying what it is about to process.
+   (We do this in the Oracle so that less-trusted components
+   don't get to hide their misbheaviours by not sending reports.)
+
+ * Checks that the tag is signed by someone in the keyring
+   (and that it uses a good enough hash function).
+   (Oracle has a copy of the keyrings and dm allow list.)
+
+ * Parses the tag to find the metadata including
+   source package name, target suite, and version.
+   Checks that the signer is authorised for this package.
+
+ * Checks that the source repository URL is basically sane.
+   (But does not access it - the Builder does that, below.)
+
+ * Arranges that the Builder is reset (see below).
+
+ * ssh's to the Builder to have the builder fetch the git data.
+
+ * Runs dgit rpush, specifying the package, version and
+   target suite on the command line.  Target host is the Builder.
+   (We use the existing dgit rpush signing oracle protocol, except extended
+   to include the new SOURCE_VERSION.git.tar.xz described below.)
+
+ * Sends an email saying what it did.
+
+ * Reports the outcome success/failure and a summary line
+   to the Manager via the still-open manager protocol connection.
+
+III. Builder (`-`)
+
+Does the actual source package conversion.
+Largely trusts the Oracle.
+Trusted as to source package contents, but not otherwise.
+
+Oracle can reset this.  So it is a VM or a chroot.
+We propose to use the same schroot configuration as for a buildd,
+subject to consultation with DSA as to the best approach.
+
+ * On instructions from the Oracle (via incoming ssh):
+   
+   - Fetches the git objects for the maintainer's tag from Salsa.
+   - Fetches the git objects for the existing canonical view
+     from the dgit-repos git server.
+   - Fetches necessary origs from the archive.
+   - Converts the git history to the canonical form (treesame to
+     the source package) by adding necessary synthetic commits.
+   - Builds the source package
+   - Uses the rpush protocol to obtain signed git tag
+     (on the canonical git form)
+     and signed .dsc and .changes.
+   - Pushes the git objects to the dgit-repos server.
+   - Uploads the .dsc and .changes to the archive.
+
+ * Packet filter limiting outgoing connections to salsa,
+   dgit-repos, and the Debian archive,
+   Incoming connections come only from the Oracle.
+
+Reproducibility, metadata and auditing
+--------------------------------------
+
+The trusted part of the tag2upload service will keep some logs,
+particularly of each tag it is told about and what the disposition of
+that was, and when it was retried.
+
+Also, it will send the following information to a public mailing list:
+  - The tag object data for any tag it decides to process,
+     before it passes it to the VM.
+  - A report (more or less, a shell transcript)
+     of each processing attempt
+  - The list will also be the public email address of the
+     tag2upload robot's signing key
+
+The generated .dscs will contain additional fields
+
+  Git-Tag-Tagger: Firstname Surname <email@address>
+
+      "tagger" line from the git tag converted to deb822 format
+
+  Git-Tag-Info: tag=<tagobjid> fp=<fingerprint>
+
+      <tagobjid> is the git object ID of the tag object
+          (if someone wants to obtain referenced git objects,
+	   they can be found on the dgit-repos git server)
+
+      <fingerprint> is the "fingerprint_in_hex" from the VALIDSIG line
+      in the gpgv output.
+
+This additional metadata is needed to be able to tell by looking at
+the .dsc who the original uploader was (which might be different to
+the maintainer, in the sponsorship case).  (Programs which use the
+uploader signature identity will send mails to the mailing list
+mentioned above, until they have been updated.  This is not desirable
+but not a blocker for deployment.)
+
+The generated .changes will contain copies of the two .dsc fields
+above.
+
+The upload will contain a .source_buildinfo.  This will list the
+versions of the software running in the Builder, which is primarily what
+controls the generated .dsc.
+
+The versions of dgit-infrastructure and git running in the trusted
+part are also relevant because the trusted part assembles outgoing
+tagger lines etc. and interprets the incoming git tag; however, in our
+deployment we intend to maintain them in sync, and anyway our ad-hoc
+reproduction tooling will not be able to arrange for them to be
+different.  So the outside-VM version information will not be
+included.
+
+Eventually there could be a mode for sbuild (related to
+binary build reproduction), or a suitable script, which can verify a
+reproduction attempt.  For now the src:dgit test suite will check that
+the upload is reproducible if run again in the same environment.
+
+SOURCE_VERSION.git.tar.xz
+=========================
+
+The .changes will also contain a file SOURCE_VERSION.git.tar.xz which is
+a compressed git repository with the following properties:
+
+ * It has the ref debian/VERSION, the maintainer's signed tag.
+ * It is sufficient on its own to (re)produce the canonical git view.
+   It is jointly sufficient, together with the orig.tar, to (re)produce
+   the source package.
+   (When the upload including the .git.tar.xz does not contain the
+   full source, this means the orig.tar that's already in the archive.)
+ * These reproductions are up to equality of file names and contents
+   -- timestamps of files may differ.
+ * It is usually shallow, for performance and storage space reasons.
+ * It may be a bare repository; or, it might be that no branch is
+   checked out.
+
+This .git.tar.xz is for the purpose of third-party auditing of what
+tag2upload did.  There will be a Python script in dgit.git, called
+mini-git-tag-fsck, which will take the .git.tar.xz as input, and produce
+two forms of auditing output:
+
+ * It extracts the maintainer's signed tag and deconstructs it into two
+   files, the tag text, and the detached signature.
+ * It prints to standard output a list of all files in the tagged
+   commit, with their git checksums (their object IDs).
+   It does this by walking the Merkle tree whose head is the
+   debian/VERSION signed tag object, re-checksumming as it goes.
+
+mini-git-tag-fsck has the following other properties:
+
+ * It does not verify the signature on the tag.
+   That is left to the caller.
+ * Given that the signature on the tag *is* valid, then all of the
+   script's own output is (transitively, via SHA1CD hashing) covered by
+   that signature, and so the output faithfully represents the intent of
+   the person who signed the tag.
+
+ * It does not invoke git, or anything from libgit2, or any other
+   external code of comparable complexity.
+ * It is designed to process only tag2upload's .git.tar.xz repositories;
+   it cannot process arbitrary git repositories.
+
+   Although the .git.tar.xz contains a bona fide git repository,
+   special arrangements are made regarding packfiles versus loose
+   objects to facilitate mini-git-tag-fsck's being able to process it
+   without invoking git/libgit2/etc..
+
+mini-git-tag-fsck will also have a mode to generate the .git.tar.xz.
+This will be invoked by the tag2upload service as part of preparing the
+upload.  (This mode will need to call out to git/libgit2/etc..)
+
+Emails
+------
+
+Emails are sent to:
+
+ 1. The username associated with the signing key
+ 2. The tagger (email address from the git tag object)
+ 3. A public mailing list selected (or created) for the purpose
+
+1 and 2 will often be the same.
+This provides feedback to the person making the signature.
+The person preparing (rather than, maybe, sponsoring) the upload
+(Changed-By in .changes) will be notified by the archive software.
+
+The email report will contain at least:
+
+ * The target distro, package, suite and version
+ * The URL from which the git objectx were downloadeed
+ * Whether the operation succeeded, and error messages if it didn't.
+
+Email is sent by the Oracle feeding a file to
+`ssh smarthost sendmail -t` not by implementing SMTP,
+to reduce the attack surface.
+
+DoS
+---
+
+This service is not very resistant to DoS attacks.  In particular,
+sending it bad URLs might stall it (since it has to retry failing
+URLs).
+
+So we (i) do not expose it to anyone but salsa and (ii) limit it to
+trying to fetch salsa urls.
+
+Making very many tags on salsa would stress this tag2upload service a
+bit but not fatally, and it would be a DoS against salsa too.
+
+After signature verification, we are much more vulnerable to DoS.  An
+approved signer can get the service to do a lot of work.  That is the
+purpose of the service, indeed.

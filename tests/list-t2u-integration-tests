@@ -1,0 +1,6 @@
+#!/bin/sh
+set -e
+
+candidates=$(run-parts --list tests/tests)
+
+grep -l '^t-restrict x-tag2upload-service-manager' $candidates

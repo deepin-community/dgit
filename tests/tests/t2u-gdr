@@ -1,0 +1,68 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-restrict x-dgit-skip-suite,bullseye
+t-restrict x-dgit-skip-suite,buster
+t-dependencies T2U DEBORIG GDR
+
+t-setup-import gdr-convert-gbp
+
+v=2.0-3
+
+t-t2u-settings
+t-debpolicy
+
+# This will spot failures to shell-escape the print-execute-command.
+# (Our tests otherwise miss this because autopkgtest-virt-null's
+# print-execute-command is trivial.)
+#
+# We do this in only one test case beause it makes the logs
+# *even harder* to read.
+#
+noop_suffix=$(
+    cat <<'END'
+,bash,-xec,
+    : bodge args "$@"
+    for e in \' \" \$; do
+        test "$1" = "$e"
+        shift
+    done
+    exec "$@"
+,x,',",$
+END
+)
+noop_suffix="${noop_suffix// /%20}"
+export DGIT_DRS_T2U_VIRT_EXEC_CMD_SUFFIX="$noop_suffix"
+
+cd $p
+
+# Remove d/patches from the maintainer view so we have a real split.
+t-git-debrebase
+DEBEMAIL=dgit-tests@example.org \
+    gbp dch --commit --qa \
+    --ignore-branch --release --spawn-editor=never
+t-git-debrebase stitch
+
+t-t2u-setup-repo
+
+# TODO Make split.b ref.
+
+tagname=test-dummy/$v
+
+# Check that the thing we are about to tag (still) lacks d/patches.
+test ! -e debian/patches
+# And, debpush it.
+t-t2u-test --quilt=linear
+t-t2u-succeeded
+
+git branch split.p dgit/dgit/sid
+
+# TODO Run an appropriate t-*-pushed-good.
+
+t-t2u-gittarxz-unpack
+t-git-debrebase make-patches
+git branch split.t
+t-t2u-gittarxz-reproduced
+
+t-ok

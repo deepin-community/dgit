@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive example 1.0-1.100
+t-git-none
+
+t-dgit clone $p
+
+t-ok

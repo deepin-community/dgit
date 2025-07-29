@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-gdr
+
+t-dependencies GDR DEBORIG quilt
+
+t-archive-none example
+t-git-none
+
+t-gdr-gbp-import-core-with-queue
+
+git-deborig
+
+for b in			\
+	patch-queue/quilt-tip	\
+	gitish-only		\
+	quilt-tip-1.1		\
+	quilt-tip-2		\
+	indep-arch		\
+; do
+	git branch -D $b
+done
+
+git rm -rf . # yikes
+git checkout HEAD -- debian
+t=$(git write-tree)
+t=$(git commit-tree -m 'Convert to bare debian' $t)
+git reset --hard $t
+
+t-setup-done '' "$(echo $p*) git mirror aq" '
+	t-select-package example
+	t-git-next-date
+'

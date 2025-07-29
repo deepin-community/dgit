@@ -1,0 +1,10 @@
+#!/bin/bash
+autoimport=
+set -e
+. tests/lib
+. $troot/lib-gdr
+
+t-dependencies GDR
+
+export ifarchive=:
+t-chain-test gdr-convert-gbp

@@ -1,0 +1,146 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+suitespecs+=' stable'
+
+# This test script tests each of the split brain quilt modes, and
+# --quilt=linear, with a tree suitable for each of those, and pushes
+# them in sequence.  The idea is to check that each tree is rejected
+# by the wrong quilt modes, and accepted and processed correctly by
+# the right ones.
+
+t-tstunt-parsechangelog
+
+# Easiest way to make a patches-unapplied but not-gbp tree is
+# to take the patches-unapplied tree and by-hand commit the .gitignore
+# changes as a debian patch.
+t-gbp-example-prep
+
+suite=sid
+
+want-success () {
+	local qmode=$1; shift
+	t-refs-same-start
+	t-ref-head
+
+	t-dgit "$@" --quilt=$qmode --dgit-view-save=split.b build-source
+
+	$want_success_pre_push_hook
+
+	t-dgit "$@" --quilt=$qmode --dgit-view-save=split.p push-built
+	t-$qmode-pushed-good $suite
+}
+
+
+echo "===== testing tree suitable for --quilt=gbp (only) ====="
+
+t-expect-fail 'git tree differs from result of applying' \
+t-dgit -wgf --quilt=dpm build-source
+
+t-expect-fail 'git tree differs from orig in upstream files' \
+t-dgit -wgf --quilt=unapplied build-source
+
+t-expect-fail 'This might be a patches-unapplied branch' \
+t-dgit -wgf build-source
+
+# testing success with --quilt=gbp are done in quilt-gbp test case
+
+
+echo "===== making tree suitable for --quilt=unapplied (only) ====="
+
+pf=debian/patches/test-gitignore
+
+cat >$pf <<END
+From: Senatus <spqr@example.com>
+Subject: Add .gitignore
+
+---
+END
+
+git diff /dev/null .gitignore >>$pf || test $? = 1
+echo ${pf##*/} >>debian/patches/series
+
+git add debian/patches
+git rm -f .gitignore
+git commit -m 'Turn gitignore into a debian patch'
+gitigncommit=`git rev-parse HEAD`
+
+t-commit unapplied 1.0-3
+
+echo "----- testing tree suitable for --quilt=unapplied (only) -----"
+
+t-expect-fail 'git tree differs from result of applying' \
+t-dgit -wgf --quilt=dpm build-source
+
+t-expect-fail 'gitignores: but, such patches exist' \
+t-dgit -wgf --quilt=gbp build-source
+
+t-expect-fail 'This might be a patches-unapplied branch' \
+t-dgit -wgf build-source
+
+# Check that push-built regenerates the cache if necessary
+want_success_pre_push_hook='git update-ref -d refs/dgit-intern/quilt-cache'
+want-success unapplied -wgf
+want_success_pre_push_hook=''
+
+maint_view_tag=$(
+    git cat-file tag archive/test-dummy/$v | \
+    perl -ne 'print $1 if m{^\[dgit.* split-maint-view-tag=(\w+)(?:\s.*)?\]$}'
+)
+git cat-file tag $maint_view_tag
+
+
+echo "===== making fully-applied tree suitable for --quilt-check ====="
+
+git checkout master
+git merge --ff-only dgit/dgit/sid
+
+t-commit vanilla 1.0-4
+
+echo "----- testing fully-applied tree suitable for --quilt-check -----"
+
+t-expect-fail 'gitignores: but, such patches exist' \
+t-dgit --quilt=dpm build-source
+
+t-expect-fail 'git tree differs from orig in upstream files' \
+t-dgit --quilt=gbp build-source
+
+t-expect-fail 'git tree differs from orig in upstream files' \
+t-dgit --quilt=unapplied build-source
+
+t-dgit --quilt=nofix build-source
+t-refs-same-start
+t-ref-head
+t-dgit --quilt=nofix push-built
+t-pushed-good-core
+
+
+echo "===== making tree suitable for --quilt=dpm (only) ====="
+
+git checkout master
+git merge --ff-only dgit/dgit/sid
+
+git revert --no-edit $gitigncommit
+
+t-commit dpmish 1.0-5
+
+echo "----- testing tree suitable for --quilt=dpm (only) -----"
+
+t-expect-fail 'git tree differs from orig in upstream files' \
+t-dgit -wgf --quilt=gbp build-source
+
+t-expect-fail 'git tree differs from orig in upstream files' \
+t-dgit -wgf --quilt=unapplied build-source
+
+t-expect-fail 'This might be a patches-applied branch' \
+t-dgit -wgf build-source
+
+want-success dpm
+
+suite=stable
+t-commit dpmish-stable 1.0-6 $suite
+
+want-success dpm --new
+
+t-ok

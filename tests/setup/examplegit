@@ -1,0 +1,55 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+suitespecs+=' stable testing'
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+cd $p
+
+revision=1
+
+push-to () {
+	t-refs-same-start
+	t-ref-head
+	t-dgit build
+	t-dgit push-built --new $2
+	t-pushed-good $1 $2
+	t-archive-process-incoming $2
+}
+
+echo ancestor >which
+git add which
+t-commit Ancestor '' stable
+push-to master stable
+
+git checkout -b stable
+
+echo stable >which
+git add which
+t-commit Stable '' stable
+push-to stable stable
+
+git checkout master
+
+majorv=2
+revision=0
+
+echo sid >which
+git add which
+t-commit Sid
+push-to master sid
+
+echo sid-again >>which
+git add which
+t-commit Sid
+push-to master sid
+
+git clean -xdff
+
+t-setup-done 'v suitespecs majorv revision' "aq git mirror $p" "
+	t-select-package $p
+"

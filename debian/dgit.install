@@ -1,0 +1,4 @@
+usr/share/locale/*/LC_MESSAGES/dgit.mo
+
+usr/share/man/*/man*/dgit*.[1-9]
+# ^ translated manpages.  This has to be commented if they should go away.

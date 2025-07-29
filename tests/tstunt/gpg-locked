@@ -1,0 +1,35 @@
+#!/bin/sh
+set -e
+
+for attempt in '' ' ' exec; do
+
+set +e
+$attempt						\
+$DGIT_TEST_REAL_GPG					\
+	--agent-program=$DGIT_STUNT_AGENT		\
+	"$@"
+rc=$?
+set -e
+
+if [ $rc != 2 ]; then exit $rc; fi
+
+echo >&2 "WARNING - GNUPG FAILED $rc - STUNT GNUPG $attempt $stdin_tmp_bytes $*"
+
+if [ "$stdin_tmp_bytes" = 0 ]; then
+	sleep 5
+else
+	sh -ec '
+		if [ "x$DGIT_GNUPG_STUNT_ERRLOG" != x ]; then
+			exec >"$DGIT_GNUPG_STUNT_ERRLOG"
+		else
+			exec 2>/dev/null
+		fi
+		exec >/dev/tty
+		printf "%s\n" "$*"
+	' x "GNUPG WRAPPER - TROUBLE - $HOME $GNUPGHOME - FAILED $rc $attempt $stdin_tmp_bytes $*" ||:
+	sleep 10
+fi
+
+done
+
+exit 127

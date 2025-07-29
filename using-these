@@ -1,0 +1,8 @@
+#!/bin/bash
+set -e
+d="${0%/*}"
+PERLLIB=$d${PERLLIB:+:}${PERLLIB}
+export PERLLIB
+PATH=$d:$d/infra${PATH:+:}${PATH}
+export PATH
+exec "$@"

@@ -1,0 +1,4 @@
+#!/bin/bash
+set -e
+echo "DGIT TEST STUNT DEBUILD $*" >&2
+"${DGIT_TEST_REAL_DEBUILD}" --preserve-env --preserve-envvar PATH "$@"

@@ -1,0 +1,7 @@
+#!/bin/bash
+set -e
+. tests/lib
+t-dsd
+rm $drs_dispatch/repos
+echo '* drs' >>$drs_dispatch/diverts
+t-chain-test fetch-somegit-notlast

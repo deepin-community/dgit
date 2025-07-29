@@ -1,0 +1,367 @@
+# -*- sh -*-
+
+: ${GDR_TEST_DEBUG=-D}
+export GDR_TEST_DEBUG
+
+t-tstunt debchange
+
+t-git-debrebase () {
+	local gdr=${DGIT_GITDEBREBASE_TEST-git-debrebase}
+	: '
+{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{'
+	$gdr "--dgit=${DGIT_TEST-dgit}" $GDR_TEST_OPTS \
+		$GDR_TEST_DEBUG $t_gdr_xopts "$@"
+	: '}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+'
+}
+
+t-gdr-good () {
+	local state=$1
+	local beforetag=$2 # say HEAD to skip this check
+	# state should be one of
+	#   laundered
+	#   stitched
+	#   pushed
+
+	case $state in
+	pushed*)
+		t-gdr-made-patches
+		;;
+	esac
+
+	git diff --quiet ${beforetag-t.before} -- ':.' ':!debian/patches'
+
+	LC_MESSAGES=C t-git-debrebase status >../status.check
+	case $state in
+	laundered*)
+		egrep '^  *branch is laundered' ../status.check
+		;;
+	stitched*|pushed*)
+		egrep \
+ '^  *branch contains furniture|^  *branch is unlaundered|^  *branch needs laundering' ../status.check
+		egrep '^  stitched$' ../status.check
+		;;
+	esac
+
+	t-gdr-good-analyse HEAD $state
+}
+
+t-gdr-good-analyse () {
+	local head=$1
+	local state=$2
+	local wsfx=$3
+	local etypes bwtip
+
+	# etypes is either a type,
+	# or   PseudoMerge-<more etypes>
+	# or   AddPatches-<more etypes>
+
+	case $state in
+	laundered)
+			etypes=Upstream
+			bwtip=Y:`t-git-debrebase breakwater`
+		;;
+	stitched)	etypes=Pseudomerge-Upstream ;;
+	pushed)		etypes=AddPatches-Pseudomerge-Upstream ;;
+	pushed-interop)	etypes=Pseudomerge-AddPatchesInterop-Upstream ;;
+	breakwater)	etypes=Packaging ;;
+	*)		fail-unknown-state-$state ;;
+	esac
+
+	anal=../anal$wsfx
+	t-git-debrebase analyse $head >$anal.check
+	expect=`git rev-parse $head`
+	exec <$anal.check
+	local cid ctype info nparents
+	while read cid ctype info; do
+		: ===== $cid $ctype $info =====
+		test $cid = $expect
+		local cetype=${etypes%%-*}
+		if [ "x$ctype" = "x$cetype" ]; then cetype=SAME; fi
+		local parents="`git log -n1 --pretty=format:%P $cid`"
+		expect="$parents"
+		enparents=1
+		: "$ctype/$cetype" "$parents"
+
+		case "$ctype/$cetype" in
+		Pseudomerge/SAME)			;;
+		Packaging/SAME)				;;
+		Packaging/Upstream)			;;
+		MergedBreakwaters/Packaging)		;;
+		MergedBreakwaters/Upstream)		;;
+		AddPatches/SAME)			;;
+		AddPatches/AddPatchesInterop)		;;
+		Changelog/Packaging)			;;
+		Changelog/Upstream)			;;
+		Upstream/SAME)				;;
+		Anchor/Upstream)			;;
+		Anchor/Packaging)			;;
+		*)
+			fail "etypes=$etypes ctype=$ctype cetype=$cetype $cid"
+			;;
+		esac
+
+		case "$ctype/$etypes" in
+		Packaging/Upstream|\
+		Changelog/Upstream)
+			if [ "x$bwtip" != x ]; then
+				test "$bwtip" = "Y:$cid"
+				bwtip=''
+			fi
+		esac
+
+		case "$cetype" in
+		AddPatchesInterop)
+			git log -n1 --pretty=format:%B \
+			| grep '^\[git-debrebase[ :]'
+			;;
+		esac
+
+		case "$ctype" in
+		Pseudomerge)
+			expect=${info#Contributor=}
+			expect=${expect%% *}
+			enparents=2
+			git diff --quiet $expect..$cid
+			etypes=${etypes#*-}
+
+			: 'reject pointless pseudomerges'
+			local overwritten=${parents/$expect/}
+			overwritten=${overwritten// /}
+			t-git-debrebase analyse $overwritten >$anal.overwr
+			local ocid otype oinfo
+			read <$anal.overwr ocid otype oinfo
+			case "$otype" in
+			Pseudomerge) test "x$info" != "x$oinfo" ;;
+			esac
+			;;
+		Packaging)
+			git diff --quiet $expect..$cid -- ':.' ':!debian' 
+			git diff --quiet $expect..$cid -- ':debian/patches'
+			etypes=Packaging
+			;;
+		AddPatches)
+			git diff --quiet $expect..$cid -- \
+				':.' ':!debian/patches'
+			etypes=${etypes#*-}
+			;;
+		Changelog)
+			git diff --quiet $expect..$cid -- \
+				':.' ':!debian/changelog'
+			etypes=Packaging
+			;;
+		Upstream/SAME)
+			git diff --quiet $expect..$cid -- ':debian'
+			;;
+		MergedBreakwaters)
+			enparents=2
+			;;
+		Anchor)
+			break
+			;;
+		esac
+
+		local cnparents=`printf "%s" "$parents" | wc -w`
+		test $cnparents = $enparents
+
+		local cndparents=`
+	for f in $parents; do echo $f; done | t-sort -u | wc -w
+				`
+		test $cndparents = $cnparents
+
+		case "$parents" in
+		*"$expect"*)	;;
+		*)		fail 'unexpected parent' ;;
+		esac
+
+		case "$ctype" in
+		MergedBreakwaters)
+			local f
+			local parent_ix=0
+			for f in $parents; do
+				t-gdr-good-analyse $f breakwater \
+					$wsfx-mp$parent_ix
+				parent_ix=$(( $parent_ix + 1 ))
+			done
+			return
+			;;
+		esac		
+
+	done
+}
+
+t-some-changes () {
+	local token=$1
+	local which=${2:-dum}
+	local fsuffix=$3
+
+	t-git-next-date
+
+	case "$which" in
+	*d*)
+		echo >>debian/zorkmid$fsuffix "// debian $token"
+		git add debian/zorkmid$fsuffix
+		git commit -m "DEBIAN add zorkmid$fsuffix ($token)"
+		;;
+	esac
+
+	case "$which" in
+	*u*)
+		echo >>src$fsuffix.c "// upstream $token"
+		git add src$fsuffix.c
+		git commit -m "UPSTREAM edit src$fsuffix.c ($token)"
+		;;
+	esac
+
+	case "$which" in
+	*m*)
+		for f in debian/zorkmid$fsuffix src$fsuffix.c; do
+			echo "// both! $token" >>$f
+			git add $f
+		done
+		git commit -m "MIXED add both($fsuffix) ($token)"
+		;;
+	esac
+
+	t-git-next-date
+}
+
+t-make-new-upstream-tarball () {
+	local uv=$1
+	git checkout make-upstream
+	echo "upstream $uv" >>docs/README
+	git commit -a -m "upstream $uv tarball"
+	t-make-orig example $uv make-upstream
+}
+
+t-nmu-upload-1 () {
+	# usage:
+	#  v=<full version>
+	#  nmu-upload-1 <nmubranch>
+	#  gbp pq import or perhaps other similar things
+	#  nmu-upload-2
+	#  maybe make some dgit-covertible commits
+	#  nmu-upload-3
+
+	t-git-next-date
+	nmubranch=$1
+	git checkout -f -b $nmubranch
+	t-git-debrebase
+	t-git-debrebase convert-to-gbp
+	t-git-next-date
+	# now we are on a gbp patched-unapplied branch
+}
+
+
+t-nmu-upload-2 () {
+	t-git-next-date
+	t-dch-commit -v $v -m "nmu $nmubranch $v"
+}
+
+t-nmu-upload-3 () {
+	t-dch-commit-r
+	t-non-dgit-upload
+	git checkout master
+}
+
+t-nmu-commit-an-upstream-change () {
+	echo >>newsrc.c "// more upstream"
+	git add newsrc.c
+	git commit -m 'UPSTREAM NMU'
+}
+
+t-maintainer-commit-some-changes () {
+	t-dch-commit -v$v -m "start $v"
+
+	t-some-changes "maintainer $v"
+	t-git-debrebase
+	t-git-debrebase stitch
+
+	git branch did.maintainer
+
+	t-git-next-date
+}
+
+t-nmu-causes-ff-fail () {
+	t-dgit fetch
+
+	t-expect-fail E:'Not.*fast-forward' \
+	git merge --ff-only dgit/dgit/sid
+
+	t-expect-fail E:'-fdiverged.*refs/remotes/dgit/dgit/sid' \
+	t-git-debrebase
+}
+
+t-nmu-reconciled-good () {
+	local nmutree=$1
+
+	: 'check that what we have is what is expected'
+
+	git checkout -b compare.nmu origin/master~0
+	git checkout $nmutree .
+	git rm -rf debian/patches
+	git commit -m 'rm patches nmu'
+
+	git checkout -b compare.maintainer origin/master~0
+	git checkout did.maintainer .
+	git rm -rf --ignore-unmatch debian/patches
+	git commit --allow-empty -m 'rm patches maintainer'
+
+	git merge compare.nmu
+	git diff --quiet master
+
+	: 'check that dgit still likes it'
+
+	git checkout master
+	t-dgit -wgf quilt-fixup
+}
+
+t-gdr-prep-new-upstream () {
+	uv=$1
+	t-git-next-date
+	git checkout make-upstream
+	git reset --hard upstream
+	t-make-new-upstream-tarball $uv
+	git push . make-upstream:upstream
+	git checkout master
+	t-git-next-date
+}
+
+t-gdr-gbp-import-core () {
+	p=example
+	t-worktree 1.1
+
+	cd example
+
+	: 'fake up some kind of upstream'
+	git checkout -b upstream quilt-tip
+	rm -rf debian
+	mkdir debian
+	echo junk >debian/rules
+	git add debian
+	git commit -m "an upstream retcon ($0)"
+	git tag v1.0
+}
+
+t-gdr-gbp-import-core-with-queue () {
+	t-gdr-gbp-import-core
+
+	: 'fake up that our quilt-tip was descended from upstream'
+	git checkout quilt-tip
+	git merge --no-edit -s ours upstream
+
+	: 'fake up that our quilt-tip had the patch queue in it'
+	git checkout patch-queue/quilt-tip
+	gbp pq export
+	git add debian/patches
+	git commit -m "patch queue update ($0)"
+
+	: 'make branch names more conventional'
+	git branch -D master
+	git branch -m quilt-tip master
+}
+
+t-gdr-made-patches () {
+	git log -n1 --'pretty=format:%B' \
+	| egrep '^\[git-debrebase'
+}

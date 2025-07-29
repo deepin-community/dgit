@@ -1,0 +1,111 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+# Base Python in buster is too old.
+t-restrict x-dgit-skip-suite,buster
+t-dependencies python3
+
+python3 <<'ENDPY'
+import os
+
+try:
+    script = os.environ["DGIT_MGTF_TEST"]
+except KeyError:
+    script = "/usr/bin/mini-git-tag-fsck"
+code = compile(open(script).read(), script, "exec")
+__name__ = "mini-git-tag-fsck"
+exec(code, globals(), None)
+
+# ---- iter_peel_bytes ----
+
+# Pulling exactly nbytes first try.
+(bytes, rest) = iter_peel_bytes(3, iter([b"abc", b"def"]))
+assert bytes == b"abc", "pulls exactly 3 bytes first try"
+assert list(rest) == [b"def"]
+
+# Pulling exactly nbytes after three tries.
+(bytes, rest) = iter_peel_bytes(3, iter([b"a", b"b", b"c", b"def"]))
+assert bytes == b"abc", "pulls exactly three bytes after 3 tries"
+assert list(rest) == [b"def"]
+
+# Pulling >nbytes first try.
+(bytes, rest) = iter_peel_bytes(2, iter([b"abc", b"def"]))
+assert bytes == b"ab", "pulls two bytes"
+assert list(rest) == [b"c", b"def"], "pushes back one byte"
+
+# Pulling >nbytes after two tries.
+(bytes, rest) = iter_peel_bytes(4, iter([b"abc", b"def", b"ghi"]))
+assert bytes == b"abcd", "pulls four bytes"
+assert list(rest) == [b"ef", b"ghi"], "pushes back two bytes"
+
+# Not enough bytes.
+try:
+    iter_peel_bytes(3, iter([b"a", b"b"]))
+except StopIteration:
+    pass
+else:
+    assert False, "exception raised"
+
+# No bytes at all.
+try:
+    iter_peel_bytes(1, iter([]))
+except StopIteration:
+    pass
+else:
+    assert False, "exception raised"
+
+# ---- iter_peel_field ----
+
+# Pulling exactly a field first try.
+(bytes, rest) = iter_peel_field(iter([b"abc\0", b"def"]))
+assert bytes == b"abc", "pulls field first try"
+assert list(rest) == [b"def"], "leaves one bytestring after 1 try"
+
+# Pulling exactly a zero-length field first try.
+(bytes, rest) = iter_peel_field(iter([b"\0", b"def"]))
+assert bytes == b"", "pulls zero-length field first try"
+assert list(rest) == [b"def"], "leaves one bytestring after 1 try"
+
+# Pulling exactly a field after three tries.
+(bytes, rest) = iter_peel_field(iter([b"a", b"b", b"c\0", b"def"]))
+assert bytes == b"abc", "pulls field after three tries"
+assert list(rest) == [b"def"], "leaves one bytestring after 3 tries"
+
+# Pulling exactly zero-length field after three tries.
+(bytes, rest) = iter_peel_field(iter([b"", b"", b"\0", b"def"]))
+assert bytes == b"", "pulls zero-length field after three tries"
+assert list(rest) == [b"def"], "leaves one bytestring after 3 tries"
+
+# Pulling more than a field first try.
+(bytes, rest) = iter_peel_field(iter([b"abc\0de", b"fgh"]))
+assert bytes == b"abc", "pulls field of three bytes"
+assert list(rest) == [b"de", b"fgh"], "pushes back two bytes"
+
+# Pulling more than a field after two tries.
+(bytes, rest) = iter_peel_field(iter([b"abc", b"d\0ef", b"ghi"]))
+assert bytes == b"abcd", "pulls four bytes"
+assert list(rest) == [b"ef", b"ghi"], "pushes back two bytes"
+
+# Properly handles two adjacent field separators.
+(bytes1, rest) = iter_peel_field(iter([b"ab\0\0", b"def"]))
+(bytes2, rest) = iter_peel_field(rest)
+assert bytes1 == b"ab", "pulls two bytes ..."
+assert bytes2 == b"", "... then zero bytes"
+assert list(rest) == [b"def"], "leaves three bytes"
+
+# Unterminated field at end of stream.
+(bytes, rest) = iter_peel_field(iter([b"abc", b"def"]))
+assert bytes == b"abcdef", "pulls six bytes"
+assert list(rest) == [], "leave no bytes"
+
+# No bytes at all.  (Ths code couldn't treat this as an unterminated,
+# zero-length field because then the caller could never get EOF.)
+try:
+    iter_peel_field(iter([]))
+except StopIteration:
+    pass
+else:
+    assert False, "exception raised"
+
+ENDPY

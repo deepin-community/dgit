@@ -1,0 +1,143 @@
+Tests: baredebian-multitar baredebian-plusgit baredebian-push baredebian-tarball
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, quilt, git-debrebase, git-buildpackage, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl
+
+Tests: build-modes-gbp
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-buildpackage
+
+Tests: clone-reprepro downstream-gitless
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, reprepro
+
+Tests: dpkgsourceignores-docs
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl
+Restrictions: x-dgit-intree-only
+
+Tests: defdistro-dsd-clone-drs dsd-clone-drs
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl
+Restrictions: x-dgit-intree-only x-dgit-git-only
+
+Tests: alternating-dgit clone-gitnosuite clone-nogit clone-skew drs-clone-nogit dsd-clone-nogit ftpmasterapi-http
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, libhttp-server-simple-static-perl
+
+Tests: gdr-import-dgit
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debrebase, git-buildpackage, libhttp-server-simple-static-perl
+
+Tests: gdr-merge-conflicts
+Tests-Directory: tests/tests
+Depends: chiark-utils-bin, faketime, git-debrebase, git-buildpackage, quilt
+
+Tests: cmd-override gdr-diverge-nmu gdr-diverge-nmu-dgit gdr-edits gdr-fresh gdr-import-dgitview gdr-import-nostitch gdr-makepatches7 gdr-merge gdr-subcommands gdr-unprocessable gdr-unprocessable-hints
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debrebase, git-buildpackage
+
+Tests: gdr-newupstream gdr-viagit
+Tests-Directory: tests/tests
+Depends: chiark-utils-bin, faketime, git-debrebase, git-buildpackage
+
+Tests: gitattributes
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, bsdgames, man-db, git-man
+
+Tests: hint-testsuite-triggers
+Tests-Directory: tests/tests
+Depends: gnupg, patch, diffutils
+Restrictions: hint-testsuite-triggers
+
+Tests: i18n-messages
+Tests-Directory: tests/tests
+Depends: chiark-utils-bin, faketime, git-debrebase, git-buildpackage, locales-all
+
+Tests: import-linkorigs
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, xz-utils
+
+Tests: manpages-format
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, man-db, make, groff, git-debrebase, git-debpush
+
+Tests: mini-git-tag-fsck-utils
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, python3
+
+Tests: defdistro-mirror mirror mirror-debnewgit mirror-private
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, rsync
+
+Tests: build-modes-sbuild quilt-gbp-build-modes-sbuild
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, sbuild
+Restrictions: x-dgit-schroot-build
+
+Tests: sbuild-gitish
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, sbuild, man-db
+Restrictions: x-dgit-schroot-build
+
+Tests: i18n-po4a-uptodate package-build spelling
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl
+Restrictions: x-dgit-git-only
+
+Tests: t2u
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl, mpack, pristine-tar
+
+Tests: t2u-baredebian
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, quilt, git-debrebase, git-buildpackage, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl
+
+Tests: t2u-debpush-gbp
+Tests-Directory: tests/tests
+Depends: chiark-utils-bin, faketime, git-debpush, git-buildpackage, bc, liblocale-gettext-perl, libjson-perl
+
+Tests: t2u-debpush-minimal
+Tests-Directory: tests/tests
+Depends: git-debpush
+
+Tests: t2u-email
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, mpack
+
+Tests: t2u-gbp
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl
+
+Tests: t2u-gdr
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl, git-debrebase, git-buildpackage
+
+Tests: t2u-integration
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, jq
+Restrictions: x-tag2upload-service-manager
+
+Tests: t2u-native
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd
+
+Tests: tag2upload-oracled
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, autopkgtest, netcat-openbsd
+
+Tests: tag2upload-oracled-systemd-unit
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, systemd
+
+Tests: test-list-uptodate
+Tests-Directory: tests/tests
+Depends: git
+
+Tests: trustingpolicy-replay
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, dput-ng
+
+Tests: absurd-gitapply build-modes build-modes-long build-modes-source checkout clone-clogsigpipe debpolicy-dbretry debpolicy-newreject debpolicy-quilt-gbp debpolicy-taintrm defdistro-rpush defdistro-setup distropatches-reject dpkgsourceignores-correct drs-push-masterupdate drs-push-rejects dsd-divert fetch-localgitonly fetch-somegit-notlast forcesplit-linear forcesplit-overwrite gbp-orig gitconfig gitworktree import-dsc import-maintmangle import-native import-nonnative import-pushold import-r1clog import-tarbomb inarchivecopy mismatches-contents mismatches-dscchanges multisuite orig-include-exclude orig-include-exclude-chkquery overwrite-chkclog overwrite-junk overwrite-splitbrains overwrite-version pbuilder protocol-compat push-buildproductsdir push-delayed push-extra-fields push-newpackage push-newrepeat push-nextdgit push-source push-source-with-changes quilt quilt-colour quilt-gbp quilt-gbp-build-modes quilt-include-binaries quilt-singlepatch quilt-splitbrains quilt-useremail rpush rpush-quilt rpush-source sourceonlypolicy tag-updates unrepresentable unrepresentable-single-dpkg unrepresentable-single-git version-opt
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl
+

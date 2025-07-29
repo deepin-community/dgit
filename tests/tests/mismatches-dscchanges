@@ -1,0 +1,34 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+cd $p
+revision=1
+
+check () {
+	local fext=$1
+	local emsgpat=$2
+
+	t-dgit -wgf build-source
+
+	perl -i~ -pe 's/^ ([0-9a-f])/ sprintf " %x", (hex $1)^1 /e' \
+		../*.$fext
+
+	t-expect-fail "$emsgpat" \
+	t-dgit -wgf push-built --new
+}
+
+check dsc E:'dpkg-source.*error.*checksum'
+check changes E:'dgit.*hash or size.*varies'
+
+# and finally check that our test is basically working
+
+t-dgit -wgf build-source
+
+t-dgit -wgf push-built --new
+
+t-ok

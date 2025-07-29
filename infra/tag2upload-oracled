@@ -1,0 +1,510 @@
+#!/usr/bin/perl
+# -*- fill-column: 78 -*-
+
+# tag2upload-oracled -- tag2upload simple Oracle protocol communicator
+
+# Copyright (C) 2024-2025  Sean Whitton
+# Copyright (C) 2025       Ian Jackson
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or (at
+# your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+# usage:
+#   tag2upload-oracled [-D] [--force-production]			\
+#                      [--workers=WORKERS] [--no-restart-workers]	\
+#                      [--worker-restart-timeout=SECONDS]               \
+#                      [--processing-timeout=SECONDS]                   \
+#                      [--ssh=SSH]					\
+#                      [--autopkgtest-virt=autopkgtest-virt-SERVER]	\
+#                      [--autopkgtest-arg=VIRT-SERVER-ARG] ...		\
+#                      [--retain-tmp]					\
+#                      --manager=[USER@]MNGR-HOST			\
+#                      --manager-socket=MNGR-SOCK			\
+#                      --builder=[USER@]BLDR-HOST			\
+#                      --noreply=NOREPLY				\
+#                      --reply-to=REPLY-TO				\
+#                      --copies=COPIES					\
+#                      [--] DISTRO DISTRO-DIR AUTH-SPEC [<settings>]
+#
+# Option -D may be repeated, e.g. -DDD, to increase the debug level.
+# --processing-timeout=0 means no timeout, and is the default.
+#
+# Uses whatever one ambient gpg key is available.
+
+use 5.028;
+use warnings;
+use POSIX qw(:errno_h :signal_h strftime WNOHANG);
+use IPC::Open2;
+use URI::Escape;
+use Getopt::Long;
+
+use Debian::Dgit::Infra;	# must precede Debian::Dgit
+use Debian::Dgit qw(!fail);
+use Debian::Dgit::ProtoConn;
+use subs qw(fail);
+
+our ($production, $force_production) = (0, 0);
+our ($workers_n, $restart_workers, $ssh, $adt_virt)
+  = (1, 1, "ssh", "autopkgtest-virt-null");
+our ($processing_timeout, $worker_restart_timeout) = (0, 20);
+our ($retain_tmp, $manager, $socket, $builder, $noreply, $reply_to, $copies,
+     @adt_args);
+
+Getopt::Long::Configure "bundling";
+GetOptions
+  # Optional arguments.
+  "D+"				=> \$debuglevel,
+  "force-production!"		=> \$force_production,
+  "workers=i"			=> \$workers_n,
+  "ssh=s"			=> \$ssh,
+  "autopkgtest-virt|adt-virt=s" => \$adt_virt,
+  "processing-timeout=i"        => \$processing_timeout,
+  "worker-restart-timeout=i"    => \$worker_restart_timeout,
+  "retain-tmp"                  => \$retain_tmp,
+  "autopkgtest-arg=s"		=> \@adt_args,
+  "restart-workers!"		=> \$restart_workers,
+
+  # Required arguments.
+  "manager=s"			=> \$manager,
+  "manager-socket=s"		=> \$socket,
+  "builder=s"			=> \$builder,
+  "noreply=s"			=> \$noreply,
+  "reply-to=s"			=> \$reply_to,
+  "copies=s"			=> \$copies;
+$manager && $socket && $builder && $noreply && $reply_to && $copies
+  or fail "not enough arguments";
+
+@ARGV >= 3 or fail "not enough arguments for dgit-repos-server";
+our @drs_args = @ARGV;
+
+initdebug "tag2upload-oracled ";
+enabledebug if $debuglevel;
+
+our @fatal_signals = qw(HUP TERM INT QUIT);
+our $sigset
+  = POSIX::SigSet->new(map { no strict; &{"SIG$_"} } @fatal_signals);
+
+our $signing_keyid;
+our $production_string;
+
+# We are expecting to be on a LAN with the Manager & Builder, so be fairly
+# intolerant of connection issues.
+our @ssh_opts = qw( -oBatchMode=yes -oConnectTimeout=30
+		    -oServerAliveInterval=120 -oServerAliveCountMax=8 );
+
+sub me () { (my $b = $builder) =~ s/^.+@//; "$b,$$" }
+sub say_log (@) {
+    # We just output to STDERR for now.  Either systemd will pick it up for
+    # its journal, or we will use some kind of remote syslogging.
+    # Either way we will want to be able to inspect the live logs even though
+    # we won't have shell access to the host running this daemon.
+    #
+    # We do only whole lines at once given these eventual expected outputs.
+    printf STDERR "[t2u-oracled %s][%s] %s\n",
+      me, strftime("%FT%T", gmtime), $_
+      for @_
+}
+
+sub fail ($) {
+    my $msg = shift;
+    $builder //= "none";
+    say_log "error: $msg";
+    die $msg;
+}
+
+# Main procedure.
+{
+    # Decide whether we are a production or testing instance.
+    # The Manager should not send ordinary user jobs to a testing instance
+    # without manual intervention.
+    # Normally, only a clean install running everything out of dgit.deb and
+    # dgit-infrastructure.deb counts as a production instance.
+    # The output of systemctl's 'show' subcommand is a stable interface.
+    if ($force_production) {
+	$production = 1;
+    } elsif ($ENV{DBUS_SESSION_BUS_ADDRESS} && $ENV{XDG_RUNTIME_DIR}) {
+	my @wanted = qw(MainPID FragmentPath DropInPaths);
+	my $ret = open my $systemctl, "-|",
+	  qw(systemctl --user show tag2upload-oracled.service),
+	  map "--property=$_", @wanted;
+	if (!$ret) {
+	    $! == ENOENT or fail "'systemctl show': $!";
+	} else {
+	    chomp(my @lines = <$systemctl>);
+	    close $systemctl
+	      or fail "systemctl failed: ".failedcmd_waitstatus();
+	    @lines == @wanted
+	      or fail "unexpected number of systemctl output lines";
+
+	    my %vals;
+
+	    for (@lines) {
+		my ($k, $v) = split /=/, $_, 2;
+		exists $vals{$k}
+		  and fail "unexpected systemctl output: repeated $k field";
+		$vals{$k} = $v // "";
+	    }
+	    $vals{$_} // fail "expected $_ in systemctl output" for @wanted;
+
+	    $production = $vals{MainPID} == $$
+	      && $vals{FragmentPath} =~ m#^(?:/usr)?/lib/#
+	      && $vals{DropInPaths} eq "";
+	}
+    }
+    $production_string = $production ? "production" : "testing";
+    say_log sprintf "instance fidelity=%s", $production_string;
+
+    -d or mkdir or fail $! for "worker-cwd";
+    test_signing_key();
+
+    # WARNING!  Be careful manipulating this without signals blocked!
+    # This variable is used by our signal handlers.
+    # (Right here is OK because we haven't set up the signal handlers yet.)
+    #
+    # Invariants:
+    #   1. Every one of our unreaped children is in this array,
+    #      except briefly with signals blocked (while we're forking).
+    #   2. The converse is NOT true - this may contain pids of
+    #      workers that we have already reaped!
+    #   3. But *at the start of each iteration of the main loop*,
+    #      it contains only (and therefore precisely) our unreaped children.
+    #   4. We reap only (a) in the main loop or (b) with signals blocked,
+    #      in a signal handler which will definitely exit rather than return.
+    #      Therefore code in the main loop can assume no children
+    #      have been reaped other than by the main loop.
+    my @worker_slots = (undef)x$workers_n;
+
+    foreach my $sig (@fatal_signals) {
+	$SIG{$sig} = sub {
+	    say_log "group_leader: received SIG$sig; shutting down workers";
+	    # See the comment for @worker_slots, notably the invariants.
+	    #
+	    # We mustn't kill anything that isn't actually one of our
+	    # children.  @worker_slots might contain already-reaped pids.
+	    # We can check a pid with waitpid, because we know that
+	    # no-one else is reaping in between (given that we block signals).
+	    #
+	    # We might run this code more than once.  So we might send
+	    # multiple signals each child.  That's OK and intended.
+	    block_signals();
+	    kill $sig => grep {
+		# waitpid returns:
+		#   -1   Not our child, or doesn't exist.  This is normal!
+		#   >0   Was our child but we just reaped it.
+		#   0    Is our unfinished. unreaped, child..
+		# Only in the final case do we want to kill.
+		my $child = waitpid $_, WNOHANG;
+		if ($child > 0) {
+		    die "$child != $_" unless $child == $_;
+		    report_reaped_worker($child);
+		    # The pid remains in @worker_slots, despite being reaped.
+		    # This is OK according to our invariants.
+		}
+		!$child
+	    } grep defined, @worker_slots;
+	    unblock_signals();
+	    exit 0;
+	};
+    }
+
+    my $start_worker = sub {
+	# We're forking, and manipulating @worker_slots.
+	# Also, avoid entering our (parent-appropriate) signal handler in
+	# the child right after fork, before the child has reset %SIG.
+	block_signals();
+
+	my $free_slot;
+	for my $i (0..$#worker_slots) {
+	    if (!defined $worker_slots[$i]) {
+		$free_slot = $i;
+		last;
+	    }
+	}
+	$free_slot // fail "No free slot to start worker -- shouldn't happen";
+
+	if (my $child = fork // fail $!) {
+	    $worker_slots[$free_slot] = $child;
+	    unblock_signals();
+	} else {
+	    $SIG{$_} = "DEFAULT" for @fatal_signals;
+	    @worker_slots = (); # just in case
+	    unblock_signals();
+	    # Jump out of the parent process's lexical scope.
+	    worker($free_slot);
+	    # worker() should never return, but ensure no grandchild workers.
+	    exit 255;
+	}
+    };
+
+    for (;;) {
+	# Particularly useful in the test suite: leaked oracleds will die.
+	stat '.' or fail "parent cwd has become inaccessibe: $!";
+	(stat _)[3] or fail "parent cwd deleted (link count 0), quitting";
+
+	# If we have empty worker slots, (re)start worker(s).
+	#
+	# We don't modify @worker_slots in this test,
+	# so this access with signals unblocked is OK.
+	$start_worker->() while grep !defined, @worker_slots;
+
+	# Now we do nothing until after at least one worker dies, then wait
+	# for a bit longer before going round again to start up a replacement.
+	# We start up one replacement at a time.
+	#
+	# If the worker died then it's probably because either the SSH
+	# connection failed, or there was a bug triggered by the particular
+	# manager request the worker was trying to handle.  In both cases it
+	# is fine to restart workers: in the latter case, it's okay because no
+	# state is shared between workers, and the manager shouldn't send the
+	# bug-triggering request again immediately.
+	#
+	# In both cases, though, we want a delay.  In the second case this is
+	# to prevent us getting stuck in a pointless tight forking loop if
+	# workers are dying over and over again in quick succession.
+
+	my $child = wait;
+	$child == -1 and fail "No workers to reap -- shouldn't be possible";
+
+	# We're manipulating worker_slots.
+	# We must block signals only now, *after* the wait,
+	# because we need such signals to interrupt the wait.
+	# Hence the possible presence of reaped pids in @worker_slots.
+	block_signals();
+
+	my $child_i;
+	for my $i (0..$#worker_slots) {
+	    if ((defined $worker_slots[$i]) && $worker_slots[$i] == $child) {
+		$child_i = $i;
+		last;
+	    }
+	}
+	if (defined $child_i) {
+	    $worker_slots[$child_i] = undef;
+	    unblock_signals();
+	    report_reaped_worker($child);
+	    # This could become more sophisticated (e.g. exponential backoff)
+	    # if necessary, but hopefully things will be reliable enough.
+	    fail "group leader: restarting workers disabled"
+	      unless $restart_workers;
+	    sleep $worker_restart_timeout;
+	} else {
+	    unblock_signals();
+	    say_log "group_leader: wait(2) returned unexpected PID $child";
+	}
+    }
+}
+
+sub worker ($) {
+    my $slot = shift;
+
+    # Try to establish a connection to the builder right away.  If we can't,
+    # then we don't even want to make ourselves available to the manager.
+    my ($virt, $virt_dir, $virt_cmd_enclist, @virt_cmd);
+    my $run_cmd = sub {
+	# Check return value or $?, which are zero on success.
+	# Otherwise, use failedcmd_waitstatus to report the status.
+	$? = -1;
+	system $ssh, @ssh_opts, $builder, shellquote @virt_cmd, @_;
+    };
+    my $new_virt = sub {
+	# Use autopkgtest's virtualisation server protocol so that we can
+	# easily upgrade the isolation.  Spec.:
+	# /usr/share/doc/autopkgtest/README.virtualisation-server.rst.gz
+	#
+	# The protocol requires that we ensure here, in this call to
+	# Debian::Dgit::ProtoConn::open2, that the way we invoke the
+	# virtualisation server will ensure that we have exclusive use of the
+	# testbed.
+	$virt = Debian::Dgit::ProtoConn->open2(
+	    $ssh, @ssh_opts, $builder, $adt_virt, @adt_args);
+
+	$virt->set_description('virt');
+	$virt->set_fail_hook(sub {
+	    (waitpid $virt->get_pid(), WNOHANG) == 0
+	      or say_log "virt-server: ".waitstatusmsg;
+	});
+
+	$virt->expect(sub { /^ok$/ });
+	$virt->send("open");
+	($virt_dir) = $virt->expect(sub { /^ok (.+)$/ });
+	$virt->send("print-execute-command");
+	($virt_cmd_enclist) = $virt->expect(sub { /^ok (\S+)/ });
+	@virt_cmd = map uri_unescape($_), split /,/, $virt_cmd_enclist;
+
+	$run_cmd->("true");
+	$? == 0 or fail "Cannot execute commands in builder virt: "
+	  .failedcmd_waitstatus();
+    };
+    $new_virt->();
+
+    # Need our own cwd -- see dgit-repos-server's file header.
+    my $wcwd = "worker-cwd/w$slot";
+    -d or mkdir or fail $! for $wcwd;
+    chdir $wcwd or fail $!;
+
+    my $mngr = Debian::Dgit::ProtoConn->open2(
+	$ssh, @ssh_opts, $manager,
+        shellquote qw(nc.openbsd -U -N), $socket
+    );
+    $mngr->set_description('manager');
+    $mngr->set_fail_hook(
+	sub {
+	    my $msg = shift;
+            (waitpid $mngr->get_pid(), WNOHANG) == 0
+		or say_log "worker: ssh to manager: ".waitstatusmsg;
+	    eval { $mngr->send("protocol-violation $msg") };
+	    say_log sprintf "worker: %s to inform manager: %s",
+	      ($@ ? "failed" : "attempted"), $msg;
+	});
+    $mngr->expect(sub { /^t2u-manager-ready$/ });
+    $mngr->send("t2u-oracle-version 4");
+    $mngr->send(sprintf "worker-id %s,w%s %s", me, $slot, $production_string);
+
+    for (;;) {
+	my ($msg, $payld_id, $payld_pkg, $payld_url) = $mngr->expect(sub {
+	    /^(?|(ayt)|(job) ([[:alnum:]][[:alnum:],-.]*) ($package_re) ([[:graph:]]+))$/a
+	});
+	if ($msg eq "ayt") {
+	    # Check the connection to the builder is still up.
+	    $virt->send("capabilities");
+	    $virt->expect(sub { /^ok(?: |$)/ });
+	    # Check the hardware token is still working.
+	    test_signing_key();
+	    $mngr->send("ack");
+	} elsif ($msg eq "job") {
+	    # Block fatal signals to avoid interrupting actual builds.
+	    # (So not to protect @worker_slots - we're the child.)
+	    block_signals();
+	    handle_job($mngr, $virt_dir, $virt_cmd_enclist,
+		       $payld_id, $payld_pkg, $payld_url);
+	    unblock_signals();
+
+	    # Now stop the autopkgtest-virt-* process, and bring up another
+	    # one.  This means that we don't have to assume anything about
+	    # what capabilities are available, which is more flexible.
+
+	    unless ($retain_tmp) {
+		# Most virtualisation backends will take care of this, but
+		# it's not guaranteed by the protocol.
+		$run_cmd->(qw(rm -rf), $virt_dir);
+		$? == 0 or warn
+		  "WARNING: failed to remove $virt_dir in builder virt: "
+		  .failedcmd_waitstatus();
+	    }
+
+	    $virt->send("quit");
+
+	    # Spec says we should expect `ok` but many autopkgtest-virt-*
+	    # don't send it.  #1092808.  Anyway, we can safely waitpid without
+	    # risk of deadlock -- the pipe would fit an ok if it sent one.
+	    (waitpid $virt->get_pid(), 0) == $virt->get_pid() or fail $!;
+	    fail sprintf "autopkgtest virt server: %s", waitstatusmsg() if $?;
+
+	    $new_virt->();
+	} else {
+	    fail "ProtoConn's expect() has failed us";
+	}
+    }
+}
+
+sub handle_job ($$$$$$) {
+    my ($mngr, $virt_dir, $virt_cmd_enclist, $id, $putative_pkg, $url) = @_;
+    my $tag;
+
+    $mngr->receive_data_blocks(sub {
+	if ($tag) {
+	    # There should not be a second data-block.
+	    $mngr->bad("unexpected data-block");
+	} else {
+	    $tag = shift;
+	}
+    });
+
+    # Parse it just enough to log something useful.
+    # Leave the real parsing, and emailing, to dgit-repos-server.
+    my ($tag_name) = $tag =~ /^tag (\S+)$/m or fail "couldn't find tag name";
+    my $log_info = "job=$id package=$putative_pkg tag=$tag_name";
+    say_log "$log_info url=$url starting";
+
+    # The diversion of the code path into dgit-repos-server now is for
+    # historical reasons.  While invoking 'dgit rpush-source' is essential to
+    # the design, the parts of dgit-repos-server we use could be refactored
+    # and moved here.
+    my @drs
+      = ($ENV{DGIT_REPOS_SERVER_TEST} // qw(dgit-repos-server), @drs_args,
+	 qw(--tag2upload9), $ssh, $builder, $virt_dir, $virt_cmd_enclist,
+	 $noreply, $reply_to, $copies, $processing_timeout, $signing_keyid,
+	 qw(--), $id, $url, $tag_name, $putative_pkg);
+    say_log "worker: invoking <<@drs>>";
+    my $drs_child = open2(my $drs_out, my $drs_in, @drs)
+      // fail "failed to start dgit-repos-server: $!";
+    print $drs_in $tag;
+    close $drs_in;
+
+    # dgit-repos-server generates the remainder of the protocol messages, but
+    # as this program is ultimately responsible for speaking the simple Oracle
+    # protocol, we validate.
+    my $drs_msg = <$drs_out>;
+    $drs_msg && chomp $drs_msg
+      && $drs_msg =~ /^message /
+      or fail "dgit-repos-server didn't send message";
+    my $drs_status = <$drs_out>;
+    $drs_status && chomp $drs_status
+      && $drs_status =~ /^(?:irrecoverable|uploaded)$/
+      or fail "dgit-repos-server didn't send disposition";
+    <$drs_out> and fail "dgit-repos-server sent too much output";
+    $drs_out->error and fail $!;
+    say_log
+      "$log_info: ".substr($drs_msg, 8),
+      "$log_info final-disposition=$drs_status";
+    $mngr->send($_) for $drs_msg, $drs_status;
+
+    (waitpid $drs_child, 0) == $drs_child or fail $!;
+
+    fail sprintf "dgit-repos-server %s", waitstatusmsg() if $?;
+}
+
+sub test_signing_key () {
+    # debsign, which dgit-repos-server's dgit call will use, defaults
+    # to looking at the changelog to find a -u option to pass to gnupg,
+    # and there's no way to tell it to not pass any such option.
+    #
+    # Also it's probably a good idea to make sure that we're not implicitly
+    # doing something surprising.
+    #
+    # So, list our secret keys, and insist that there's exactly one,
+    # and pass its keyid to dgit-repos-server to pass to dgit to
+    # pass to debsign.
+    my $keys = cmdoutput qw(gpg --list-secret --with-colons);
+    my @keys = $keys =~ m{^fpr:.*}mg;
+    @keys or fail "no signing keys available";
+    @keys == 1 or fail "multiple signing keys available";
+    $signing_keyid = (split /:/, $keys[0])[9];
+    (defined $signing_keyid) && $signing_keyid =~ m{^[0-9a-f]+$}i
+      or fail "bad output from gnupg $keys[0]";
+
+    open my $gpg_in, "|gpg -u$signing_keyid --clearsign >/dev/null"
+      or fail $!;
+    print $gpg_in "Test of signing key.";
+    close $gpg_in
+      or fail "Signing key is not usable: ".failedcmd_waitstatus();
+}
+
+sub block_signals () { sigprocmask(SIG_BLOCK, $sigset) or fail $! }
+sub unblock_signals () { sigprocmask(SIG_UNBLOCK, $sigset) or fail $! }
+
+sub report_reaped_worker ($) {
+    # Logs a message about worker $pid, using $?.
+    # Doesn't update @worker_slots.
+    say_log sprintf "group_leader worker=%s: %s", shift, waitstatusmsg;
+}

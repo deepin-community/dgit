@@ -1,0 +1,69 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-setup-import examplegit
+t-tstunt-parsechangelog
+
+mkdir $tmp/aside
+
+versions=""
+for f in $(find $tmp/mirror -name \*.dsc | t-sort); do
+	perl -i -pe '
+		$_="" if m/^-----BEGIN PGP SIGNED/..!m/\S/;
+		$_="" if m/^-----BEGIN PGP SIGNATURE/..0;
+		$_="" if m/^Dgit: /;
+	' $f
+	mv $f $tmp/aside/.
+	version="${f%.dsc}"
+	version="${version##*/${p}_}"
+	versions+=" $version"
+done
+
+echo $versions
+
+rm -rf $tmp/git/$p.git
+t-archive-none $p
+
+cd $p
+
+lrref=refs/remotes/dgit/dgit/sid
+
+git update-ref -d $lrref
+
+for v in $versions; do
+	git show-ref
+
+	mv $tmp/aside/${p}_${v}.dsc $tmp/mirror/pool/main/
+	t-archive-query
+
+	t-dgit fetch
+
+	set +e
+	git merge-base HEAD remotes/dgit/dgit/sid
+	rc=$?
+	set -e
+	test $rc = 1
+
+	t-refs-same-start
+	t-ref-same-exact refs/tags/$p/$v:
+	t-ref-same-exact refs/remotes/dgit/dgit/sid:
+
+	first_imp=first-import/$v
+	git tag first-import/$v $lrref
+
+	if [ "$lastv_imp" ]; then
+		git update-ref $lrref $lastv_imp
+
+		t-git-next-date
+		t-dgit fetch
+
+		t-refs-same-start
+		t-ref-same $first_imp
+		t-ref-same $lrref
+	fi
+
+	lastv_imp=$this_imp
+done
+
+t-ok

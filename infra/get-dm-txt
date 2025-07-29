@@ -1,0 +1,22 @@
+#!/bin/sh
+set -e
+
+cd ${1-/srv/dgit.debian.org/data}
+${DGIT_INFRA_GETDMTXT_UMASK-umask 002}
+
+file=dm.txt
+server=ftp-master.debian.org
+path=$file
+
+certargs=$(git config --default '' \
+	dgit-distro.debian.archive-query-tls-curl-ca-args \
+	|| (echo >&2 "git config failed"; exit 1))
+
+with-lock-ex -f $file.lock sh -c "
+	if ! curl $certargs \
+		>$file.new https://$server/$path 2>$file.stderr; then
+		cat $file.stderr >&2
+		exit 127
+	fi
+	mv -f $file.new $file
+"

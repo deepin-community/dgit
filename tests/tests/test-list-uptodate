@@ -1,0 +1,14 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+
+t-dependencies NO-DEFAULT git
+
+: "just verifies internal consistency of test suite"
+
+cd $root
+$troot/enumerate-tests gencontrol >$tmp/control-expected
+diff debian/tests/control $tmp/control-expected
+
+t-ok

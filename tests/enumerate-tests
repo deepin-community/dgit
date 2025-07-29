@@ -1,0 +1,202 @@
+#!/bin/bash
+
+set -e
+
+. tests/lib-core
+. tests/lib-restricts
+
+mode=$1
+
+test-begin- () {
+	whynots=''
+}
+
+restriction- () {
+	set +e
+	whynot=$(t-restriction-${r//,/ })
+	rc=$?
+	whynot="${whynot//
+/ / }"
+	set -e
+	case "$rc.$whynot" in
+	0.)	;;
+	1.?*)	whynots="$whynots${whynots:+; }$whynot" ;;
+	*)	fail "restriction $r for $t gave $rc $whynot !"
+	esac
+}
+
+dependencies- () {
+	:
+}
+
+test-done- () {
+	case "$whynots" in
+	'')	echo $t ;;
+	?*)	echo >&2 "SKIP $t $whynots" ;;
+	esac
+}
+
+finish- () {
+	:
+}
+
+test-begin-gencontrol () {
+	restrictions=''
+	dependencies='dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl'
+}
+
+gencontrol-add-things () {
+	local varname=$1; shift
+	local delim=$1; shift
+	local thing
+	eval '
+		for thing in "$@"; do
+			case " $'$varname$delim '" in
+			*" "$thing"'$delim' "*)	continue ;;
+			esac
+			'$varname'+="${'$varname':+'$delim' }$thing"
+		done
+	'
+}
+
+restriction-gencontrol () {
+	case "$r" in
+	x-dgit-out-of-tree-only) return ;;
+	# Deliberately don't honour suite restrictions in formal autopkgtests.
+	# Test dependencies should handle that as needed.
+	x-dgit-skip-suite,*) return ;;
+	esac
+	gencontrol-add-things restrictions '' "$r"
+}
+
+gencontrol-add-deps () {
+	gencontrol-add-things dependencies , "$@"
+}
+
+dependencies-gencontrol () {
+	for dep in "$deps"; do
+		case "$dep" in
+		NO-DGIT) dependencies='chiark-utils-bin, faketime' ;;
+		NO-DEFAULT) dependencies='' ;;
+		GDR) gencontrol-add-deps \
+			git-debrebase git-buildpackage
+			;;
+		DEBORIG) gencontrol-add-deps \
+			devscripts libdpkg-perl \
+			libgit-wrapper-perl liblist-compare-perl \
+			libstring-shellquote-perl libtry-tiny-perl \
+			# NB git-deborig is not compatible with
+			#  t-tstunt-parsechangelog
+			;;
+		DEBPUSH) gencontrol-add-deps \
+			git-debpush
+			;;
+		T2U) gencontrol-add-deps \
+			git-debpush autopkgtest python3-pygit2 netcat-openbsd
+			;;
+		*) gencontrol-add-deps "$dep" ;;
+		esac
+	done
+}
+
+test-done-gencontrol () {
+	stanza=$(
+		add_Depends="$dependencies" \
+		perl <debian/tests/control.in -wpe '
+			if (/^(\w+):/) {
+				my $h = $1;
+				s{$}{ $ENV{"add_$h"} // "" }e;
+			}
+		' 
+		case "$restrictions" in
+		?*) echo "Restrictions: $restrictions" ;;
+		esac
+		)
+	key=$(printf "%s" "$stanza" | sha256sum)
+	key=${key%% *}
+	eval "
+		stanza_$key=\"\$stanza\"
+		tests_$key+=\" \${t#tests/tests/}\"
+	"
+	keys=" ${keys/ $key /}"
+	keys+=" $key "
+}
+
+finish-gencontrol () {
+	for key in $keys; do
+		eval "
+			stanza=\$stanza_$key
+			tests=\$tests_$key
+		"
+		printf "Tests:%s\n%s\n\n" "$tests" "$stanza"
+	done
+}
+
+test-begin-dep-packages () {
+	test-begin-gencontrol
+	test-begin-
+}
+test-done-dep-packages () {
+	test-begin-gencontrol
+}
+dependencies-dep-packages () {
+	dependencies-gencontrol
+}
+restriction-dep-packages () {
+	restriction-
+}
+test-done-dep-packages () {
+	if [ -z "$whynots" ]; then
+		all_dependencies+=" $dependencies"
+	else
+		echo >&2 "skipping $t: $whynot"
+	fi
+}
+finish-dep-packages () {
+	perl -e '
+		# include every dependency, but without version
+
+		$_ = $ARGV[0];
+		s{\([^()]*\)}{}g;
+		s{\,}{ }g;
+		$y{$_}=1 foreach split /\s+/;
+
+		printf "%s\n", join " ", sort keys %y or die $!;
+	' -- "$all_dependencies"
+}
+
+seddery () {
+	local seddery=$1
+	sed <$tf -n '
+		20q;
+		/^: t-enumerate-tests-end$/q;
+		'"$seddery"'
+	'
+}
+
+allsedderies () {
+	local tf=$1
+	for r in $(seddery 's/^t-restrict //p'); do
+		restriction-$mode
+	done
+	for deps in $(seddery 's/^t-dependencies //p'); do
+		dependencies-$mode
+	done
+	for import in $(seddery 's/^t-setup-import //p'); do
+		allsedderies tests/setup/$import
+	done
+	if egrep -q '^t-alt-test *$' <$tf; then
+		local leaf=${tf#tests/tests/}
+		allsedderies tests/tests/"${leaf#*-}"
+	fi
+}
+
+: ${TESTSCRIPTS=$(run-parts --list tests/tests)}
+
+for t in $TESTSCRIPTS; do
+	test-begin-$mode
+	allsedderies $t
+	test-done-$mode
+done
+
+finish-$mode

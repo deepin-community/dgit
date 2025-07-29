@@ -1,0 +1,25 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-build-modes
+
+bm-buildproductsdir-nonworking
+bm-prep
+
+for act in					\
+	'build'					\
+	'build -S'				\
+	'build -b'				\
+	'build -B'				\
+	'build -A'				\
+	'build -F'				\
+	'build -g'				\
+	'build -G'				\
+; do
+	bm-guess-e-source-e-targets "$act"
+	cleanmodes="$cleanmodes_default"
+	real_act="$act"
+	bm-act-iterate
+done
+
+t-ok

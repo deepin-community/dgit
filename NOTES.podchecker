@@ -1,0 +1,27 @@
+todo: maybe we wanted to run podchecker but it complains about a lot
+of things for which we don't have good alternatives.  Eg:
+
+
+*** WARNING: (section) in 'dgit-maint-debrebase(7)' deprecated at line 17 in file ../git-debrebase.1.pod
+
+   But this is not actually described as deprecated and how else to
+   write a manpage cross-reference ?  Maybe this warning applies
+   only to perl's own manpages.
+
+*** WARNING: 2 unescaped <> in paragraph at line 30 in file ../git-debrebase.1.pod
+
+   I have a habit of writing things like 
+   git-debrebase [-- <git-rebase options...>]
+   which is obviously unescaped < but the E<> syntax would be awful
+
+*** WARNING: No items in =over (at line 31) / =back list at line 42 in file ../dgit-user.7.pod
+*** WARNING: No argument for =item at line 553 in file ../git-debrebase.1.pod
+
+   pod doesn't offer a better answer, and these render well
+
+*** ERROR: unresolved internal link 'dgit-maint-*(7)' at line 22 in file ../dgit-user.7.pod
+
+   This is obviously needed.
+
+At the time of writing it does not seem to detect anything which
+generates bad rendering.  So for now I will not run it.

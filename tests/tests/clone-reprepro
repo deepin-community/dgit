@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+. tests/lib
+. $troot/lib-reprepro
+
+suitespecs+=' stable'
+
+t-dependencies reprepro
+t-reprepro
+t-tstunt-parsechangelog
+
+t-archive example 1.0-1
+t-git-none
+
+t-dgit clone $p
+
+cd $p
+t-cloned-fetched-good
+
+add_pari () {
+	local p
+	local v
+	local suite=stable
+	t-archive pari-extra 3-1
+}
+add_pari
+
+t-dgit fetch unstable,stable
+
+t-refs-same-start
+t-refs-same refs/remotes/dgit/sid,stable refs/remotes/dgit/sid
+
+t-ok

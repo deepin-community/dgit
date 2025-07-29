@@ -1,0 +1,107 @@
+#!/usr/bin/tclsh
+#
+# We check each translated message against its original,
+# making certain consistency checks.
+
+# In theory this would be easy: we could read the .po file
+# directly.  But the format of the .po file is not documented.
+# Looking at the source code for the po parser in GNU gettext,
+# the syntax is complicated with a wide variety of escapes.
+#
+# So I would prefer to reuse the gettext parser.  That means getting
+# the output from gettext in some other format.  Most of the gettext
+# utilities output in annoying formats.  The least annoying seems
+# to be to use msgfmt to generate a tcl file (!)
+
+# usage:
+#   cd po4a
+#   ./pairwise-potcheck [LANG]
+
+proc badusage {} {
+    puts stderr "usage: ./pairwise-pocheck [LANG]"
+    exit 1
+}
+
+set lang *
+
+set bad 0
+
+proc bad {emsg} {
+    global po for_emsg bad
+    puts stderr "$po: $emsg $for_emsg"
+    incr bad
+}
+
+proc check_equal {desc script} {
+    upvar 1 m m
+    foreach is {id str} {
+	set m [uplevel 1 [list set msg$is]]
+	set m$is $m
+	set r$is [uplevel 1 $script]
+    }
+    if {![string compare $rid $rstr]} { return 0 }
+    bad "mismatch $rid != $rstr $desc"
+}
+
+# called directly by msgfmt output
+namespace eval ::msgcat {
+    proc mcset {lang msgid msgstr} {
+	check_msg $msgid $msgstr
+    }
+}
+
+proc check_msg {msgid msgstr} {
+    global for_emsg
+    set for_emsg "msgid=[list $msgid] msgstr=[list $msgstr]"
+    check_equal "un-escaped non-pod < count (missing B or I?)" {
+	regexp -all {(?:^!(?!\b[IBCLEFSXZ]).)\<} $m
+    }
+}
+
+proc check {} {
+    # msgfmt --tcl wants to use a pretty much fixed filename:
+    # you get to specify part of it but it has to look like a
+    # locale.  But we can specify ya directory to use, so
+    # one directory per po it is!
+    global po
+    set vexdir ".$po.pwpc.tmp"
+    set vexleaf xx.msg
+    set vexfile $vexdir/$vexleaf
+    file mkdir $vexdir
+    file delete $vexfile
+    exec msgfmt -d$vexdir -lxx --tcl $po
+
+    # and then we execute it!
+    source $vexfile
+}
+
+proc parseargs {} {
+    global argv lang
+    switch -glob [llength $argv].$argv {
+	0. { }
+	1.-* { badusage }
+	1.* { set lang [lindex $argv 0] }
+	* { badusage }
+    }
+}    
+
+proc iterate {} {
+    global po lang
+    
+    foreach po [lsort [glob -nocomplain *.$lang.po]] {
+	check
+	puts "pairwise-pocheck $po ok."
+    }
+}
+
+proc report {} {
+    global bad
+    if {$bad} {
+	puts stderr "pairwise-pocheck: $bad errors"
+	exit 1
+    }
+}
+
+parseargs
+iterate
+report

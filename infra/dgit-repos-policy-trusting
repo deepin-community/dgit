@@ -1,0 +1,58 @@
+#!/bin/bash
+#
+# This is a genuine policy, not just one for testing.
+#
+# It allows anyone authorised to push to also, on demand:
+#   - wipe the repo and replace it with a new one
+#     (with --deliberately-fresh-repo)
+#   - do non-fast-forward pushes
+#     (with --deliberately-not-fast-forward)
+
+set -e
+
+case "$DGIT_DRS_DEBUG" in
+''|0)	exec 3>/dev/null	;;
+1)	exec 3>&2		;;
+*)	exec 3>&2;	set -x	;;
+esac
+
+distro=$1	; shift
+reposdir=$1	; shift
+livedir=$1	; shift
+distrodir=$1	; shift
+action=$1	; shift
+
+echo >&3 "dgit-repos-policy-trusting: action=$action"
+
+case "$action" in
+push|push-confirm) 	;;
+*) exit 0		;;
+esac
+
+package=$1	; shift
+version=$1	; shift
+suite=$1	; shift
+tagname=$1	; shift
+delibs=$1	; shift
+
+bitmask=0
+
+policyflags () {
+	perl -e '
+		use Debian::Dgit::Infra;
+		use Debian::Dgit qw(:policyflags); print '$1',"\n"
+	'
+}
+
+set -e
+
+case "$action//,$delibs," in
+push//*,--deliberately-fresh-repo,*)
+	bitmask=$(( bitmask | `policyflags 'NOFFCHECK|FRESHREPO'` ))
+	;;
+push//*,--deliberately-not-fast-forward,*)
+	bitmask=$(( bitmask | `policyflags 'NOFFCHECK'` ))
+	;;
+esac
+
+exit $bitmask

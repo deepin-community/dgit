@@ -1,0 +1,87 @@
+# -*- sh -*-
+
+fail () {
+	echo >&2 "failed: $*"
+	exit 1
+}
+
+t-set-intree () {
+	if [ "x$DGIT_TEST_INTREE" = x ]; then return; fi
+	: ${DGIT_TEST:=$DGIT_TEST_INTREE/dgit}
+	: ${DGIT_BADCOMMIT_FIXUP:=$DGIT_TEST_INTREE/dgit-badcommit-fixup}
+	: ${DGIT_REPOS_SERVER_TEST:=$DGIT_TEST_INTREE/infra/dgit-repos-server}
+	: ${DGIT_SSH_DISPATCH_TEST:=$DGIT_TEST_INTREE/infra/dgit-ssh-dispatch}
+: ${DGIT_MIRROR_SSH_WRAP_TEST:=$DGIT_TEST_INTREE/infra/dgit-mirror-ssh-wrap}
+	: ${DGIT_DEBPUSH_TEST:=$DGIT_TEST_INTREE/git-debpush}
+	: ${DGIT_INFRA_PFX:=$DGIT_TEST_INTREE${DGIT_TEST_INTREE:+/infra/}}
+	: ${DGIT_GITDEBREBASE_TEST:=$DGIT_TEST_INTREE/git-debrebase}
+	: ${DGIT_MANPAGES_SOURCE_DIR:=$DGIT_TEST_INTREE}
+	: ${DEBPUSH_GIT_PLAYTREE_SETUP:=$DGIT_TEST_INTREE/git-playtree-setup}
+	: ${T2U_ORACLED_TEST:=$DGIT_TEST_INTREE/infra/tag2upload-oracled}
+	: ${DGIT_MGTF_TEST:=$DGIT_TEST_INTREE/mini-git-tag-fsck}
+	export DGIT_TEST DGIT_BADCOMMIT_FIXUP
+	export DGIT_REPOS_SERVER_TEST DGIT_SSH_DISPATCH_TEST
+	export DGIT_MIRROR_SSH_WRAP_TEST DGIT_MGTF_TEST
+	export DGIT_MANPAGES_SOURCE_DIR DEBPUSH_GIT_PLAYTREE_SETUP
+	export PERLLIB="$DGIT_TEST_INTREE${PERLLIB:+:}${PERLLIB}"
+}
+
+t-set-using-tmp () {
+	export HOME=$tmp
+	export DGIT_TEST_DUMMY_DIR=$tmp
+	export DGIT_TEST_TMP=$tmp
+	export GNUPGHOME=$tmp/nonexistent
+	export DEBFULLNAME='dgit test git user'
+	git config --global user.email 'dgit-test@debian.example.net'
+	git config --global user.name "$DEBFULLNAME"
+	git config --global protocol.ext.allow always
+	git config --global dgit.default.push-subcmd reject
+}
+
+t-filter-out-git-hyphen-dir () {
+	local pathent; pathent=$(type -p git-rev-parse ||:)
+	case "$pathent" in '') return ;; esac
+	pathent=${pathent%/*}
+	local path=":$PATH:"
+	path="${path//:$pathent:/}"
+	path="${path#:}"
+	path="${path%:}"
+	PATH="$path"
+}
+
+t-mkfifo () {
+	mkfifo -m 600 "$@"
+}
+
+t-sort () {
+	LC_COLLATE=C sort "$@"
+}
+
+t-dontkill-pid () {
+    local pid=$1
+    end_kill_pids=${end_kill_pids//" $pid "/}
+}
+
+t-kill () {
+    for pid; do
+	t-dontkill-pid $pid
+	kill -9 "$pid"
+    done
+}
+
+t-dgit () {
+	local dgit=${DGIT_TEST-dgit}
+	${DGIT_TEST_NDEBUG+ :} pwd >&2
+	: '
+{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{{'
+	$dgit --dgit=$dgit --dget:-u --dput:--config=$tmp/dput.cf \
+ ${dgit_config_debian_alias-"--config-lookup-explode=dgit-distro.debian.alias-canon"} \
+ ${DGIT_GITDEBREBASE_TEST+--git-debrebase=}${DGIT_GITDEBREBASE_TEST} \
+ ${DGIT_MGTF_TEST+--mini-git-tag-fsck=}${DGIT_MGTF_TEST} \
+		--gbp-build:--git-notify=off \
+		${distro+${distro:+-d}}${distro--dtest-dummy} \
+		$DGIT_TEST_OPTS $DGIT_TEST_DEBUG \
+		$DGIT_TEST_SIGNING_KEY_OPTS $t_dgit_xopts "$@"
+	: '}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}
+'
+}

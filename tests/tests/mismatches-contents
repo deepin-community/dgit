@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-tstunt-parsechangelog
+
+t-prep-newpackage example 1.0
+
+ln -s $troot/pkg-srcs/${p}_${v%-*}.orig.tar.* .
+
+cd $p
+
+v=1.0-1
+t-debchange -v $v -D unstable -m 'Make a revision'
+echo foo >us-file
+git add us-file debian/changelog
+git commit -m "Commit $v"
+
+t-dgit build-source
+
+t-expect-fail 'debian/TRASH' \
+t-dgit push-built --new
+
+t-ok

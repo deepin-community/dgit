@@ -1,0 +1,43 @@
+# -*- sh -*-
+
+t-mirror-setup () {
+	# p must be set already
+
+	reposmirror=$tmp/git-mirror
+	pmirror=$reposmirror/$p.git
+	queuedir=$tmp/git/_mirror-queue
+
+	mkdir $reposmirror
+
+	mirror_hook=$drs_dispatch/mirror-hook
+	t-make-hook-link dgit-mirror-rsync $mirror_hook
+
+	>$drs_dispatch/mirror-settings
+	t-mirror-set remoterepos="$reposmirror"
+
+	t-mirror-hook setup
+}
+
+t-mirror-set () {
+	echo >>$drs_dispatch/mirror-settings "$1"
+}
+
+t-mirror-hook () {
+	: '(((((((((((((((((((((((((((((((((((((((('
+	"$mirror_hook" "$drs_dispatch" "$@"
+	: '))))))))))))))))))))))))))))))))))))))))'
+}
+
+t-check-mirrored () {
+	t-reporefs master
+	t-reporefs mirror $pmirror
+	diff $tmp/show-refs.{master,mirror}
+	cat $queuedir/$p.log ||:
+	t-files-notexist $queuedir/$p.{n,a,lock,err}
+}
+
+t-check-not-mirrored () {
+	# uses previous t-reporefs-master
+	t-reporefs mirror $pmirror
+	diff $tmp/show-refs.{master,mirror}
+}

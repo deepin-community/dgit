@@ -1,0 +1,30 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+. $troot/lib-gdr
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+
+t-gdr-gbp-import-core-with-queue
+
+git checkout master
+
+git tag -m synthetic debian/1.0-1
+
+echo '# comment' >>debian/patches/series
+git add debian/patches/series
+git commit -m 'add a comment'
+
+t-expect-fail F:-fseries-comments \
+t-git-debrebase -fupstream-has-debian -funused-patches convert-from-gbp
+
+t-git-debrebase -fupstream-has-debian -funused-patches -fseries-comments \
+  convert-from-gbp \
+  2>&1 | tee ../convert-msg
+
+grep -e 'dgit --trust-changelog will be needed' ../convert-msg >/dev/null
+
+t-ok

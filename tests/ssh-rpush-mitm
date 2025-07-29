@@ -1,0 +1,42 @@
+#!/usr/bin/perl -w
+#
+# This script is used to simulate a misbehaving responder in the rpush
+# tests.  It does two things:
+#
+# - strips --package, --expect-suite and --expect-version arguments
+#   out from the arguments passed on to the responder dgit, so that it
+#   can more easily be made to disagree with the initiator about what
+#   the package name, version and target suite should be (this is not
+#   relied upon by the current tests, but may be useful for new ones)
+#
+# - rewrites the nth instance of a given deb822 field found in the
+#   responder's responses, reversing the value (so as to keep the same
+#   number of bytes in the data-block).
+#
+# As we control the input, specifying where to perform the MITM by
+# counting instances of a particular deb822 field is sufficiently
+# robust for our testing purposes.
+#
+# Usage:
+#
+#     DGIT_SSH="$troot/ssh-rpush-mitm FIELD N" t-dgit ...
+#
+
+use IPC::Open2;
+
+($|, $i) = (1, 0);
+
+($f, $n, undef, @args) = @ARGV;
+# Support only '--foo=bar' calling convention, not, e.g., '--foo bar'.
+s/\b--(?:package|expect-(?:suite|version))=\S+\s*// for @args;
+$pat = qr/^\Q$f\E: (.+)$/;
+
+open2($out, "<&STDIN", "@args");
+
+while (<$out>) {
+    if (/$pat/ && ++$i == $n) {
+	printf "%s: %s\n", $f, scalar reverse $1;
+    } else {
+	print;
+    }
+}

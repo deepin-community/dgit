@@ -1,0 +1,87 @@
+#!/bin/bash
+set -e
+autoimport=
+. tests/lib
+. $troot/lib-gdr
+
+$ifarchive t-setup-import gnupg
+
+t-dependencies GDR
+
+t-tstunt-parsechangelog
+
+not-gdr-processable () {
+	git branch gdr-unprocessable/$1
+	t-git-debrebase analyse | grep 'Unknown Unprocessable'
+}
+
+t-gdr-gbp-import-core-with-queue
+
+not-gdr-processable origin
+
+: 'fake up an upstream 2.0'
+git branch make-upstream upstream
+t-make-new-upstream-tarball 2.0
+
+for b in \
+		quilt-tip-2		\
+		gitish-only		\
+		quilt-tip-1.1		\
+		patch-queue/quilt-tip	\
+		indep-arch		\
+; do
+	git branch -D $b
+done
+
+: 'see what gbp import-orig does'
+git checkout master
+gbp import-orig --upstream-version=2.0 ../$ust
+
+t-dch-commit -v 2.0-1 -m 'new upstream (did gbp import-orig)'
+t-dch-commit-r
+
+echo garbage >debian/patches/garbage
+git add debian/patches/garbage
+git commit -m 'add garbage' debian/patches/garbage
+
+$ifarchive t-archive-none $p
+$ifarchive t-git-none
+$ifarchive t-dgit -wgf --gbp push-source --new
+
+t-salsa-add-remote
+git push --set-upstream origin master
+
+# OK now this looks like something more normal.
+# We have:
+#  maintainer (gbp) view                dgit view
+#    master
+#    debian/2.0-1                          archive/debian/2.0-1
+#    remotes/origin/master                 remotes/dgit/dgit/sid
+
+t-expect-fail E:'identical in upstream files' \
+t-git-debrebase -fupstream-has-debian convert-from-gbp upstream/2.0~
+
+t-expect-fail E:'Unused patch file garbage will be discarded' \
+t-git-debrebase -fupstream-has-debian convert-from-gbp
+
+t-git-debrebase -fupstream-has-debian -funused-patches convert-from-gbp
+
+git branch converted-from-gbp
+
+v=2.0-2
+t-dch-commit -v $v -m 'switch to git-debrebase, no other changes'
+t-dch-commit-r
+
+$ifarchive t-dgit -wgf push-source --new
+git push
+
+cd ..
+
+$ifarchive t-archive-process-incoming sid
+
+t-setup-done '' "$(echo $p*) salsa $($ifarchive echo git mirror aq)" '
+	. $troot/lib-gdr
+	t-tstunt-parsechangelog
+	t-select-package example
+	t-git-next-date
+'

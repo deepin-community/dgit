@@ -1,0 +1,49 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive sunxi-tools 1.2-2.~~dgittest
+t-git-none
+
+t-dgit clone $p
+cd $p
+t-cloned-fetched-good
+
+echo EXTRA-LINE-1 >>fel.c
+echo EXTRA-LINE-2 >>fel.c
+echo EXTRA-LINE-3 >>.gitignore
+
+git add fel.c .gitignore
+
+t-commit 'commit our stuff' 1.2-3
+
+t-dgit -wgf quilt-fixup
+
+t-refs-same-start
+t-ref-head
+
+t-dgit -wgf build-source
+
+t-dgit push-built
+t-pushed-good dgit/sid
+
+diff <<END - debian/patches/series
+debian-changes
+END
+
+diff <<END - <(ls debian/patches)
+debian-changes
+series
+END
+
+git apply --reverse debian/patches/debian-changes
+git commit -a -m 'go back to plain upstream'
+
+t-dgit -wgf build-source
+t-dgit --damp-run --force-reusing-version push-built
+
+t-dch-commit -i -m 'for split-view (#1076983)'
+t-dch-commit-r
+t-dgit -wgf push-source --split-view=always
+
+t-ok

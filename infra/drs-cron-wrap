@@ -1,0 +1,14 @@
+#!/bin/sh
+set -e
+umask 002
+
+distro=$1; shift
+
+srvdir=/srv/dgit.debian.org
+dispatchdir=$srvdir/dispatch-dir
+dgitlive=$srvdir/dgit-live
+
+distrodir=$dispatchdir/distro=$distro
+
+PERLLIB="$dgitlive${PERLLIB+:}${PERLLIB}" \
+exec $dgitlive/infra/dgit-repos-server $distro $distrodir '' --cron

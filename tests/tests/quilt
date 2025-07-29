@@ -1,0 +1,96 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+t-archive ruby-rails-3.2 3.2.6-1
+t-git-none
+
+mkdir -p incoming
+cd incoming
+t-worktree test
+cd ..
+
+t-dgit clone $p
+
+cd $p
+t-cloned-fetched-good
+
+git fetch $tmp/incoming/$p dgit/sid:incoming
+
+dummy=0
+
+iteration () {
+	dummy=$(( $dummy + 1))
+	v=3.2.6-2~dummy${dummy}
+
+	t-refs-same-start
+	t-dgit --dpkg-buildpackage:-d build
+	t-dgit push-built
+	t-pushed-good dgit/sid
+}
+
+git cherry-pick -x incoming~1; iteration
+git cherry-pick -x incoming~0; iteration
+
+git fetch $tmp/incoming/$p incoming-branch:branch
+git checkout branch
+git rebase --onto dgit/sid incoming
+git checkout dgit/sid
+git merge branch
+iteration
+
+diff <<END - debian/patches/series
+ups-topic/ups-yml
+spongiform-upstream-new-file-incl-change.patch
+zorkmid-options-=-42.patch
+END
+
+for f in `cat debian/patches/series`; do
+	egrep -q '^From.*ijackson@chiark' debian/patches/$f
+done
+
+t-822-field ../${p}_${v}_*.changes Changes |
+ grep -Fx 'ruby-rails-3.2 (3.2.6-2~dummy1) unstable; urgency=low'
+
+t-git-next-date
+
+# Now we are going to check that our dgit-generated patches round
+# trip to similar git commits when imported by gbp pq:
+
+git clean -xdf
+
+# We need to make a patches-unapplied version
+unpa=$(git log --pretty=format:'%H' --grep '^\[dgit import unpatched')
+git checkout -b for-gbp
+git reset "$unpa" .
+git reset HEAD debian
+git commit -m UNAPPY
+git reset --hard
+git clean -xdf
+
+export GIT_AUTHOR_NAME='Someone Else'
+export GIT_AUTHOR_EMAIL='else@example.com'
+export GIT_COMMITTER_NAME='Someone Else'
+export GIT_COMMITTER_EMAIL='else@example.com'
+
+gbp pq import
+
+for compare in $(git log --pretty='format:%H' \
+	--grep 'Change something in the upstream yml')
+do
+	git cat-file commit $compare >../this.cmp
+	# normalise
+	perl -i~$compare~ -0777 -pe '
+		s/\n+$//; $_ .= "\n";
+		s/^(?:committer|parent|tree) .*\n//gm;
+		s/\n+(\(cherry picked from .*\)\n)\n*/\n\n/m
+			and s/$/$1/;
+		s/\n+$//; $_ .= "\n";
+	' ../this.cmp
+	if test -f ../last.cmp; then
+		diff -u ../last.cmp ../this.cmp
+	fi
+	mv ../this.cmp ../last.cmp
+done
+
+t-ok

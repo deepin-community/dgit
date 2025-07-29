@@ -1,0 +1,32 @@
+#!/bin/bash
+set -e
+set -o pipefail
+shopt -s inherit_errexit # #514862, wtf
+
+# Wrapper to run the tests in gitlab CI
+
+x () { echo >&2 "+ $*"; "$@"; }
+
+deps=" $(tests/enumerate-tests dep-packages) "
+our_debs=$(find ./debian/output -name '*.deb')
+
+our_pkgs=''; for p in $our_debs; do
+    p=${p##*/}
+    p=${p%%_*}
+    our_pkgs+=" $p"
+    deps="${deps// $p / }"
+done
+
+# This timeout is per test case, but becauswe of our gnupg serialisation,
+# in principle, a test case might end up waiting for ages and ages for
+# other test cases.  Empirically, locally, I have seen very alphabetically
+# early test cases being the last ones to finish.  This is mad.
+# Anyway, we must therefore set this long for the whole test suite.
+export DGIT_TEST_RUN_PFX='timeout 2500'
+
+x apt-get -y install $our_debs
+x apt-get -y install --no-install-recommends $deps eatmydata moreutils
+x apt-get -y build-dep .
+x apt-get -y remove $our_pkgs
+
+x eatmydata tests/using-intree tests/run-all "$@"
