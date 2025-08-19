@@ -154,6 +154,7 @@ See \-v, below.
 Builds the source package, and a changes file for a prospective
 source-only upload, using
 .BR dpkg-source .
+
 The output is left in
 .IR package \fB_\fR version \fB.dsc\fR
 and
@@ -161,6 +162,16 @@ and
 
 Tagging, signing and actually uploading should be left to dgit
 push-source, or dgit push.
+
+.B dgit build-source
+checks that the generated source package
+corresponds to the git HEAD
+(as canonicalised with the specified quilt mode, if applicable).
+The other
+.B dgit *build*
+options to not perform this check at build time,
+instead leaving it to
+.BR "dgit push" .
 .TP
 .B dgit clean
 Cleans the current working tree (according to the \-\-clean= option in
@@ -510,6 +521,37 @@ dgit will stop with an error message.
 If
 .I branch
 does not start with refs/, refs/heads/ is prepended.
+.TP
+.BR dgit download\-unfetched\-origs " [\fIoptions\fR]"
+Consults the archive for any orig tarballs
+for this package and upstream version,
+and downloads them.
+
+The suite declared in the changelog will be checked first.
+
+Failing that, the whole archive will be searched for suitable origs.
+If there are multiple sets of origs that may apply,
+fails with exit status 5.
+This can happen if different uploads of the same upstream version
+have different origs.
+
+If (some of) the selected origs are already present locally,
+they aren't re-downloaded, but their checksums are checked
+against data from the archive.
+
+download\-unfetched\-origs supports some subcommand-specific options:
+.RS
+.TP
+.BI --write-sha256sums= file
+Writes checksums of the selected origs to
+.IR file ,
+in sha256sum format.
+The files listed are a set suitable for a new upload or build,
+of the this package and version.
+The checksums file is written and correct,
+even if dgit download\-unfetched\-origs
+exits with status 3.
+.RE
 .TP
 .B dgit version
 Prints version information and exits.
@@ -1554,7 +1596,7 @@ Specifies that the dgit rpush invoking host should
 be willing to sign only a .dsc or .changes file
 with version \fIversion\fR.
 .TP
-\fB--tag2upload-builder-mode\fR, \fB--tag2upload-upstream=\fITAG\fR, \fB--tag2upload-upstream-commit=\fICOMMIT\fR
+\fB--tag2upload-builder-mode\fR, \fB--t2u-\fI...\fR
 These options
 activate configuration and behavioural changes
 needed when the tag2upload robot invokes dgit.
@@ -1579,6 +1621,48 @@ not the build host.
 .TP
 \fB--ch-control-add=\fIFIELD\fB=\fIVALUE\fR
 Like \fB--dsc-control-add\fR but for adding fields to the .changes file.
+.SH EXIT STATUS
+.TP
+0
+Success.
+.TP
+3
+With
+.BR "dgit download-unfetched-origs" ,
+the relevant origs were identified,
+but some of them couldn't be downloaded.
+.TP
+4
+Source package does not exist in the requested suite.
+
+With
+.BR "dgit download-unfetched-origs" ,
+no relevant origs exist in the archive.
+.TP
+5
+With
+.BR "dgit download-unfetched-origs" ,
+the selection of origs in the archive is confusing:
+multiple files exist (for the same component),
+so we cannot uniquely identify which to use.
+.TP
+6
+Discrepancy between (generated) source package and git information.
+See \fBdgit\fP(7).
+
+When
+.B dgit build-source
+exits with status 6, the source package *has* been built;
+it just might not be what was intended.
+.TP
+8
+Bad usage.
+.TP
+12
+Invalid configuration.
+.TP
+Other
+Catastrophic failure.
 .SH CONFIGURATION
 dgit can be configured via the git config system.
 You may set keys with git-config (either in system-global or per-tree
@@ -1616,6 +1700,16 @@ The default suite (eg for clone).
 for each
 .BR dgit-distro. \fIdistro\fR . *,
 the default value used if there is no distro-specific setting.
+.TP
+.BR dgit-distro. \fIdistro\fR .build-source-check-correspondence
+Whether
+.B dgit build-source
+should check that the resulting source package
+properly corresponds to the git HEAD.
+True by default.
+(Correspondence checking cannot be disabled for
+.BR "dgit push!" ,
+since that would lead to the publication of broken outputs.)
 .TP
 .BR dgit-distro. \fIdistro\fR .clean-mode
 One of the values for the command line \-\-clean= option; used if

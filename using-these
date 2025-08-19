@@ -1,6 +1,15 @@
 #!/bin/bash
 set -e
 d="${0%/*}"
+: ${DGIT_VERSION:=$(
+    exec 2>&1 # if we fail at this, use the error message as the version
+    set -e
+    cd "$d"
+    printf "git:"
+    git-describe --dirty=+ 2>/dev/null ||
+    git rev-parse HEAD
+)}
+export DGIT_VERSION
 PERLLIB=$d${PERLLIB:+:}${PERLLIB}
 export PERLLIB
 PATH=$d:$d/infra${PATH:+:}${PATH}

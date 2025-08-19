@@ -13,8 +13,6 @@ t-t2u-native-prep
 
 t-t2u-setup-repo
 
-tagname=test-dummy/$v
-
 t-t2u-test
 t-t2u-succeeded
 t-pushed-good master
@@ -30,8 +28,6 @@ t-archive-process-incoming sid 1.0-1
 v=1.0-2
 t-dch-commit -v $v -m bump
 t-dch-commit-r
-
-tagname=test-dummy/$v
 
 # Make Senatus the tagger for this second upload.
 git config --local user.name "Senatus Romanus"

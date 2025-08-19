@@ -1,7 +1,230 @@
+dgit (13.12) unstable; urgency=medium
+
+  dgit changes [Ian Jackson]:
+  * build-source now checks for git vs dsc discrepancies.
+    Other build subcommands are unchanged.  Closes: #1110907.
+    - New dgit-distro.DISTRO.build-source-check-correspondence option.
+      You can use this to restore build-source's old behaviour of
+      deferring discrepency checking to the push phase.
+  * Report git vs dsc discrepancies with exit status 6.
+
+  git-debpush fixes:
+  * Hide output from git-tag(1) run in the playtree.
+  * Move checks depending on quilt mode autodetection later.
+    Closes: #1111109.
+  * Pass --no-pager when failing a check with a git diff.
+    [Ian Jackson]
+
+  New program:
+  * git-deborig, moved from 'devscripts' package.  See #1105759.
+  * Declare that bin:git-debpush replaces bin:devscripts <<2.25.18.
+
+  tag2upload service:
+  * tag2upload-builder-crontab: Move the job from 03:00 to 03:55.
+  * tag2upload-builder-rebuild: Revert to installing from testing.
+  * tag2upload-builder-rebuild: Rebuild only once (!).
+    [Ian Jackson]
+
+  Documentation:
+  * git-debpush(1): New "Mistakes" section.
+  * git-debpush: Additional design notes.
+  * i18n: Import de, fr, pt translations for git-deborig(1).
+    Closes: #1110822.
+
+  Internationalisation [Ian Jackson]:
+  * 'make i18n-commit' adds new potfiles and cleans up old pofiles.
+  * Rename old po4a/list-documents to po4a/generate-po4a.cfg.
+    - Fix for when there are multiple languages (!).
+  * New po4a/list-documents script.
+  * Test that we have all the potfiles we expect.
+  * po/README: Give more translation priority advice.
+  * po/README: Other updates.
+  * Makefile: Replace the various pod2man targets with pattern rules.
+  * Fix titles of translated manpages.
+
+  Test suite:
+  * t2u-debpush-gbp: Make an edit to debian/, not the upstream.
+    [Ian Jackson]
+  * t2u-debpush-gbp: Test git-debpush's 'upstream-nonidentical' check.
+    [Ian Jackson]
+  * Use in-tree git-deborig.
+  * Disable missing-breaks Salsa CI job.
+
+  Miscellaneous/internal:
+  * Give the git-debpush package a private /usr/share/dgit/gdp/perl5.
+    - Move git-debpush's copy of git-playtree-setup there.
+  * New Debian::Dgit::Core module installed into all binary packages.
+  * git-debpush: Rework some code sectioning.
+  * Don't show the version of Perl in manpage footers.  [Ian Jackson]
+  * Some copyright notice updates.
+  * Adjustments for trunk branch name change.  [Ian Jackson]
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Fri, 15 Aug 2025 10:05:44 +0100
+
+dgit (13.11) unstable; urgency=medium
+
+  * No change upload, targeting mainline to unstable.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 10 Aug 2025 20:18:45 +0100
+
+dgit (13.11+exp1) experimental; urgency=medium
+
+  git-debpush UX improvements:
+  * Always print a message before fetching from salsa.
+    Closes: #1110402.  [Sean Whitton]
+  * Detect debian/source/local-options, as a failed check.
+    This avoids later failures.  Closes: #1110339.  [Sean Whitton]
+  * Detect redundant --quilt mode option, as a failed check.
+    Helps useers avoid dangerous habits.  Closes: #1108378.  [Sean Whitton]
+  * Detect possible intent to use pristine-tar even if pristine-tar
+    is not installed.  [Andrea Pappacoda]
+
+  tag2upload service:
+  * If origs cannot be obtained from the archive (eg due to mirror delays),
+    try to regenerate them.  Closes: #1109130.  (Deployment TBC.)
+
+  Documentation:
+  * Workflow manpages: Replace bookworm with trixie.  [Sean Whitton]
+  * Workflow manpages: Suggest sbuild -d, not sbuild -c.  [Sean Whitton]
+  * tag2upload(5): Specify ! for service-critical extensions.
+
+  Minor bugfixes:
+  * git-debpush: Avoid ignoring a failure of git-cat-file.  [Sean Whitton]
+  * Add missing newline to overridden --force fail message.
+
+  dgit download-unfetched-origs subcommand (changes to support tag2upload):
+  * Look in the source tree's current suite, specifically.
+  * New --write-sha256sums subcommand option.
+  * Don't download files already present in the build-products-dir.
+  * Save downloaded files to .tmp names until file checksums verified.
+  * Report unobtainable origs with special exit status 3.
+
+  Supporting and internal changes:
+  * Cleanups and defensiveness in tag2upload-oracled.  [Sean Whitton]
+  * Code cleanups, and refactoring, in git-debpush.  [Sean Whitton]
+  * Much logic moved from tag2upload-obtain-origs into dgit.
+
+  Tests:
+  * Refactoring and additions for testing the new functionality.
+  * restore checking of error messages in tag2upload emails.
+  * t2u-integration: Include the event_name field in webhook.
+    (Compatibility with tag2upload-service-manager changes.)
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 10 Aug 2025 19:58:53 +0100
+
+dgit (13.10) experimental; urgency=medium
+
+  git-debpush user experience improvements:
+  * Print some status messages while processing.
+  * Better error messages when git-deborig tag search fails.
+  * New --help, -h options.  Closes: #1109473.
+
+  tag2upload infrastructure:
+  * Switch to using new tag2upload-obtain-origs script.
+    Closes: #1108658.  [Ian Jackson]
+  * tag2upload Manager protocol: Introduce some protocol state names.
+    [Ian Jackson]
+  * tag2upload-oracled: Speak Manager protocol version 5.
+  * tag2upload-builder-rebuild: Request restarting workers.
+
+  git-debpush miscellaneous:
+  * Expand and update statement of design principles.
+  * Delete a completed TODO.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Mon, 28 Jul 2025 13:53:45 +0100
+
+dgit (13.9) experimental; urgency=medium
+
+  tag2upload infrastructure:
+  * Improve and shorten command lines appearing in report emails.
+  * Check upstream tag/commit correspondence even when using existing origs.
+  * Minor performance improvement for native packages (skip pre-fetch).
+
+  Internal changes:
+  * Testing improvements for tag2upload.
+  * changelog: Start 13.9
+  * Introduce new tag2upload-obtain-origs script.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 19 Jul 2025 11:51:39 +0100
+
+dgit (13.8) experimental; urgency=medium
+
+  git-debpush user experience improvements:
+  * Check for and handle an existing tag for this version.
+  * Try to check our branch against the remote target branch,
+    to detect releasing from behind mainline, and avoid push failures.
+    Closes: #1107921.
+
+  Internal changes:
+  * dgit: Provide abbreviated --t2u-* options, to support log improvements.
+  * git-debpush: Improve comment about remote branch.  [Sean Whitton]
+  * git-debpush: Coding style cleanups.
+  * dir-locals.el: Set fill-column to 78 for all languages.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 18 Jul 2025 17:36:28 +0100
+
+dgit (13.7) experimental; urgency=medium
+
+  * Demo upload for talk.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Tue, 15 Jul 2025 08:33:32 +0100
+
+dgit (13.6) experimental; urgency=medium
+
+  * Demo upload for talk rehearsal.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 14 Jul 2025 20:26:58 +0100
+
+dgit (13.5) experimental; urgency=medium
+
+  git-debpush user experience improvements:
+  * Check for tag already existing at the remote.  Part of #1107921.
+  * Improve error message for tag already existing locally.
+  * Check for uncommitted changes in working tree.
+    Closes: #1108088.  [Sean Whitton]
+
+  tag2upload service:
+  * Properly RFC2047-escape non-ASCII names.  Closes: #1108613.
+  * Hide virt runes in a per-invocation ssh wrapper  Closes: #1107151.
+  * Print oracle and builder dgit versions in transcript.  Closes: #1108242.
+  * d-r-s t2u: Add missing -oBatchMode=yes option to ssh invocation.
+
+  CI and administrivia:
+  * CI: Check for missing Signed-off-by.
+  * git-debpush: Add missing copyright notice.  [Sean Whitton]
+  * Add missing Closes for #1108180 to changelog entry for 12.125.
+  * CI: Drop compatibility tests for buster, which is gone from the archive.
+
+  Suppporting changes:
+  * git-debpush: Figure out the previous maintainer upload version.
+  * dgit: Honour DGIT_VERSION in dgit --version and use it in ./using-these.
+  * git-debpush: Reorganisation and tidying.  [Ian Jackson and Sean Whitton]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 14 Jul 2025 09:45:16 +0100
+
+dgit (13.4) experimental; urgency=medium
+
+  Documentation:
+  * t2u o2m: Describe version 5, with 'restart' message.  [Sean Whitton]
+  * t2u FAQ: Clarify that debian/-only repos still need
+    upstream source in git.  [Christoph Berg]
+  * t2u FAQ: Remove much obsolete material.
+
+  Tests:
+  * t2u: Test "tag changed between fetches" path.
+  * CI: Check for blocking todos (three or more X's).
+
+  Internals:
+  * Avoid blocking-todo markers in a few places in docs and comments.
+  * dgit-repos-server: Fix a comment about indistrodir.
+  * tests: debpolicy-taintrm: Downgrade a TODO.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 22 Jun 2025 19:03:47 +0100
+
 dgit (12.15) unstable; urgency=medium
 
   git-debpush bugfixes:
-  * Fix package dependencies.
+  * Fix package dependencies.  Closes: #1108180.
   * Do not pointlessly print "pristine-tar is /usr/bin/pristine-tar".
   * Some shell quoting fixes.
 
@@ -13,6 +236,33 @@ dgit (12.15) unstable; urgency=medium
 
  -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sun, 22 Jun 2025 17:53:17 +0100
 
+dgit (13.3) experimental; urgency=medium
+
+  git-debpush behavioural improvements:
+  * Read a whole line when prompting.  Closes: #1107897.
+  * Drop changed-suite check.  Closes: #1107552.
+  * Exit immediately if overriding a check denied by user.
+
+  git-debpush fix:
+  * Fix parsing --batch command line option.
+
+  Documentation [Ian Jackson]:
+  * tag2upload(5): New "SEMANTICS" section.
+
+ -- Sean Whitton <spwhitton@spwhitton.name>  Wed, 18 Jun 2025 13:55:28 +0100
+
+dgit (13.2) experimental; urgency=medium
+
+  * git-debpush: Rename --no-prompt to --batch.   [Sean Whitton]
+
+  Administrivia:
+  * d/source/options: Declare source format to be native.
+    (Should enable uploading with git-debpush.)   [Sean Whitton]
+  * CI: Add trixie to salsa CI
+  * Include fixes from dgit 12.14 (as shown below).
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 16 Jun 2025 18:49:49 +0100
+
 dgit (12.14) unstable; urgency=medium
 
   * tests: t2u: Add missing dependency on pristine-tar; fixes CI.
@@ -20,7 +270,45 @@ dgit (12.14) unstable; urgency=medium
 
  -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Mon, 16 Jun 2025 17:58:19 +0100
 
+dgit (13.1) experimental; urgency=medium
+
+  git-debpush behavioural improvements [Sean Whitton]:
+  * Detect apparent intent to use pristine-tar (which is not supported).
+    Closes: #1105862.  [Reports from Simon Josefsson, Anton Gladky]
+  * Detect presence of git submodules, and fail early.
+    Closes: #1107226.  [Report from Andrea Pappacoda]  See also #726953.
+  * When checks fail, prompt interactively, asking whether to proceed.
+    Closes: #1105815, #1107550.
+  * Rename hazardous --quilt=auto, to --quilt=try-linear.
+    [Prompted by report from Anton Gladky]
+
+  git-debpush(1) improvements [Sean Whitton]:
+  * Document that we never do a git force push.
+    Closes: #1105756.  [Report from Simon Josefsson]
+  * --quilt=gbp: Mention quilt(1) explicitly.  [Report from Anton Gladky]
+  * Fix erroneous dedent location for end of list of options.
+
+  tag2upload infrastructure:
+  * t2u-b-rebuild: Improve logging and error handling.
+  * tag2upload-oracled: Predeclare some function prototypes.
+    Closes: #1105878.  [Sean Whitton]
+
+  Documentation:
+  * Update to non-ancient distribution names in many docs.  [Marc Haber]
+  * tag2upload(t5); Fix and clarify semantics of unknown tags,
+    multiplicity, ordering, and syntax of keyword=value.
+    Closes: #1106078.  [Report from Matthias Urlichs]
+  * i18n: Updated message translation for nl.
+    Closes: #1106481.  [Frans Spiesschaert]
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 13 Jun 2025 15:07:04 +0100
+
 dgit (12.13) unstable; urgency=medium
+
+  (NB: this changelog entry was cross-ported from 12.x (trixie), so it
+  includes duplicated information for those changes which were done
+  first in 13.x (experimental) and then backported to 12.x (trixie).
+  All these were in 13.1, as implied by the placement of this entry.)
 
   git-debpush behavioural change:
   * Detect apparent intent to use pristine-tar (which is not supported).
@@ -38,6 +326,29 @@ dgit (12.13) unstable; urgency=medium
   * gitlab CI metadata: Add dgit-test-suite trixie job.
 
  -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Fri, 13 Jun 2025 16:09:04 +0100
+
+dgit (13.0) experimental; urgency=medium
+
+  Documentation:
+  * dgit(1): Document exit status.
+
+  New feature:
+  * dgit: New operation mode download-unfetched-origs.
+
+  Infrastructure bugfixes:
+  * tag2upload: Fetch origs from other suites, too.
+    Avoid creating inconsistent sets of orig tarballs.
+    [Report from Simon Josefsson]  Closes: #1105766.
+  * dgit-repos-server: Fix changing suites while in NEW.
+
+  Supporting changes and tidying up:
+  * tag2upload-builder-rebuild: Pull our packages from experimental
+    so that we can deploy the bugfixes.  [Sean Whitton]
+  * Update paths to Debian keyrings.  [Sean Whitton]
+  * Internal improvements and refactorings.
+  * tests: Add experimental to suite lists.
+
+ -- Ian Jackson <ijackson@chiark.greenend.org.uk>  Sat, 17 May 2025 13:02:53 +0100
 
 dgit (12.12) unstable; urgency=medium
 

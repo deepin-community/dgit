@@ -51,7 +51,12 @@ use Getopt::Long;
 use Debian::Dgit::Infra;	# must precede Debian::Dgit
 use Debian::Dgit qw(!fail);
 use Debian::Dgit::ProtoConn;
-use subs qw(fail);
+
+sub fail ($);
+sub test_signing_key ();
+sub report_reaped_worker ($);
+sub block_signals ();
+sub unblock_signals();
 
 our ($production, $force_production) = (0, 0);
 our ($workers_n, $restart_workers, $ssh, $adt_virt)
@@ -174,7 +179,7 @@ sub fail ($) {
     # Invariants:
     #   1. Every one of our unreaped children is in this array,
     #      except briefly with signals blocked (while we're forking).
-    #   2. The converse is NOT true - this may contain pids of
+    #   2. The converse is NOT true -- this may contain pids of
     #      workers that we have already reaped!
     #   3. But *at the start of each iteration of the main loop*,
     #      it contains only (and therefore precisely) our unreaped children.
@@ -345,6 +350,26 @@ sub worker ($) {
 	$? == 0 or fail "Cannot execute commands in builder virt: "
 	  .failedcmd_waitstatus();
     };
+    my $quit_virt = sub {
+	unless ($retain_tmp) {
+	    # Most virtualisation backends will take care of this, but
+	    # it's not guaranteed by the protocol.
+	    $run_cmd->(qw(rm -rf), $virt_dir);
+	    $? == 0 or warn
+	      "WARNING: failed to remove $virt_dir in builder virt: "
+	      .failedcmd_waitstatus();
+	}
+
+	$virt->send("quit");
+
+	# Spec says we should expect `ok` but many autopkgtest-virt-*
+	# don't send it.  #1092808.  Anyway, we can safely waitpid without
+	# risk of deadlock -- the pipe would fit an ok if it sent one.
+	(waitpid $virt->get_pid(), 0) == $virt->get_pid() or fail $!;
+	fail sprintf "autopkgtest virt server: %s", waitstatusmsg() if $?;
+
+	undef $virt;
+    };
     $new_virt->();
 
     # Need our own cwd -- see dgit-repos-server's file header.
@@ -367,13 +392,16 @@ sub worker ($) {
 	      ($@ ? "failed" : "attempted"), $msg;
 	});
     $mngr->expect(sub { /^t2u-manager-ready$/ });
-    $mngr->send("t2u-oracle-version 4");
+    $mngr->send("t2u-oracle-version 5");
     $mngr->send(sprintf "worker-id %s,w%s %s", me, $slot, $production_string);
 
     for (;;) {
-	my ($msg, $payld_id, $payld_pkg, $payld_url) = $mngr->expect(sub {
-	    /^(?|(ayt)|(job) ([[:alnum:]][[:alnum:],-.]*) ($package_re) ([[:graph:]]+))$/a
-	});
+	my ($msg, $payld_id, $payld_pkg, $payld_url)
+	  = $mngr->expect(sub {/^(?|
+	    (ayt)
+	   |(restart-worker)
+	   |(job)\ ([[:alnum:]][[:alnum:],-.]*)\ ($package_re)\ ([[:graph:]]+)
+	   )$/ax});
 	if ($msg eq "ayt") {
 	    # Check the connection to the builder is still up.
 	    $virt->send("capabilities");
@@ -381,35 +409,20 @@ sub worker ($) {
 	    # Check the hardware token is still working.
 	    test_signing_key();
 	    $mngr->send("ack");
+	} elsif ($msg eq "restart-worker") {
+	    $quit_virt->();
+	    exit;
 	} elsif ($msg eq "job") {
 	    # Block fatal signals to avoid interrupting actual builds.
-	    # (So not to protect @worker_slots - we're the child.)
+	    # (So not to protect @worker_slots -- we're the child.)
 	    block_signals();
 	    handle_job($mngr, $virt_dir, $virt_cmd_enclist,
 		       $payld_id, $payld_pkg, $payld_url);
 	    unblock_signals();
-
 	    # Now stop the autopkgtest-virt-* process, and bring up another
 	    # one.  This means that we don't have to assume anything about
 	    # what capabilities are available, which is more flexible.
-
-	    unless ($retain_tmp) {
-		# Most virtualisation backends will take care of this, but
-		# it's not guaranteed by the protocol.
-		$run_cmd->(qw(rm -rf), $virt_dir);
-		$? == 0 or warn
-		  "WARNING: failed to remove $virt_dir in builder virt: "
-		  .failedcmd_waitstatus();
-	    }
-
-	    $virt->send("quit");
-
-	    # Spec says we should expect `ok` but many autopkgtest-virt-*
-	    # don't send it.  #1092808.  Anyway, we can safely waitpid without
-	    # risk of deadlock -- the pipe would fit an ok if it sent one.
-	    (waitpid $virt->get_pid(), 0) == $virt->get_pid() or fail $!;
-	    fail sprintf "autopkgtest virt server: %s", waitstatusmsg() if $?;
-
+	    $quit_virt->();
 	    $new_virt->();
 	} else {
 	    fail "ProtoConn's expect() has failed us";

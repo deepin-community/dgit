@@ -17,8 +17,102 @@ t-debpush-settings
 
 cd $p
 t-t2u-setup-repo
+cd ..
+
+git clone $p $p-2
+cd $p-2
+t-t2u-setup-repo
+cd ..
+
+cd $p
 
 t-git-debpush --quilt=gbp
+
+: 'Test mistaken attempt to re-upload already uploaded version'
+
+# Suppose that co-maintainer did the upload, so the previous tag isn't local.
+cd ../$p-2
+t-expect-fail 'This version seems already to have been released' \
+t-git-debpush --quilt=gbp
+
+: 'Test use of previous maintainer upload tag to determine quilt mode'
+
+t-dch-commit-bump bump
+
+# When we are in --tag-only mode, we don't fetch, so this just fails.
+t-expect-fail "could not determine the git branch layout" \
+t-git-debpush --tag-only
+
+t-git-debpush
+
+: 'Test trying to upload when behind'
+
+cd ../$p
+
+t-dch-commit-bump concurrent-bump -v 1.0-3
+t-expect-fail "E:branch master and remote branch .* have diverged" \
+t-git-debpush
+t-git-debpush --force=branch-diverged
+
+: 'reset things to sanity and prepare for next upload'
+git reset --hard salsa/master
+git pull salsa master
+t-dch-commit-bump debpush-after-push -v 1.0-4
+
+: 'Test change to upstream, not represented as a patch'
+
+echo '// this should have been a quilt patch' >>src.c
+git commit -m 'un-pq-d upstream change' src.c
+t-expect-fail 'E:the upstream source .* is not identical' \
+t-git-debpush
+git reset --hard HEAD~ # undo the breakage
+
+: 'Test uploading without pushing branch'
+
+git push salsa master
+t-git-debpush
+
+: 'Test uploading old version'
+
+cd ../$p
+t-dch-commit-bump upload-old-version
+git push
+
+cd ../$p-2
+git pull salsa master
+date >>debian/edited
+git add debian/edited
+git commit -m edited debian/edited
+git push
+
+cd ../$p
+t-expect-fail "E:local branch master is behind" \
+t-git-debpush
+t-git-debpush --force=branch-behind
+git pull --no-tags
+
+t-dch-commit-bump debpush-tag-only-then-push
+t-git-debpush --tag-only
+export GIT_COMMITTER_NAME='Someone else'
+t-expect-fail 'E:tag already exists, and is different'	\
+t-git-debpush
+: 'push the tag we just made, idempotently (see #1107921)'
+unset GIT_COMMITTER_NAME
+t-git-debpush
+
+: 'check that we fetched precisely the tags we expected'
+
+git for-each-ref --'format=%(refname)' refs/tags >../tags-actual
+grep -v '^#' <<END >../tags-expected
+refs/tags/test-dummy/1.0-1
+# 1.0-2 exists remotely but should be missing locally
+refs/tags/test-dummy/1.0-3
+refs/tags/test-dummy/1.0-4
+refs/tags/test-dummy/1.0-5
+refs/tags/test-dummy/1.0-6
+refs/tags/upstream/1.0
+END
+diff -u ../tags-{expected,actual}
 
 t-ok
 

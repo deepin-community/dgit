@@ -1,0 +1,738 @@
+# SOME DESCRIPTIVE TITLE
+# Copyright (C) YEAR Free Software Foundation, Inc.
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: 2025-08-15 11:11+0100\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. type: =head1
+#: ../dgit.1:3 ../dgit.7:2 ../dgit-user.7.pod:1 ../dgit-nmu-simple.7.pod:1
+#: ../dgit-maint-native.7.pod:1 ../dgit-maint-merge.7.pod:1
+#: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
+#: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
+#: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#: ../git-debpush.1.pod:1 ../git-deborig.1.pod:1 ../tag2upload.5.pod:1
+#, no-wrap
+msgid "NAME"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:6 ../git-debrebase.1.pod:5 ../git-debpush.1.pod:5
+#: ../git-deborig.1.pod:5
+#, no-wrap
+msgid "SYNOPSIS"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:33 ../git-debpush.1.pod:9 ../git-deborig.1.pod:9
+#, no-wrap
+msgid "DESCRIPTION"
+msgstr ""
+
+#. type: =item
+#: ../dgit.1:951 ../git-debpush.1.pod:138
+#, no-wrap
+msgid "B<--quilt=linear>"
+msgstr ""
+
+#. type: =item
+#: ../dgit.1:963 ../git-debpush.1.pod:150
+#, no-wrap
+msgid "B<--quilt=try-linear>"
+msgstr ""
+
+#. type: =item
+#: ../dgit.1:973 ../git-debpush.1.pod:144
+#, no-wrap
+msgid "B<--quilt=smash>"
+msgstr ""
+
+#. type: =item
+#: ../dgit.1:1001 ../git-debpush.1.pod:155
+#, no-wrap
+msgid "B<--quilt=nofix>"
+msgstr ""
+
+#. type: =head1
+#: ../dgit.1:1890 ../dgit.7:23 ../dgit-user.7.pod:446
+#: ../dgit-nmu-simple.7.pod:158 ../dgit-maint-native.7.pod:125
+#: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
+#: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
+#: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
+#: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
+#: ../git-debpush.1.pod:341 ../git-deborig.1.pod:60 ../tag2upload.5.pod:307
+#, no-wrap
+msgid "SEE ALSO"
+msgstr ""
+
+#. type: =head1
+#: ../dgit-maint-merge.7.pod:513 ../dgit-maint-gbp.7.pod:143
+#: ../dgit-maint-debrebase.7.pod:796 ../dgit-maint-bpo.7.pod:144
+#: ../git-debpush.1.pod:346 ../git-deborig.1.pod:64
+msgid "AUTHOR"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:3
+msgid ""
+"git-debpush - create & push a git tag with metadata for an ftp-master upload"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:7
+msgid "B<git debpush> [I<option>...]"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:11
+msgid ""
+"B<git-debpush> is a wrapper around git-tag(1) and git-push(1).  It helps you "
+"create and push a specially formatted signed tag which indicates that the "
+"tagged commit should be pushed (or \"uploaded\") to a Debian-style archive."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:16
+msgid ""
+"Typically, your git server will be configured to notify an intermediary "
+"service of the new tag that you pushed.  That service will then fetch your "
+"tag, check your PGP signature, do any conversion that's needed (such as "
+"producing and signing a B<.dsc> and B<.changes>), and upload the result to "
+"the Debian-style archive."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:22
+msgid "B<git-debpush> is only for source-only uploads."
+msgstr ""
+
+#. type: =head1
+#: ../git-debpush.1.pod:24
+msgid "TYPICAL USAGE"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:26
+msgid ""
+"B<git-debpush> is designed such that for regular uploads of your package, "
+"you should be able to just invoke it without passing any command line "
+"arguments.  After you've built and tested some .debs, run dch(1) to finalise "
+"your changelog and committed the result, just type \"git debpush\", and the "
+"intermediary service and your distribution's autobuilder network will take "
+"care of the rest."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:33
+msgid ""
+"The most common exception to this is the first time you use B<git-debpush> "
+"for a non-native package.  You will need to pass a quilt mode option to "
+"inform the intermediary service which git branch format you are using, for "
+"example"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debpush.1.pod:40
+#, no-wrap
+msgid ""
+"    % git debpush --gbp\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:44
+msgid ""
+"if you are using the git branch format typically used with gbp(1).  See "
+"\"QUILT MODE OPTIONS\", below, for the available quilt mode options."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:47
+msgid ""
+"Aside from a few sanity checks to help avoid broken uploads, B<git-debpush> "
+"does not do anything with the information provided by the quilt mode "
+"option.  It simply embeds the corresponding quilt mode in its generated tag, "
+"for use by the intermediary service."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:52
+msgid ""
+"Future invocations of B<git-debpush> will try to read the quilt mode out of "
+"the tag generated by B<git-debpush> for your previous upload.  You can "
+"override that on the command line by passing a quilt mode option, which "
+"always takes precedence."
+msgstr ""
+
+#. type: =head2
+#: ../git-debpush.1.pod:57
+msgid "Mistakes"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:59
+msgid ""
+"If you use B<git-debpush> to make a tag but haven't pushed it yet, either "
+"because you used B<--tag-only>|B<-t> or because the push failed, it is okay "
+"to delete it and make another.  (In the case that the push failed you can "
+"just run B<git-debpush> again I<without> deleting the tag, and it will retry "
+"just the push.)"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:65
+msgid "However, if a tag made by this script has been pushed, then B<do not>"
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:69
+msgid "* delete the tag, locally or remotely;"
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:71
+msgid "* rewind (force push) the branch the tag is on; or"
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:73
+msgid "* remove any entries from debian/changelog."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:77
+msgid ""
+"The intermediary service won't let you reuse the version number anyway, and "
+"taking any of these actions may make it unnecessarily difficult to try "
+"another upload.  Instead, add a new changelog stanza and run B<git-debpush> "
+"again."
+msgstr ""
+
+#. type: =head1
+#: ../git-debpush.1.pod:81
+msgid "SETUP FOR SOURCE FORMAT 1.0"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:83
+msgid ""
+"B<git-debpush> needs to tell the intermediary git service whether this is a "
+"native or non-native package.  Given historical Debian practices, it is not "
+"sufficient for either B<git-debpush> or the intermediary service to rely on "
+"the version number in debian/changelog."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:88
+msgid ""
+"If you are using one of the 3.0 source package formats, B<git-debpush> will "
+"just look in debian/source/format to determine whether the package is native "
+"or non-native, and you can ignore this section of the manpage."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:93
+msgid ""
+"If you are using the 1.0 source package format -- either debian/source/"
+"format does not exist, or contains the string \"1.0\" -- then B<git-debpush> "
+"must be told whether the package is native or non-native.  We do this using "
+"debian/source/options.  If your package is non-native, execute"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debpush.1.pod:101
+#, no-wrap
+msgid ""
+"    % echo \"-sk\" >>debian/source/options\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:105
+msgid "If your package is native, execute"
+msgstr ""
+
+#. type: verbatim
+#: ../git-debpush.1.pod:109
+#, no-wrap
+msgid ""
+"    % echo \"-sn\" >>debian/source/options\n"
+"\n"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:113
+msgid ""
+"(With source format 1.0, dpkg-source(1) decides whether the package is "
+"native or non-native based on the presence of absence of an orig.tar in "
+"B<..>, but B<git-debpush> is a pure git tool that never looks at tarballs.)"
+msgstr ""
+
+#. type: =head1
+#: ../git-debpush.1.pod:118
+msgid "QUILT MODE OPTIONS"
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:122
+msgid "B<--quilt=gbp>|B<--gbp>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:124
+msgid ""
+"You are using the 'unapplied' branch format, typically used with gbp(1) or "
+"quilt(1)."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:127
+msgid "B<--quilt=dpm>|B<--dpm>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:129
+msgid "You are using git-dpm(1)'s branch format."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:131
+msgid "B<--quilt=baredebian[+git]>|B<--baredebian[+git]>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:133
+msgid ""
+"You are using the 'bare debian' branch format, with the upstream source in "
+"the form of an upstream tag."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:136
+msgid "B<--quilt=baredebian+git> is an alias for B<--quilt=baredebian>."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:140
+msgid ""
+"You are using the 'manually maintained applied' branch format or similar, "
+"and each commit touching the upstream source not already represented in "
+"debian/patches should be added as a new patch."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:146
+msgid ""
+"You are using the 'manually maintained applied' branch format or similar, "
+"and you want all changes to the upstream source to be squashed into a single "
+"patch in debian/patches."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:152
+msgid ""
+"Tell the intermediary service to try B<--quilt=linear>, and if that cannot "
+"succeed, fall back to B<--quilt=smash>."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:157
+msgid ""
+"You are using the 'manually maintained applied' branch format or similar, "
+"and you don't want debian/patches to be touched by the intermediary service."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:161
+msgid ""
+"If all commits touching the upstream source are not already represented in "
+"debian/patches, the intermediary service will fail to upload your package."
+msgstr ""
+
+#. type: =head1
+#: ../git-debpush.1.pod:167
+msgid "OTHER OPTIONS"
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:171
+msgid "B<--dry-run>|B<-n>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:173
+msgid ""
+"Run checks and generate the tag text, but don't sign or create the tag, or "
+"push."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:176
+msgid "B<--tag-only>|B<-t>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:178
+msgid ""
+"Just tag, don't push.  A noop if passed together with B<--dry-run>|B<-n>."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:180
+msgid "B<--print-tag-text>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:182
+msgid "Also print the (unsigned) tag text to standard output."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:184
+msgid "Useful together with B<--dry-run>|B<-n>, for scripting."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:186
+msgid "B<--help>|B<-h>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:188
+msgid "Print brief usage summary and exit."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:190
+msgid "B<-u> I<keyid>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:192
+msgid "Passed on to git-tag(1)."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:194
+msgid "B<--branch=>I<BRANCH>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:196
+msgid ""
+"Where to place the tag, i.e., what you want to release.  If unspecified, we "
+"put the tag on whatever HEAD points to."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:199
+msgid ""
+"Note that this need not actually be a branch, but any committish (see "
+"gitglossary(7)).  The option name is chosen to fit what is by far the most "
+"common case."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:203
+msgid "B<--upstream=>I<TAG>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:205
+msgid ""
+"When pushing a non-native package, B<git-debpush> needs a tag for the "
+"upstream part of your package."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:208
+msgid ""
+"By default B<git-debpush> asks git-deborig(1), which searches for a suitable "
+"tag based on the upstream version in debian/changelog."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:212
+msgid "B<--remote=>I<REMOTE>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:214
+msgid ""
+"Where to push tags and branches.  If unspecified, use the remote which git "
+"would use if you typed \"git push BRANCH\"."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:217
+msgid "B<--distro=>I<DISTRO>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:219
+msgid ""
+"What distribution name to embed in the signed tag.  Defaults to \"debian\"."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:222
+msgid "B<--force>|B<-f>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:224
+msgid "Ignore the results of all checks designed to prevent broken uploads."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:226
+msgid ""
+"Note that this does not imply doing a git force push: B<git-debpush> never "
+"passes B<-f> through to B<git push>.  If you need that, use B<git debpush "
+"-t> and then do your own git force push."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:230
+msgid "B<--force>=I<check>[,I<check>] ..."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:232
+msgid ""
+"Override individual checks designed to prevent broken uploads.  May be "
+"specified more than once."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:235
+msgid ""
+"Using B<--force> or B<--force=>I<check> might cause the upload to fail at "
+"some later point in the process."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:238
+msgid "Valid values for I<check> are:"
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:242
+msgid "B<uncommitted>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:244
+msgid "Ignore that there are uncommitted changes to tracked files."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:246
+msgid "B<untracked>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:248
+msgid ""
+"Ignore that there are untracked files.  (For the bare debian branch format, "
+"untracked files outside of debian/ are always ignored.)"
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:251
+msgid "B<superfluous-quilt-mode>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:253
+msgid ""
+"Ignore the fact that the quilt mode option supplied on the command line is "
+"the same as the one we would have autodetected."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:256
+msgid ""
+"If a package has been uploaded with B<git-debpush> before, you don't need to "
+"pass B<--gbp>|B<--dpm>|B<--quilt=>I<mode>, except in the unusual case that "
+"you are changing your git workflow."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:260
+msgid ""
+"It's better not to get into the habit of specifying the quilt mode, since "
+"that could override B<git-debpush>'s determination, and thereby end up "
+"applying the wrong quilt mode to a different package."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:264
+msgid "B<upstream-nonancestor>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:266
+msgid ""
+"Ignore the fact that the upstream tag is not an ancestor of the branch to be "
+"tagged (skipping this check is implied by B<--quilt=baredebian>)."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:269
+msgid "B<upstream-nonidentical>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:271
+msgid ""
+"Ignore any differences between the upstream source in the upstream tag and "
+"the upstream source in the branch to be tagged (this check is only run when "
+"using B<--quilt=gbp> or B<--quilt=unapplied>)."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:275
+msgid "B<patches-nonapplicable>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:277
+msgid "Ignore any failures of the following two checks:"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:283
+msgid ""
+"With B<--quilt=gbp>, B<--quilt=unapplied>, B<--quilt=baredebian>, B<--"
+"quilt=dpm>, and B<--quilt=nofix>, the quilt patches should apply cleanly to "
+"the upstream source with git-apply(1)."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:289
+msgid ""
+"With B<--quilt=dpm> and B<--quilt=nofix>, applying the quilt patches to the "
+"upstream source should produce exactly the source tree to be tagged."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:295
+msgid "B<unreleased>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:297
+msgid "Permit upload to a suite called UNRELEASED."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:299
+msgid "B<dgit-view>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:301
+msgid ""
+"Ignore apparently pushing the dgit view of a package (as produced by B<dgit "
+"clone>) to the maintainer branch, where the dgit view and the maintainer "
+"view of the package are not identical."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:305
+msgid "B<pristine-tar>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:307
+msgid ""
+"Ignore that pristine tar data for this new upstream version has been "
+"committed to the pristine-tar branch, despite the fact that the intermediary "
+"service will always ignore this data.  (It will generate its own orig "
+"tarball with git-archive(1).  See Debian bug #1106071.)"
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:312
+msgid "B<submodule>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:314
+msgid "Ignore that there are git submodule(s).  Submodules are not supported."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:316
+msgid "B<local-options>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:318
+msgid ""
+"Ignore that the file debian/source/local-options exists.  This file is not "
+"supported (but note you can use debian/source/options)."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:321
+msgid "B<unstitched>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:323
+msgid ""
+"Ignore the fact that the branch to be pushed seems to be a git-debrebase(1) "
+"branch in an unstitched state (see git-debrebase(5))."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:326
+msgid "B<detached>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:328
+msgid ""
+"Ignore the fact that HEAD is to be tagged, but HEAD is detached (this check "
+"is only run when B<--branch=HEAD> or no B<--branch> option is specified)."
+msgstr ""
+
+#. type: =item
+#: ../git-debpush.1.pod:334
+msgid "B<--batch>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:336
+msgid ""
+"When used interactively, and a test fails, B<git-debpush> will offer to "
+"ignore the failure.  Passing this option disables this interactive prompting."
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:343
+msgid ""
+"Git branch formats in use by Debian maintainers: <https://wiki.debian.org/"
+"GitPackagingSurvey>"
+msgstr ""
+
+#. type: textblock
+#: ../git-debpush.1.pod:348
+msgid ""
+"B<git-debpush> and this manpage were written by Sean Whitton "
+"<spwhitton@spwhitton.name> with much input from Ian Jackson "
+"<ijackson@chiark.greenend.org.uk>."
+msgstr ""

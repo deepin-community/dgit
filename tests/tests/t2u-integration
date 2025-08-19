@@ -150,6 +150,7 @@ cd ..
 
 curl http://127.0.0.1:"$port"/hook/gitlab -d@- <<END | tee hook-response
 {
+  "event_name": "tag_push",
   "object_kind": "tag_push",
   "after": "$tag_objid",
   "ref": "refs/tags/test-dummy/$v",

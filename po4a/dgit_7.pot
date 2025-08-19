@@ -7,7 +7,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2024-04-11 22:39+0100\n"
+"POT-Creation-Date: 2025-08-15 11:11+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -34,19 +34,19 @@ msgstr ""
 #: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
 #: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
 #: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
-#: ../git-debpush.1.pod:1
+#: ../git-debpush.1.pod:1 ../git-deborig.1.pod:1 ../tag2upload.5.pod:1
 #, no-wrap
 msgid "NAME"
 msgstr ""
 
 #. type: =head1
-#: ../dgit.1:1694 ../dgit.7:23 ../dgit-user.7.pod:447
-#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:125
+#: ../dgit.1:1890 ../dgit.7:23 ../dgit-user.7.pod:446
+#: ../dgit-nmu-simple.7.pod:158 ../dgit-maint-native.7.pod:125
 #: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
 #: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
-#: ../dgit-sponsorship.7.pod:325 ../dgit-maint-bpo.7.pod:140
-#: ../git-debrebase.1.pod:643 ../git-debrebase.5.pod:678
-#: ../git-debpush.1.pod:261
+#: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
+#: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
+#: ../git-debpush.1.pod:341 ../git-deborig.1.pod:60 ../tag2upload.5.pod:307
 #, no-wrap
 msgid "SEE ALSO"
 msgstr ""
@@ -276,7 +276,7 @@ msgstr ""
 msgid ""
 "So, for example, B<stable,-security> means to look for the package in "
 "stable, and stable-security, taking whichever is newer.  If stable is "
-"currently jessie, dgit clone would leave you on the branch B<dgit/jessie,-"
+"currently trixie, dgit clone would leave you on the branch B<dgit/trixie,-"
 "security>."
 msgstr ""
 

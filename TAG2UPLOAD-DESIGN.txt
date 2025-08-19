@@ -285,6 +285,35 @@ mini-git-tag-fsck will also have a mode to generate the .git.tar.xz.
 This will be invoked by the tag2upload service as part of preparing the
 upload.  (This mode will need to call out to git/libgit2/etc..)
 
+tag handling and future extensions
+----------------------------------
+
+ * The tag2upload(5) tag spec provides space to add additional
+   information to tags without causing problems for existing consumers
+   of the metadata.  This is important for nonbreaking extensibility.
+
+ * The tag spec also provides, implicitly, a way to add extensions
+   that *do* cause older tag parsers that don't understand the
+   extension to reject the whole tag rather than just ignore the extra
+   information.  This could be done by (for example) starting the item
+   keyword name with a capital letter, or prefixing it with a !.
+
+ * All the parsers that are on the principal boundaries are set up to
+   reject such items.  The ftp archive has a more relaxed
+   interpretation, but but it is defended from misunderstandings by
+   the fact that it insists on a .changes signature from the
+   tag2upload service - which will in turn reject tags containing
+   essential but unknown items.
+
+ * So we do not have to deploy changes to dak if we add new extensions
+   that don't need to affect dak's processing.  An example would be a
+   "this has been tested" countersignature-from-CI:
+     https://salsa.debian.org/freexian-team/debusine/-/issues/815#note_49ce643d86dd723db5a4540f300498a2faee4746
+   If we were to define a new essential item targeted at dak, we would
+   need to deploy the new version of dak before the new version of the
+   t2u service.  The t2u design principles make this scenario fairly
+   unlikely.
+
 Emails
 ------
 

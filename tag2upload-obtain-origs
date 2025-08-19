@@ -1,0 +1,99 @@
+#! /bin/bash
+#
+# usage:
+#     tag2upload-obtain-origs <setting>=<value> ...
+#
+#     Writes tag2upload report information to stdout;
+#     errors and executed commands to stderr.
+#     
+# settings:
+#
+#     v=VERSION-REVISION
+#     p=PACKAGE
+#     s=SUITE
+#     u=UPSTREAM-COMMITID
+#
+# optional settings:
+#
+#     bpd                          defaults to ../bpd
+
+set -eu -o pipefail
+shopt -s inherit_errexit # #514862, wtf
+
+fail () { echo >&2 "tag2upload-obtain-origs: error: $*"; exit 16; }
+x () { echo >&2 "+ $*"; "$@"; }
+
+s_bpd=../bpd
+
+while [ $# != 0 ]; do
+    case "$1" in
+	--*) fail "unknown option" ;;
+	*=*)
+	    k="${1%%=*}"
+	    v="${1#*=}"
+	    case "$k" in
+		*[^0-9a-z-]*) fail "bad syntax for setting" ;;
+		*)
+		    eval "s_$k=\$v"
+		    ;;
+	    esac
+	    shift
+	    ;;
+	*) fail "non-option arguments must all be settings K=V" ;;
+    esac
+done
+
+: ${DGIT_DRS_DGIT:=dgit}
+run-dgit () {
+    x $DGIT_DRS_DGIT --build-products-dir="$s_bpd" -p"$s_p" "$@" >&2
+}
+report () {
+    printf "%s\n" "$*"
+    printf >&2 "# %s\n" "$*"
+}
+
+uversion="${s_v%-*}" # strip revision
+fversion="${uversion#*:}" # strip epoch
+
+set +e
+run-dgit download-unfetched-origs			\
+	 --write-sha256sums="$s_bpd"/origs.sha256sums
+rc=$?
+set -e
+
+need_checksums_check=false
+
+case "$rc" in
+    0)
+	report 'using existing orig(s)'
+	exit 0
+	;;
+    3)
+	need_checksums_check=true
+	report \
+ 'some orig(s) not available from archive mirrors, trying to regenerate'
+	;;
+    4)
+	report 'no orig(s) in archive, generating'
+	;;
+    5)
+	report \
+'conflicting orig(s) in archive, regenerating, hoping to reproduce a good one'
+	;;
+    *)
+	fail 'failed querying archive for existing orig(s)'
+	;;
+esac
+
+# TODO want git-deborig to support bpd
+x ${DGIT_DEBORIG_TEST-git deborig} "$s_u"
+mv ../"${s_p}_${fversion}.orig".* ../bpd/
+
+report 'created orig'
+
+if $need_checksums_check; then
+    (set -e; cd "$s_bpd"; sha256sum >&2 -c <origs.sha256sums)
+    report 'successfully regenerated orig'
+fi
+
+exit 0

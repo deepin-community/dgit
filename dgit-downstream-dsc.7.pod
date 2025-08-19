@@ -65,16 +65,16 @@ I<distro> for your distro name.
 In dgit and Debian archive terminology, a B<suite> is a line of
 development, and/or a Debian release.
 For example, at the time of writing, Debian has suites like
-B<sid> aka B<unstable>, B<buster> aka B<testing>,
-and B<stretch> aka B<stable>.
-There are also ancillary suites like B<stretch-security>.
+B<sid> aka B<unstable>, B<trixie> aka B<testing>,
+and B<bookworm> aka B<stable>.
+There are also ancillary suites like B<bookworm-security>.
 
 If your releases align with Debian's releases,
 then your suites should contain the Debian suite names.
 B<Do not> use just the Debian names.
 That will cause confusion.
 Instead, prepend your organisation's name and a hyphen.
-For example, FSFE might end up with suites like fsfe-stretch.
+For example, FSFE might end up with suites like fsfe-trixie.
 
 Suite names end up in git ref and branch names,
 and on dgit command lines.

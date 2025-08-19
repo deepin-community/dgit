@@ -62,20 +62,6 @@ specpkg_install_infra: pm=Infra
 
 define specpkg_install_common
 	make install-$(tok) prefix=/usr DESTDIR=debian/$(p) perldir=$(specperl)
-endef
-
-specpkg_install_gdp: tok=gdp
-specpkg_install_gdp: specperl=/usr/share/dgit/gdp/perl5
-specpkg_install_gdp:
-	$(specpkg_install_common)
-	set -x; perl -i -pe 'next unless m/###substituted###/;' \
- -e 's{^(git_playtree_setup)=.*}{$$1=/usr/share/$p/git-playtree-setup};' \
-		debian/$(p)/usr/bin/*
-
-specpkg_install_%: tok=$*
-specpkg_install_%: specperl=/usr/share/dgit/$(tok)/perl5
-specpkg_install_%:
-	$(specpkg_install_common)
 #	# Most of the Perl modules in this package live in
 #	# $(specperl).  The exception is Debian::Dgit::Infra, which
 #	# lives in $(globalperl) and adds $(specperl) to @INC.
@@ -93,6 +79,21 @@ specpkg_install_%:
 		-e 'next unless s/^# (?=unshift \@INC,)//;' \
 		-e 'die unless s{q\{\S+\}}{q{$(specperl)}};' \
 		 $$dst
+endef
+
+specpkg_install_%: tok=$*
+specpkg_install_%: specperl=/usr/share/dgit/$(tok)/perl5
+specpkg_install_%:
+	$(specpkg_install_common)
+
+specpkg_install_gdp: tok=gdp
+specpkg_install_gdp: pm=GDP
+specpkg_install_gdp: specperl=/usr/share/dgit/gdp/perl5
+specpkg_install_gdp:
+	$(specpkg_install_common)
+	set -x; perl -i -pe 'next unless m/###substituted###/;' \
+ -e 's{^(git_playtree_setup)=.*}{$$1=$(specperl)/git-playtree-setup};' \
+		debian/$(p)/usr/bin/*
 
 debian/tests/control: tests/enumerate-tests debian/tests/control.in
 	$< gencontrol >$@.new && mv -f $@.new $@

@@ -44,10 +44,17 @@ Description: rebasing git workflow tool for Debian packaging
  gbp pq, and direct use of quilt patches.
 
 Package: git-debpush
-Depends: devscripts, git, gnupg, libgit-wrapper-perl, libdpkg-perl,
-# devscripts git-deborig:
+Depends: git, gnupg, ${misc:Depends},
+# git-deborig:
+	 libgit-wrapper-perl, libdpkg-perl,
 	 liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl,
-         ${misc:Depends}
+Replaces: devscripts (<< 2.25.18)
+# No "Breaks: devscripts (<< 2.25.18)" because:
+# - devscripts doesn't hard-depend on git-deborig
+# - it would break installability of this .deb on anything older than
+#   forky, and we try to support installability on older Debian stable
+#   releases as much as possible.
+# Also cf. <https://bugs.debian.org/592610#64>.
 Architecture: all
 Description: client script for git pushing to Debian-style archives
  git-debpush is a script to create and push a specially formatted
@@ -58,12 +65,16 @@ Description: client script for git pushing to Debian-style archives
  which performs any conversion that's needed (such as producing and
  signing a .dsc and .changes), and then uploads the result to the
  Debian-style archive on your behalf.
+ .
+ This package also ships git-deborig, a program which tries to produce
+ Debian orig.tar using git-archive(1).  (This program used to be in the
+ 'devscripts' package.)
 
 Package: dgit-infrastructure
 Depends: ${misc:Depends}, perl, git-core, gpgv, chiark-utils-bin,
          libjson-perl, libdigest-sha-perl, libdbd-sqlite3-perl, sqlite3,
          libdpkg-perl,
-         liburi-perl,
+         liburi-perl, libmime-tools-perl,
          liblocale-gettext-perl
 Recommends: dgit (>= 11.7~)
 Architecture: all

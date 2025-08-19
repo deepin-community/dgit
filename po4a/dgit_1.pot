@@ -7,7 +7,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2025-03-28 17:38+0000\n"
+"POT-Creation-Date: 2025-08-15 14:05+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -34,7 +34,7 @@ msgstr ""
 #: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
 #: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
 #: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
-#: ../git-debpush.1.pod:1 ../tag2upload.5.pod:1
+#: ../git-debpush.1.pod:1 ../git-deborig.1.pod:1 ../tag2upload.5.pod:1
 #, no-wrap
 msgid "NAME"
 msgstr ""
@@ -46,6 +46,7 @@ msgstr ""
 
 #. type: =head1
 #: ../dgit.1:6 ../git-debrebase.1.pod:5 ../git-debpush.1.pod:5
+#: ../git-deborig.1.pod:5
 #, no-wrap
 msgid "SYNOPSIS"
 msgstr ""
@@ -92,7 +93,7 @@ msgid "B<dgit> [I<dgit-opts>] I<action> ..."
 msgstr ""
 
 #. type: =head1
-#: ../dgit.1:33 ../git-debpush.1.pod:9
+#: ../dgit.1:33 ../git-debpush.1.pod:9 ../git-deborig.1.pod:9
 #, no-wrap
 msgid "DESCRIPTION"
 msgstr ""
@@ -340,7 +341,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:148 ../dgit.1:196 ../dgit.1:236
+#: ../dgit.1:148 ../dgit.1:207 ../dgit.1:247
 msgid "Tagging, signing and actually uploading should be left to dgit push."
 msgstr ""
 
@@ -358,54 +359,68 @@ msgid "B<dgit build-source> ..."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:161
+#: ../dgit.1:157
 msgid ""
 "Builds the source package, and a changes file for a prospective source-only "
-"upload, using B<dpkg-source>.  The output is left in "
-"I<package>B<_>I<version>B<.dsc> and "
+"upload, using B<dpkg-source>."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:162
+msgid ""
+"The output is left in I<package>B<_>I<version>B<.dsc> and "
 "I<package>B<_>I<version>B<_source.changes>."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:164
+#: ../dgit.1:165
 msgid ""
 "Tagging, signing and actually uploading should be left to dgit push-source, "
 "or dgit push."
 msgstr ""
 
+#. type: Plain text
+#: ../dgit.1:175
+msgid ""
+"B<dgit build-source> checks that the generated source package corresponds to "
+"the git HEAD (as canonicalised with the specified quilt mode, if "
+"applicable).  The other B<dgit *build*> options to not perform this check at "
+"build time, instead leaving it to B<dgit push>."
+msgstr ""
+
 #. type: TP
-#: ../dgit.1:164
+#: ../dgit.1:175
 #, no-wrap
 msgid "B<dgit clean>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:168
+#: ../dgit.1:179
 msgid ""
 "Cleans the current working tree (according to the --clean= option in force)."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:168
+#: ../dgit.1:179
 #, no-wrap
 msgid "B<dgit update-vcs-git> [I<suite>|B<.>] [B<-->] [I<git fetch options>]"
 msgstr ""
 
 #. type: TQ
-#: ../dgit.1:170
+#: ../dgit.1:181
 #, no-wrap
 msgid "B<dgit update-vcs-git> [I<suite|>B<.>] B<->"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:175
+#: ../dgit.1:186
 msgid ""
 "Sets up, or updates the url of, the vcs-git remote, and (unless B<-> was "
 "specified)  runs git fetch on it."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:182
+#: ../dgit.1:193
 msgid ""
 "By default, the Vcs-Git field of the .dsc from Debian sid is used, as that "
 "is probably most up to date.  Another suite may be specified, or B<.> to "
@@ -413,24 +428,24 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:182
+#: ../dgit.1:193
 #, no-wrap
 msgid "B<dgit help>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:185 ../dgit.1:1442
+#: ../dgit.1:196 ../dgit.1:1484
 msgid "Print a usage summary."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:185
+#: ../dgit.1:196
 #, no-wrap
 msgid "B<dgit sbuild> ..."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:194
+#: ../dgit.1:205
 msgid ""
 "Constructs the source package, uses B<sbuild> to do a binary build, and uses "
 "mergechanges to merge the source and binary changes files.  Options and "
@@ -439,13 +454,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:196
+#: ../dgit.1:207
 #, no-wrap
 msgid "B<dgit pbuilder> [I<debbuildopts>]"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:204
+#: ../dgit.1:215
 msgid ""
 "Constructs the source package, uses B<pbuilder> to do a binary build, and "
 "uses mergechanges to merge the source and binary changes files.  The output "
@@ -453,14 +468,14 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:207
+#: ../dgit.1:218
 msgid ""
 "You should ensure that your dgit --build-products-dir setting matches your "
 "pbuilder --buildresult."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:213
+#: ../dgit.1:224
 msgid ""
 "The I<debbuildopts> are passed to pbuilder using its --debbuildopts option.  "
 "If you want to pass other options to pbuilder, use the B<--pbuilder:> dgit "
@@ -469,58 +484,58 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:219
+#: ../dgit.1:230
 msgid ""
 "You should ensure that in your pbuilderrc you do B<not> have the setting "
 "B<SOURCE_ONLY_CHANGES=yes> as this may cause trouble."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:219
+#: ../dgit.1:230
 #, no-wrap
 msgid "B<dgit cowbuilder> [I<debbuildopts>]"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:225
+#: ../dgit.1:236
 msgid "Like B<dgit pbuilder>, but uses B<cowbuilder> instead of B<pbuilder.>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:225
+#: ../dgit.1:236
 #, no-wrap
 msgid "B<dgit gbp-build> ..."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:231
+#: ../dgit.1:242
 msgid ""
 "Runs B<git-buildpackage> with some suitable options.  Options and arguments "
 "after gbp-build will be passed on to git-buildpackage."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:234
+#: ../dgit.1:245
 msgid ""
 "By default this uses --quilt=gbp, so HEAD should be a git-buildpackage style "
 "branch, not a patches-applied branch."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:236
+#: ../dgit.1:247
 #, no-wrap
 msgid "B<dgit push-source> [I<suite>]"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:241
+#: ../dgit.1:252
 msgid ""
 "Does an `upload': sends the current HEAD to dgit-repos (as git commits), and "
 "to the archive (as a source package, built by this command)."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:245
+#: ../dgit.1:256
 msgid ""
 "This is the usual way to upload to Debian.  It is like saying \"update the "
 "source code in the archive to match my git HEAD, and let the autobuilders do "
@@ -528,7 +543,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:256
+#: ../dgit.1:267
 msgid ""
 "In more detail: dgit push-source builds a source package from HEAD.  It then "
 "pushes the HEAD to the suite's dgit-repos branch, adjusts the .changes to "
@@ -540,7 +555,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:260
+#: ../dgit.1:271
 msgid ""
 "dgit push always uses the package, suite and version specified in the debian/"
 "changelog and the .dsc, which must agree.  If the command line specifies a "
@@ -548,27 +563,27 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:265
+#: ../dgit.1:276
 msgid ""
 "When used on a git-debrebase branch, dgit calls git-debrebase to prepare the "
 "branch for source package upload and push."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:269
+#: ../dgit.1:280
 msgid ""
 "With B<-C>, dgit push-source performs a dgit push-built, additionally "
 "ensuring that no binary packages are uploaded."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:269
+#: ../dgit.1:280
 #, no-wrap
 msgid "B<dgit push-built> [I<suite>]"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:276
+#: ../dgit.1:287
 msgid ""
 "Does an `upload' of a previously built package, possibly including "
 "binaries.  Sends the current HEAD to dgit-repos (as git commits); and, sends "
@@ -576,7 +591,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:283
+#: ../dgit.1:294
 msgid ""
 "The package must already have been built ready for upload, with the .dsc "
 "and .changes left in the parent directory.  It is normally best to do the "
@@ -586,7 +601,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:288
+#: ../dgit.1:299
 msgid ""
 "dgit will check that the .dsc corresponds exactly to the current HEAD, "
 "ensuring that all users, whether of the dgit git view, or of the traditional "
@@ -594,13 +609,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:288
+#: ../dgit.1:299
 #, no-wrap
 msgid "B<dgit rpush-source>|B<rpush-built> I<build-host>B<:>I<src-dir> [I<push args...>]"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:295
+#: ../dgit.1:306
 msgid ""
 "Pushes the contents of the specified directory on a remote machine.  This is "
 "like running dgit push on build-host with src-dir as the current directory; "
@@ -610,67 +625,67 @@ msgid ""
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:298 ../dgit-maint-merge.7.pod:464
+#: ../dgit.1:309 ../dgit-maint-merge.7.pod:464
 #, no-wrap
 msgid "1."
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:298
+#: ../dgit.1:309
 #, no-wrap
 msgid "Clone on build host (dgit clone)"
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:299 ../dgit-maint-merge.7.pod:468
+#: ../dgit.1:310 ../dgit-maint-merge.7.pod:468
 #, no-wrap
 msgid "2."
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:299
+#: ../dgit.1:310
 #, no-wrap
 msgid "Edit code on build host (edit, git commit)"
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:300 ../dgit-maint-merge.7.pod:473
+#: ../dgit.1:311 ../dgit-maint-merge.7.pod:473
 #, no-wrap
 msgid "3."
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:300
+#: ../dgit.1:311
 #, no-wrap
 msgid "Build package on build host (dgit build)"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:301
+#: ../dgit.1:312
 #, no-wrap
 msgid "4."
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:301
+#: ../dgit.1:312
 #, no-wrap
 msgid "Test package on build host or elsewhere (dpkg -i, test)"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:302
+#: ../dgit.1:313
 #, no-wrap
 msgid "5."
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:302
+#: ../dgit.1:313
 #, no-wrap
 msgid "Upload by invoking dgit rpush on host with your GPG key."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:308
+#: ../dgit.1:319
 msgid ""
 "However, the build-host must be able to ssh to the dgit repos.  If this is "
 "not already the case, you must organise it separately, for example by the "
@@ -678,14 +693,14 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:312
+#: ../dgit.1:323
 msgid ""
 "The remaining arguments are treated just as dgit push-source or dgit push-"
 "built would handle them."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:317
+#: ../dgit.1:328
 msgid ""
 "build-host and build-dir can be passed as separate arguments; this is "
 "assumed to be the case if the first argument contains no : (except perhaps "
@@ -693,7 +708,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:323
+#: ../dgit.1:334
 msgid ""
 "You will need similar enough versions of dgit on the build-host and the "
 "invocation host.  The build-host needs gnupg installed, with your public "
@@ -702,13 +717,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:323
+#: ../dgit.1:334
 #, no-wrap
 msgid "B<dgit push>|B<rpush> I<...>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:334
+#: ../dgit.1:345
 msgid ""
 "Configurable aliases for B<dgit push-built> and B<dgit rpush-built>.  These "
 "aliases will in the future change to mean B<dgit push-source> and B<dgit "
@@ -716,74 +731,74 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:338
+#: ../dgit.1:349
 msgid ""
 "The behaviour of dgit push is controlled by the B<dgit.default.push-subcmd> "
 "git config option:"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:340
+#: ../dgit.1:351
 #, no-wrap
 msgid "B<source>"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:340
+#: ../dgit.1:351
 #, no-wrap
 msgid "runs B<dgit push-source>"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:340
+#: ../dgit.1:351
 #, no-wrap
 msgid "future default"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:341
+#: ../dgit.1:352
 #, no-wrap
 msgid "B<built>"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:341
+#: ../dgit.1:352
 #, no-wrap
 msgid "and runs B<dgit push-built>"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:342
+#: ../dgit.1:353
 #, no-wrap
 msgid "B<built,warn>"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:342
+#: ../dgit.1:353
 #, no-wrap
 msgid "warns, and runs B<dgit push-built>"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:342
+#: ../dgit.1:353
 #, no-wrap
 msgid "current default"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:343
+#: ../dgit.1:354
 #, no-wrap
 msgid "B<reject>"
 msgstr ""
 
 #. type: tbl table
-#: ../dgit.1:343
+#: ../dgit.1:354
 #, no-wrap
 msgid "fails"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:354
+#: ../dgit.1:365
 msgid ""
 "For dgit rpush, the behaviour is controlled by B<dgit.default.rpush-subcmd>, "
 "falling back to B<dgit.default.push-subcmd> if that is not set.  Because "
@@ -792,7 +807,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:364
+#: ../dgit.1:375
 msgid ""
 "These settings can safely be passed to older dgit (via B<-c);> the value "
 "B<built> will be supported indefinitely.  This should be used in scripts "
@@ -801,13 +816,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:364
+#: ../dgit.1:375
 #, no-wrap
 msgid "B<dgit setup-new-tree>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:380
+#: ../dgit.1:391
 msgid ""
 "Configure the current working tree the way that dgit clone would have set it "
 "up.  Like running B<dgit setup-useremail>, B<setup-mergechangelogs> and "
@@ -818,13 +833,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:380
+#: ../dgit.1:391
 #, no-wrap
 msgid "B<dgit setup-useremail>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:386
+#: ../dgit.1:397
 msgid ""
 "Set the working tree's user.name and user.email from the distro-specific "
 "dgit configuration (B<dgit-distro.>I<distro>B<.user-name> and B<.user-"
@@ -832,26 +847,26 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:386
+#: ../dgit.1:397
 #, no-wrap
 msgid "B<dgit setup-mergechangelogs>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:392
+#: ../dgit.1:403
 msgid ""
 "Configures a git merge helper for the file B<debian/changelog> which uses "
 "B<dpkg-mergechangelogs>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:392
+#: ../dgit.1:403
 #, no-wrap
 msgid "B<dgit setup-gitattributes>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:407
+#: ../dgit.1:418
 msgid ""
 "Set up the working tree's B<.git/info/attributes> to disable all "
 "transforming attributes for all files.  This is done by defining a macro "
@@ -861,7 +876,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:415
+#: ../dgit.1:426
 msgid ""
 "If there is an existing macro attribute line B<[attr]dgit-defuse-attrs> "
 "in .git/info/attributes, but it is insufficient, because it was made by an "
@@ -870,7 +885,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:426
+#: ../dgit.1:437
 msgid ""
 "(If there is already a macro attribute line B<[attr]dgit-defuse-attrs> "
 "in .git/info/attributes which does what dgit requires (whatever files it "
@@ -880,13 +895,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:426
+#: ../dgit.1:437
 #, no-wrap
 msgid "B<dgit quilt-fixup>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:433
+#: ../dgit.1:444
 msgid ""
 "`3.0 (quilt)' format source packages need changes representing not only in-"
 "tree but also as patches in debian/patches.  dgit quilt-fixup checks whether "
@@ -895,12 +910,12 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:435
+#: ../dgit.1:446
 msgid "This is normally done automatically by dgit build and dgit push."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:441
+#: ../dgit.1:452
 msgid ""
 "dgit will try to turn each relevant commit in your git history into a new "
 "quilt patch.  dgit cannot convert nontrivial merges, or certain other kinds "
@@ -910,7 +925,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:450
+#: ../dgit.1:461
 msgid ""
 "When used with a git-debrebase branch, dgit will ask git-debrebase to "
 "prepare patches.  However, dgit can make patches in some situations where "
@@ -920,25 +935,25 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:455
+#: ../dgit.1:466
 msgid "See B<FORMAT 3.0 (QUILT)> in B<dgit(7)>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:455
+#: ../dgit.1:466
 #, no-wrap
 msgid "B<dgit import-dsc> [I<sub-options>] I<../path/to/.dsc> [B<+>|B<..>]branch"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:461
+#: ../dgit.1:472
 msgid ""
 "Import a Debian-format source package, specified by its .dsc, into git, the "
 "way dgit fetch would do."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:472
+#: ../dgit.1:483
 msgid ""
 "This does about half the work of dgit fetch: it will convert the .dsc into a "
 "new, orphan git branch.  Since dgit has no access to a corresponding source "
@@ -949,7 +964,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:482
+#: ../dgit.1:493
 msgid ""
 "Because a .dsc can contain a Dgit field naming a git commit (which you might "
 "not have), and specifying where to find that commit (and any history rewrite "
@@ -959,12 +974,12 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:484
+#: ../dgit.1:495
 msgid "There is only one sub-option:"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:490
+#: ../dgit.1:501
 msgid ""
 "B<--require-valid-signature> causes dgit to insist that the signature on "
 "the .dsc is valid (using the same criteria as dpkg-source -x).  Otherwise, "
@@ -973,7 +988,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:509
+#: ../dgit.1:520
 msgid ""
 "If I<branch> is prefixed with B<+> then if it already exists, it will be "
 "simply overwritten, no matter its existing contents.  If I<branch> is "
@@ -985,55 +1000,109 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:513
+#: ../dgit.1:524
 msgid "If I<branch> does not start with refs/, refs/heads/ is prepended."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:513
+#: ../dgit.1:524
+#, no-wrap
+msgid "B<dgit>download-unfetched-origsB< [>I<options>]"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:529
+msgid ""
+"Consults the archive for any orig tarballs for this package and upstream "
+"version, and downloads them."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:531
+msgid "The suite declared in the changelog will be checked first."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:537
+msgid ""
+"Failing that, the whole archive will be searched for suitable origs.  If "
+"there are multiple sets of origs that may apply, fails with exit status 5.  "
+"This can happen if different uploads of the same upstream version have "
+"different origs."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:541
+msgid ""
+"If (some of) the selected origs are already present locally, they aren't re-"
+"downloaded, but their checksums are checked against data from the archive."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:543
+msgid "download-unfetched-origs supports some subcommand-specific options:"
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:544
+#, no-wrap
+msgid "B<--write-sha256sums=>I<file>"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:554
+msgid ""
+"Writes checksums of the selected origs to I<file>, in sha256sum format.  The "
+"files listed are a set suitable for a new upload or build, of the this "
+"package and version.  The checksums file is written and correct, even if "
+"dgit download-unfetched-origs exits with status 3."
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:555
 #, no-wrap
 msgid "B<dgit version>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:516
+#: ../dgit.1:558
 msgid "Prints version information and exits."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:516
+#: ../dgit.1:558
 #, no-wrap
 msgid "B<dgit clone-dgit-repos-server>I< destdir>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:520
+#: ../dgit.1:562
 msgid ""
 "Tries to fetch a copy of the source code for the dgit-repos-server, as "
 "actually being used on the dgit git server, as a git tree."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:520
+#: ../dgit.1:562
 #, no-wrap
 msgid "B<dgit print-dgit-repos-server-source-url>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:525
+#: ../dgit.1:567
 msgid ""
 "Prints the url used by dgit clone-dgit-repos-server.  This is hopefully "
 "suitable for use as a git remote url.  It may not be usable in a browser."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:525
+#: ../dgit.1:567
 #, no-wrap
 msgid "B<dgit print-dpkg-source-ignores>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:532
+#: ../dgit.1:574
 msgid ""
 "Prints the -i and -I arguments which must be passed to dpkg-souce to cause "
 "it to exclude exactly the .git directory and nothing else.  The separate "
@@ -1041,13 +1110,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:532
+#: ../dgit.1:574
 #, no-wrap
 msgid "B<dgit print-unapplied-treeish>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:543
+#: ../dgit.1:585
 msgid ""
 "Constructs a tree-ish approximating the patches-unapplied state of your 3.0 "
 "(quilt) package, and prints the git object name to stdout.  This requires "
@@ -1058,7 +1127,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:550
+#: ../dgit.1:592
 msgid ""
 "To make this operate off-line, the access configuration key which is used to "
 "determine the build-products-dir is the uncanonicalised version of the suite "
@@ -1067,24 +1136,24 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:552
+#: ../dgit.1:594
 msgid "This function is primarily provided for the benefit of git-debrebase."
 msgstr ""
 
 #. type: =head1
-#: ../dgit.1:552 ../git-debrebase.1.pod:473
+#: ../dgit.1:594 ../git-debrebase.1.pod:473 ../git-deborig.1.pod:28
 #, no-wrap
 msgid "OPTIONS"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:553
+#: ../dgit.1:595
 #, no-wrap
 msgid "B<-k>I<keyid>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:562
+#: ../dgit.1:604
 msgid ""
 "Use I<keyid> for signing the tag and the upload.  The default comes from the "
 "distro's B<keyid> config setting (see CONFIGURATION, below), or failing "
@@ -1092,63 +1161,63 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:562
+#: ../dgit.1:604
 #, no-wrap
 msgid "B<--no-sign>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:565
+#: ../dgit.1:607
 msgid "does not sign tags or uploads (meaningful only with push)."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:566
+#: ../dgit.1:608
 #, no-wrap
 msgid "B<-p>I<package>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:570
+#: ../dgit.1:612
 msgid "Specifies that we should process source package I<package>."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:574
+#: ../dgit.1:616
 msgid ""
 "For dgit fetch and dgit pull, uses this value rather than looking in debian/"
 "control or debian/changelog."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:579
+#: ../dgit.1:621
 msgid ""
 "For dgit rpush, specifies that the invoking host should be willing to sign "
 "only a .dsc or .changes file for the source package I<package>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:579
+#: ../dgit.1:621
 #, no-wrap
 msgid "B<--clean=git> | B<-wg>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:585
+#: ../dgit.1:627
 msgid ""
 "Use B<git clean -xdf> to clean the working tree, rather than running the "
 "package's rules clean target."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:588
+#: ../dgit.1:630
 msgid ""
 "This will delete all files which are not tracked by git.  (Including any "
 "files you forgot to git add.)"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:593
+#: ../dgit.1:635
 msgid ""
 "B<--clean=>I<...> options other than dpkg-source are useful when the "
 "package's clean target is troublesome, or to avoid needing the build-"
@@ -1156,7 +1225,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:600
+#: ../dgit.1:642
 msgid ""
 "dgit will only actually clean the tree if it needs to (because it needs to "
 "build the source package or binaries from your working tree).  Otherwise it "
@@ -1165,13 +1234,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:600
+#: ../dgit.1:642
 #, no-wrap
 msgid "B<--clean=git-ff> | B<-wgf>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:609
+#: ../dgit.1:651
 msgid ""
 "Use B<git clean -xdff> to clean the working tree.  Like git clean -xdf but "
 "it also removes any subdirectories containing different git trees (which "
@@ -1179,33 +1248,33 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:609
+#: ../dgit.1:651
 #, no-wrap
 msgid "B<--clean=git>[B<-ff>]B<,always> | B<-wga> | B<-wgfa>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:613
+#: ../dgit.1:655
 msgid ""
 "Like --clean=git, but always does the clean and not just a check, deleting "
 "any untracked un-ignored files."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:613
+#: ../dgit.1:655
 #, no-wrap
 msgid "B<--clean=check> | B<--clean=check,ignores> | B<-wc> | B<-wci>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:619
+#: ../dgit.1:661
 msgid ""
 "Merely check that the tree is clean (does not contain uncommitted files).  "
 "Avoids running rules clean, and can avoid needing the build-dependencies."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:630
+#: ../dgit.1:672
 msgid ""
 "With B<,ignores> or B<-wci>, untracked files covered by .gitignore are "
 "tolerated, so only files which show up as B<?> in git status (ie, ones you "
@@ -1213,13 +1282,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:630
+#: ../dgit.1:672
 #, no-wrap
 msgid "B<--clean=none> | B<-wn>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:638
+#: ../dgit.1:680
 msgid ""
 "Do not clean the tree, nor check that it is clean.  Avoids running rules "
 "clean, and can avoid needing the build-dependencies.  If there are files "
@@ -1228,13 +1297,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:638
+#: ../dgit.1:680
 #, no-wrap
 msgid "B<--clean=dpkg-source>[B<-d>] | B<-wd> | B<-wdd>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:643
+#: ../dgit.1:685
 msgid ""
 "Use dpkg-buildpackage to do the clean, so that the source package is cleaned "
 "by dpkg-source running the package's clean target.  --clean=dpkg-source is "
@@ -1242,12 +1311,12 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:647
+#: ../dgit.1:689
 msgid "Without the extra B<d>, requires the package's build dependencies."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:657
+#: ../dgit.1:699
 msgid ""
 "With B<...>-d or B<-wdd>, the build-dependencies are not checked (due to "
 "passing B<-d> to dpkg-buildpackage), which violates policy, but may work in "
@@ -1255,7 +1324,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:664
+#: ../dgit.1:706
 msgid ""
 "The rules clean target will only be run if it is needed: when dgit is going "
 "to build source or binary packages from your working tree, rather than from "
@@ -1264,7 +1333,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:674
+#: ../dgit.1:716
 msgid ""
 "In all cases, dgit will check that there are (after rules clean, if "
 "applicable) no untracked un-ignored files, in case these are files you "
@@ -1275,38 +1344,38 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:674
+#: ../dgit.1:716
 #, no-wrap
 msgid "B<--clean=dpkg-source>[B<-d>]B<,no-check> | B<-wdn> | B<-wddn>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:678
+#: ../dgit.1:720
 msgid ""
 "Like --clean=dpkg-source, but does not care about untracked un-ignored files."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:678
+#: ../dgit.1:720
 #, no-wrap
 msgid "B<--clean=dpkg-source>[B<-d>]B<,all-check> | B<-wda> | B<-wdda>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:683
+#: ../dgit.1:725
 msgid ""
 "Like --clean=dpkg-source, but fails even on ignored untracked files.  This "
 "could perhaps be used to detect bugs in your rules clean target."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:683
+#: ../dgit.1:725
 #, no-wrap
 msgid "B<-N> | B<--new>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:689
+#: ../dgit.1:731
 msgid ""
 "The package is, or may be, new in this suite.  Without this, dgit will "
 "refuse to push.  Needing --new is not unusual; for example, it is frequently "
@@ -1314,7 +1383,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:695
+#: ../dgit.1:737
 msgid ""
 "Note that dgit may be unable to access the git history for an entirely new "
 "package which has not been accepted by the archive.  So for an entirely new "
@@ -1322,13 +1391,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:695
+#: ../dgit.1:737
 #, no-wrap
 msgid "B<--include-dirty>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:703
+#: ../dgit.1:745
 msgid ""
 "Do not complain if the working tree does not match your git HEAD, and when "
 "building, include the changes from your working tree.  This can be useful "
@@ -1338,7 +1407,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:715
+#: ../dgit.1:757
 msgid ""
 "Note that this does B<not> prevent dgit from cleaning your tree, so if the "
 "changes in your working tree are in the form of untracked files, those might "
@@ -1349,31 +1418,31 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:715
+#: ../dgit.1:757
 #, no-wrap
 msgid "B<--ignore-dirty>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:718
+#: ../dgit.1:760
 msgid "Deprecated alias for --include-dirty."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:718
+#: ../dgit.1:760
 #, no-wrap
 msgid "B<--collab-non-dgit>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:725
+#: ../dgit.1:767
 msgid ""
 "Make B<dgit push>, behave more suitably for collaborating (using shared git "
 "history)  with git-using co-developers who aren't using dgit."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:731
+#: ../dgit.1:773
 msgid ""
 "With this option, dgit won't mind that the git history you're using isn't "
 "necessarily fast forward from the dgit view; instead, it will rely on the "
@@ -1381,7 +1450,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:740
+#: ../dgit.1:782
 msgid ""
 "And, the synthetic commits needed to make the dgit git history fast forward "
 "will appear only on the dgit git server, and local dgit suite branches, not "
@@ -1390,18 +1459,18 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:743
+#: ../dgit.1:785
 msgid "This is equivalent to B<--split-view=always --trust-changelog>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:743
+#: ../dgit.1:785
 #, no-wrap
 msgid "B<--trust-changelog> | B<--overwrite>=I<previous-version>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:754
+#: ../dgit.1:796
 msgid ""
 "Declare that your HEAD really does contain all the (wanted) changes from all "
 "versions listed in its changelog; or, all (wanted) changes from I<previous-"
@@ -1410,14 +1479,14 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:760
+#: ../dgit.1:802
 msgid ""
 "It is safer to specify B<--trust-changelog>, than B<--overwrite=>I<previous-"
 "version>, and usually the latter is not needed."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:767
+#: ../dgit.1:809
 msgid ""
 "B<--trust-changelog> is useful if you are the maintainer, and you have "
 "incorporated NMU changes into your own git workflow in a way that doesn't "
@@ -1427,14 +1496,14 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:773
+#: ../dgit.1:815
 msgid ""
 "It is also usually necessary the first time a package is pushed with dgit "
 "push to a particular suite.  See B<dgit-maint->I<*>B<(7)>."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:782
+#: ../dgit.1:824
 msgid ""
 "With B<--trust-changelog> dgit will check that the version in the archive is "
 "mentioned in your debian/changelog.  (This will avoid losing changes, unless "
@@ -1443,7 +1512,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:788
+#: ../dgit.1:830
 msgid ""
 "With B<--overwrite=>I<previous-version> that version ought to be the version "
 "currently in the archive, and it will be unconditionally overwritten, "
@@ -1451,7 +1520,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:794
+#: ../dgit.1:836
 msgid ""
 "These options will, if necessary, make a pseudo-merge (that is, something "
 "that looks like the result of git merge -s ours) to stitch the archive's "
@@ -1460,7 +1529,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:801
+#: ../dgit.1:843
 msgid ""
 "(In quilt mode B<gbp>, B<dpm>, B<unpatched> or B<baredebian>*, implying a "
 "split between the dgit view and the maintainer view, the pseudo-merge will "
@@ -1469,25 +1538,25 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:805
+#: ../dgit.1:847
 msgid ""
 "B<--overwrite> without a version number is an obsolete way of specifying B<--"
 "trust-changelog>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:805
+#: ../dgit.1:847
 #, no-wrap
 msgid "B<--delayed>=I<days>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:808
+#: ../dgit.1:850
 msgid "Upload to a DELAYED queue."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:818
+#: ../dgit.1:860
 msgid ""
 "B<WARNING:> If the maintainer responds by cancelling your upload from the "
 "queue, and does not make an upload of their own, this will not rewind the "
@@ -1497,27 +1566,27 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:823
+#: ../dgit.1:865
 msgid ""
 "If this situation arises, someone should make a suitable dgit push to update "
 "the contents of dgit-repos to a version without the controversial changes."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:823
+#: ../dgit.1:865
 #, no-wrap
 msgid "B<--no-chase-dsc-distro>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:829
+#: ../dgit.1:871
 msgid ""
 "Tells dgit not to look online for additional git repositories containing "
 "information about a particular .dsc being imported.  Chasing is the default."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:839
+#: ../dgit.1:881
 msgid ""
 "For most operations (such as fetch and pull), disabling chasing means dgit "
 "will access only the git server for the distro you are directly working "
@@ -1526,7 +1595,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:847
+#: ../dgit.1:889
 msgid ""
 "Disabling chasing can be hazardous: if the .dsc names a git commit which has "
 "been rewritten by those in charge of the distro, this option may prevent "
@@ -1535,13 +1604,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:847
+#: ../dgit.1:889
 #, no-wrap
 msgid "B<--save-dgit-view=>I<branch>|I<ref>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:857
+#: ../dgit.1:899
 msgid ""
 "Specifies that when split view is in operation, and dgit calculates (or "
 "looks up in its cache)  a dgit view corresponding to your HEAD, the dgit "
@@ -1550,7 +1619,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:861
+#: ../dgit.1:903
 msgid ""
 "This option is effective only with the following operations: quilt-fixup; "
 "push; all builds.  And it is only effective when split view is actually in "
@@ -1558,25 +1627,25 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:865
+#: ../dgit.1:907
 msgid ""
 "If ref does not start with refs/ it is taken to be a branch - i.e. refs/"
 "heads/ is prepended."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:869
+#: ../dgit.1:911
 msgid "B<--dgit-view-save> is a deprecated alias for --save-dgit-view."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:869
+#: ../dgit.1:911
 #, no-wrap
 msgid "B<--deliberately->I<something>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:883
+#: ../dgit.1:925
 msgid ""
 "Declare that you are deliberately doing I<something>.  This can be used to "
 "override safety catches, including safety catches which relate to distro-"
@@ -1588,13 +1657,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:883
+#: ../dgit.1:925
 #, no-wrap
 msgid "B<--deliberately-not-fast-forward>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:889
+#: ../dgit.1:931
 msgid ""
 "Declare that you are deliberately rewriting history.  This could be because "
 "your branch is not fast forward from the dgit server history, or not fast "
@@ -1602,7 +1671,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:895
+#: ../dgit.1:937
 msgid ""
 "When pushing to Debian, use this only when you are making a renewed upload "
 "of an entirely new source package whose previous version was not accepted "
@@ -1611,7 +1680,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:906
+#: ../dgit.1:948
 msgid ""
 "When split view is in operation, this also prevents the construction by dgit "
 "of a pseudomerge to make the dgit view fast forwarding.  Normally only one "
@@ -1621,13 +1690,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:906
+#: ../dgit.1:948
 #, no-wrap
 msgid "B<--deliberately-include-questionable-history>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:915
+#: ../dgit.1:957
 msgid ""
 "Declare that you are deliberately including, in the git history of your "
 "current push, history which contains a previously-submitted version of this "
@@ -1639,13 +1708,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:915
+#: ../dgit.1:957
 #, no-wrap
 msgid "B<--deliberately-fresh-repo>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:920
+#: ../dgit.1:962
 msgid ""
 "Declare that you are deliberately rewriting history and want to throw away "
 "the existing repo.  Not relevant when pushing to Debian, as the Debian "
@@ -1653,13 +1722,13 @@ msgid ""
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:920 ../git-debpush.1.pod:114
+#: ../dgit.1:962 ../git-debpush.1.pod:138
 #, no-wrap
 msgid "B<--quilt=linear>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:927
+#: ../dgit.1:969
 msgid ""
 "With format `3.0 (quilt)', insist on a linear patch stack: one new patch for "
 "each relevant commit.  If such a stack cannot be generated, fail.  This is "
@@ -1667,20 +1736,20 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:932
+#: ../dgit.1:974
 msgid ""
 "HEAD should be a series of plain commits (not touching debian/patches/), and "
 "pseudomerges, with as ancestor a patches-applied branch."
 msgstr ""
 
-#. type: TP
-#: ../dgit.1:932
+#. type: =item
+#: ../dgit.1:974 ../git-debpush.1.pod:150
 #, no-wrap
 msgid "B<--quilt=try-linear>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:942
+#: ../dgit.1:984
 msgid ""
 "With format `3.0 (quilt)', prefer a linear patch stack (as with --"
 "quilt=linear)  but if that doesn't seem possible, try to generate a single "
@@ -1689,13 +1758,13 @@ msgid ""
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:942 ../git-debpush.1.pod:120
+#: ../dgit.1:984 ../git-debpush.1.pod:144
 #, no-wrap
 msgid "B<--quilt=smash>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:948
+#: ../dgit.1:990
 msgid ""
 "With format `3.0 (quilt)', assume patches-applied (as obtained from dgit "
 "clone) and generate a single additional patch for all the changes made in "
@@ -1703,7 +1772,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:954
+#: ../dgit.1:996
 msgid ""
 "(If HEAD has any in-tree patches already, they must apply cleanly.  This "
 "will be the case for any trees produced by dgit fetch or clone; if you do "
@@ -1712,13 +1781,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:954
+#: ../dgit.1:996
 #, no-wrap
 msgid "B<--quilt=single>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:961
+#: ../dgit.1:1003
 msgid ""
 "With format `3.0 (quilt)', assume patches-applied (as obtained from dgit "
 "clone), delete all the existing patches, and then generate a single patch "
@@ -1727,7 +1796,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:970
+#: ../dgit.1:1012
 msgid ""
 "Use this instead of the B<single-debian-patch> dpkg-source format option.  "
 "That dpkg-source option cannot handle certain changes to the tree that dpkg-"
@@ -1737,13 +1806,13 @@ msgid ""
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:970 ../git-debpush.1.pod:131
+#: ../dgit.1:1012 ../git-debpush.1.pod:155
 #, no-wrap
 msgid "B<--quilt=nofix>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:980
+#: ../dgit.1:1022
 msgid ""
 "With format `3.0 (quilt)', assume patches-applied (as obtained from dgit "
 "clone), and check that the patch metadata is up to date.  If it isn't, fail; "
@@ -1753,13 +1822,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:980
+#: ../dgit.1:1022
 #, no-wrap
 msgid "B<--quilt=nocheck> | B<--no-quilt-fixup>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:987
+#: ../dgit.1:1029
 msgid ""
 "With format `3.0 (quilt)', assume that the tree is patches-applied (as "
 "obtained from dgit clone), and I<assume> that the patch metadata is up to "
@@ -1768,27 +1837,27 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:987
+#: ../dgit.1:1029
 #, no-wrap
 msgid "B<-->[B<quilt=>]B<gbp> | B<-->[B<quilt=>]B<dpm> | B<--quilt=unapplied> | B<-->[B<quilt=>]B<baredebian>[B<+git>|B<+tarball>]"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:994
+#: ../dgit.1:1036
 msgid ""
 "Tell dgit that you are using a nearly-dgit-compatible git branch, aka a "
 "B<maintainer view>, and do not want your branch changed by dgit."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:998
+#: ../dgit.1:1040
 msgid ""
 "These quilt modes are known as B<splitting quilt modes>.  See --split-view, "
 "below."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1006
+#: ../dgit.1:1048
 msgid ""
 "B<--gbp> (short for B<--quilt=gbp>)  is for use with git-buildpackage.  Your "
 "HEAD is expected to be a patches-unapplied git branch, except that it might "
@@ -1797,7 +1866,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1014
+#: ../dgit.1:1056
 msgid ""
 "B<--dpm> (short for B<--quilt=dpm>)  is for use with git-dpm.  Your HEAD is "
 "expected to be a patches-applied git branch, except that it might contain "
@@ -1805,7 +1874,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1019
+#: ../dgit.1:1061
 msgid ""
 "B<--quilt=unapplied> specifies that your HEAD is a patches-unapplied git "
 "branch (and that any changes to upstream .gitignore files are represented as "
@@ -1813,7 +1882,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1033
+#: ../dgit.1:1075
 msgid ""
 "B<--quilt=baredebian> (or its alias B<--quilt=baredebian+git>)  specifies "
 "that your HEAD contains only a debian/ directory, with any changes to "
@@ -1825,7 +1894,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1044
+#: ../dgit.1:1086
 msgid ""
 "B<--quilt=baredebian+tarball> is like --quilt=baredebian, but is used when "
 "there is no appropriate upstream git history.  To construct the dgit view, "
@@ -1836,7 +1905,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1062
+#: ../dgit.1:1104
 msgid ""
 "With --quilt=gbp|dpm|unapplied|baredebian*, dgit push (or precursors like "
 "quilt-fixup and build) will automatically generate a conversion of your git "
@@ -1850,7 +1919,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1071
+#: ../dgit.1:1113
 msgid ""
 "B<If you have a branch like this it is essential to specify the appropriate "
 "--quilt= option!> This is because it is not always possible to tell: a "
@@ -1862,13 +1931,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1071
+#: ../dgit.1:1113
 #, no-wrap
 msgid "B<-d>I<distro> | B<--distro=>I<distro>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1080
+#: ../dgit.1:1122
 msgid ""
 "Specifies that the suite to be operated on is part of distro I<distro>.  "
 "This overrides the default value found from the git config option B<dgit-"
@@ -1878,7 +1947,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1086
+#: ../dgit.1:1128
 msgid ""
 "If your suite is part of a distro that dgit already knows about, you can use "
 "this option to make dgit work even if your dgit doesn't know about the "
@@ -1887,7 +1956,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1091
+#: ../dgit.1:1133
 msgid ""
 "To define a new distro it is necessary to define methods and URLs for "
 "fetching (and, for dgit push, altering) a variety of information both in the "
@@ -1895,20 +1964,20 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1091
+#: ../dgit.1:1133
 #, no-wrap
 msgid "B<--split-view=auto>|B<always>|B<never>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1096
+#: ../dgit.1:1138
 msgid ""
 "Controls whether dgit operates a split view, separating your own branch (as "
 "Debian maintainer)  from that shown to users of dgit clone and dgit fetch."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1104
+#: ../dgit.1:1146
 msgid ""
 "When split view is in operation dgit will not make or merge any commits onto "
 "your own branch.  Specifically, only the dgit view will contain dgit's "
@@ -1918,7 +1987,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1110
+#: ../dgit.1:1152
 msgid ""
 "B<auto> is the default, and splits the view only when needed: i.e., when you "
 "are working with a `3.0 (quilt)' source package and a splitting quilt mode: "
@@ -1926,18 +1995,18 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1113
+#: ../dgit.1:1155
 msgid ""
 "B<always> splits the view regardless of the source format and the quilt mode."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1116
+#: ../dgit.1:1158
 msgid "B<never> will cause dgit to fail if split view is needed."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1124
+#: ../dgit.1:1166
 msgid ""
 "When split view is in operation, the dgit view is visible in your local git "
 "clone, but only in refs specific to dgit: notably B<remotes/dgit/dgit/"
@@ -1945,20 +2014,20 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1127
+#: ../dgit.1:1169
 msgid ""
 "Note that split view does not affect dgit fetch, and is not compatible with "
 "dgit pull."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1127
+#: ../dgit.1:1169
 #, no-wrap
 msgid "B<-C>I<changesfile>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1132
+#: ../dgit.1:1174
 msgid ""
 "Specifies the .changes file which is to be uploaded.  By default dgit push "
 "looks for a single .changes file in the parent directory whose filename "
@@ -1966,7 +2035,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1141
+#: ../dgit.1:1183
 msgid ""
 "If the specified I<changesfile> pathname contains slashes, the directory "
 "part is also used as the value for B<--build-products-dir>; otherwise, the "
@@ -1974,13 +2043,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1141
+#: ../dgit.1:1183
 #, no-wrap
 msgid "B<--upstream-commitish=>I<upstream>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1149
+#: ../dgit.1:1191
 msgid ""
 "For use with --quilt=baredebian only.  Specifies the commit containing the "
 "upstream source.  This commit must be identical to your .orig tarball.  The "
@@ -1989,13 +2058,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1149
+#: ../dgit.1:1191
 #, no-wrap
 msgid "B<--rm-old-changes>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1161
+#: ../dgit.1:1203
 msgid ""
 "When doing a build, delete any changes files matching "
 "I<package>B<_>I<version>B<_*.changes> before starting.  This ensures that "
@@ -2007,32 +2076,32 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1164
+#: ../dgit.1:1206
 msgid ""
 "Note that B<dgit push-source> will always find the right .changes, "
 "regardless of this option."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1164
+#: ../dgit.1:1206
 #, no-wrap
 msgid "B<--build-products-dir=>I<directory>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1168
+#: ../dgit.1:1210
 msgid ""
 "Specifies where to find and create tarballs, binary packages, source "
 "packages, .changes files, and so on."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1171
+#: ../dgit.1:1213
 msgid "By default, dgit uses the parent directory (B<..>)."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1180
+#: ../dgit.1:1222
 msgid ""
 "Changing this setting may necessitate moving .orig tarballs to the new "
 "directory, so it is probably best to use the B<dgit.default.build-products-"
@@ -2041,95 +2110,95 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1180
+#: ../dgit.1:1222
 #, no-wrap
 msgid "B<--no-rm-on-error>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1183
+#: ../dgit.1:1225
 msgid "Do not delete the destination directory if clone fails."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1183
+#: ../dgit.1:1225
 #, no-wrap
 msgid "B<--dep14tag> | B<--no-dep14tag>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1189
+#: ../dgit.1:1231
 msgid ""
 "Whether to push a DEP-14 tag (eg B<debian/>I<version>)  as well as a dgit "
 "tag (eg B<archive/debian/>I<version>)."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1192
+#: ../dgit.1:1234
 msgid ""
 "Pushing a DEP-14 tag is the default.  In split view mode, a DEP-14 tag is "
 "always pushed, regardless of this option."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1195
+#: ../dgit.1:1237
 msgid ""
 "B<--always-dep14tag> is an obsolete alias for --dep14tag, retained for "
 "compatibility."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1195
+#: ../dgit.1:1237
 #, no-wrap
 msgid "B<--dep14tag-reuse=must>|B<if-exists>|B<replace-unsuitable>|B<replace>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1199
+#: ../dgit.1:1241
 msgid ""
 "Whether to use an existing DEP-14 tag, or make a fresh one.  Ignored if no "
 "DEP-14 tag is to be pushed."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1200
+#: ../dgit.1:1242
 #, no-wrap
 msgid "B<--dep14tag-reuse=must>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1204
+#: ../dgit.1:1246
 msgid ""
 "Push an existing tag DEP-14 tag.  If there is no existing tag, or the "
 "existing tag is unsuitable, fail."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1204
+#: ../dgit.1:1246
 #, no-wrap
 msgid "B<--dep14tag-reuse=if-exists>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1209
+#: ../dgit.1:1251
 msgid ""
 "Push an existing tag DEP-14 tag, if it exists.  If there is no existing tag, "
 "make one.  If there is an existing tag but it is unsuitable, fail."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1211
+#: ../dgit.1:1253
 msgid "This is the default."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1211
+#: ../dgit.1:1253
 #, no-wrap
 msgid "B<--dep14tag-reuse=replace-unsuitable>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1216
+#: ../dgit.1:1258
 msgid ""
 "Push an existing tag DEP-14 tag, if it exists and is suitable.  If there is "
 "no existing tag, or it's unsuitable, make a fresh tag, overwriting the "
@@ -2137,44 +2206,44 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1216
+#: ../dgit.1:1258
 #, no-wrap
 msgid "B<--dep14tag-reuse=replace>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1220
+#: ../dgit.1:1262
 msgid ""
 "Always make a fresh DEP-14 tag, overwriting the corresponding git ref, and "
 "thus deleting any old tag."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1222
+#: ../dgit.1:1264
 msgid "This was the default in dgit 11 and earlier."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1223
+#: ../dgit.1:1265
 #, no-wrap
 msgid "B<--dep14tag-verify> | B<--no-dep14tag-verify>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1227
+#: ../dgit.1:1269
 msgid ""
 "Whether to verify an existing DEP-14 tag, as part of the suitability check."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1230
+#: ../dgit.1:1272
 msgid ""
 "The default is to consider an unsigned tag suitable (and not verify a signed "
 "one)."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1236
+#: ../dgit.1:1278
 msgid ""
 "Note that any DEP-14 tag being pushed will be, effectively, countersigned: "
 "the hash of the DEP-14 tag object (if there is one)  is part of the metadata "
@@ -2182,26 +2251,26 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1236
+#: ../dgit.1:1278
 #, no-wrap
 msgid "B<-D>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1240
+#: ../dgit.1:1282
 msgid ""
 "Prints debugging information to stderr.  Repeating the option produces more "
 "output (currently, up to -DDDD is meaningfully different)."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1240
+#: ../dgit.1:1282
 #, no-wrap
 msgid "B<--keep-playground>|B<--no--keep-playground>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1249
+#: ../dgit.1:1291
 msgid ""
 "Controls whether to retain the \"playground\" working directory B<.git/dgit/"
 "unpack> even on success, for examination and debugging.  The default is B<--"
@@ -2209,26 +2278,26 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1249
+#: ../dgit.1:1291
 #, no-wrap
 msgid "B<-c>I<name>B<=>I<value>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1253
+#: ../dgit.1:1295
 msgid ""
 "Specifies a git configuration option, to be used for this run.  dgit itself "
 "is also controlled by git configuration options."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1253
+#: ../dgit.1:1295
 #, no-wrap
 msgid "B<-v>I<version>|B<_> | B<--since-version=>versionI<|>B<_>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1262
+#: ../dgit.1:1304
 msgid ""
 "Specifies the B<-v>I<version> option to pass to dpkg-genchanges, during "
 "builds.  Changes (from debian/changelog) since this version will be included "
@@ -2238,7 +2307,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1268
+#: ../dgit.1:1310
 msgid ""
 "Specifying B<_> inhibits this, so that no -v option will be passed to dpkg-"
 "genchanges (and as a result, only the last stanza from debian/changelog will "
@@ -2246,30 +2315,30 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1268
+#: ../dgit.1:1310
 #, no-wrap
 msgid "B<-m>I<maintaineraddress>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1271
+#: ../dgit.1:1313
 msgid "Passed to dpkg-genchanges (eventually)."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1271
+#: ../dgit.1:1313
 #, no-wrap
 msgid "B<--ch:>I<option>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1275
+#: ../dgit.1:1317
 msgid ""
 "Specifies a single additional option to pass, eventually, to dpkg-genchanges."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1282
+#: ../dgit.1:1324
 msgid ""
 "Options which are safe to pass include B<-C> (and also B<-si -sa -sd> "
 "although these should never be necessary with Debian since dgit "
@@ -2277,18 +2346,18 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1284
+#: ../dgit.1:1326
 msgid "For other options the caveat below applies."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1284
+#: ../dgit.1:1326
 #, no-wrap
 msgid "B<--curl:>I<option> | B<--dput:>I<option> |..."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1306
+#: ../dgit.1:1348
 msgid ""
 "Specifies a single additional option to pass to B<curl>, B<dput>, "
 "B<debsign>, B<dpkg-source>, B<dpkg-buildpackage>, B<dpkg-genchanges>, "
@@ -2298,7 +2367,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1314
+#: ../dgit.1:1356
 msgid ""
 "Use of this ability should not normally be necessary.  It is provided for "
 "working around bugs, or other unusual situations.  If you use these options, "
@@ -2307,7 +2376,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1319
+#: ../dgit.1:1361
 msgid ""
 "For dpkg-buildpackage, dpkg-genchanges, mergechanges and sbuild, the option "
 "applies only when the program is invoked directly by dgit.  Usually, for "
@@ -2315,7 +2384,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1323
+#: ../dgit.1:1365
 msgid ""
 "Specifying --git is not effective for some lower-level read-only git "
 "operations performed by dgit, and also not when git is invoked by another "
@@ -2323,39 +2392,39 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1325
+#: ../dgit.1:1367
 msgid "See notes below regarding ssh and dgit."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1333
+#: ../dgit.1:1375
 msgid ""
 "NB that --gpg:option is not supported (because debsign does not have that "
 "facility).  But see B<-k> and the B<keyid> distro config setting."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1333
+#: ../dgit.1:1375
 #, no-wrap
 msgid "B<--curl!:>I<option> | B<--dput!:>I<option> |..."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1339
+#: ../dgit.1:1381
 msgid ""
 "Specifies an option to remove from the command line for a program called by "
 "dgit, as for B<-->I<program>B<:>I<option> (and the same caveats apply)."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1344
+#: ../dgit.1:1386
 msgid ""
 "Any options or arguments exactly identical to I<option> are removed.  (It is "
 "not an error if there were none.)"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1351
+#: ../dgit.1:1393
 msgid ""
 "This can only be used to delete options which are always passed by default "
 "by dgit, or to undo a previous B<-->I<program>B<:>I<option>.  It cannot be "
@@ -2363,13 +2432,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1351
+#: ../dgit.1:1393
 #, no-wrap
 msgid "B<--curl=>I<program> | B<--dput=>I<program> |..."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1376
+#: ../dgit.1:1418
 msgid ""
 "Specifies alternative programs to use instead of B<curl>, B<dput>, "
 "B<debsign>, B<dpkg-source>, B<dpkg-buildpackage>, B<dpkg-genbuildinfo>, "
@@ -2379,7 +2448,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1386
+#: ../dgit.1:1428
 msgid ""
 "For B<dpkg-buildpackage>, B<dpkg-genbuildinfo>, B<dpkg-genchanges>, B<dpkg-"
 "query>, B<mergechanges> and B<sbuild>, this applies only when the program is "
@@ -2387,7 +2456,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1393
+#: ../dgit.1:1435
 msgid ""
 "For B<dgit>, specifies the command to run on the remote host when dgit rpush "
 "needs to invoke a remote copy of itself.  (dgit also reinvokes itself as the "
@@ -2396,7 +2465,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1404
+#: ../dgit.1:1446
 msgid ""
 "B<gbp-build>'s value is used instead of gbp build or git-buildpackage.  (The "
 "default is the latter unless the former exists on PATH.)  B<gbp-pq>'s value "
@@ -2406,7 +2475,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1412
+#: ../dgit.1:1454
 msgid ""
 "For pbuilder and cowbuilder, the defaults are B<sudo -E pbuilder> and B<sudo "
 "-E cowbuilder> respectively.  Like with gbp-build and gbp pq, the specified "
@@ -2414,7 +2483,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1429
+#: ../dgit.1:1471
 msgid ""
 "For B<ssh>, the default value is taken from the B<DGIT_SSH> or B<GIT_SSH> "
 "environment variables, if set (see below).  And, for ssh, when accessing the "
@@ -2426,13 +2495,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1429
+#: ../dgit.1:1471
 #, no-wrap
 msgid "B<--existing-package=>I<package>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1439
+#: ../dgit.1:1481
 msgid ""
 "dgit push needs to canonicalise the suite name.  Sometimes, dgit lacks a way "
 "to ask the archive to do this without knowing the name of an existing "
@@ -2443,19 +2512,19 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1439
+#: ../dgit.1:1481
 #, no-wrap
 msgid "B<-h>|B<--help>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1442
+#: ../dgit.1:1484
 #, no-wrap
 msgid "B<--initiator-tempdir=>I<directory>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1451
+#: ../dgit.1:1493
 msgid ""
 "dgit rpush uses a temporary directory on the invoking (signing) host.  This "
 "option causes dgit to use I<directory> instead.  Furthermore, the specified "
@@ -2465,13 +2534,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1451
+#: ../dgit.1:1493
 #, no-wrap
 msgid "B<--dry-run> | B<-n>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1458
+#: ../dgit.1:1500
 msgid ""
 "Go through the motions, fetching all information needed, but do not actually "
 "update the output(s).  For push, dgit does the required checks and leaves "
@@ -2480,27 +2549,27 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1461
+#: ../dgit.1:1503
 msgid ""
 "This is not a very good simulation.  It can easily go wrong in ways that a "
 "for-real push wouldn't."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1461
+#: ../dgit.1:1503
 #, no-wrap
 msgid "B<--damp-run> | B<-L>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1466
+#: ../dgit.1:1508
 msgid ""
 "Go through many more of the motions: do everything that doesn't involve "
 "either signing things, or making changes on the public servers."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1471
+#: ../dgit.1:1513
 msgid ""
 "Using this will make unsigned tags, and possibly other local changes, that "
 "will get in the way of a for-real push.  So be prepared to burn the version "
@@ -2508,13 +2577,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1471
+#: ../dgit.1:1513
 #, no-wrap
 msgid "B<--force->I<something>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1479
+#: ../dgit.1:1521
 msgid ""
 "Instructs dgit to try to proceed despite detecting what it thinks is going "
 "to be a fatal problem.  B<This is probably not going to work.> These options "
@@ -2523,13 +2592,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1479
+#: ../dgit.1:1521
 #, no-wrap
 msgid "B<--force-import-dsc-with-dgit-field>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1486
+#: ../dgit.1:1528
 msgid ""
 "Tell dgit import-dsc to treat a .dsc with a Dgit field like one without it.  "
 "The result is a fresh import, discarding the git history that the person who "
@@ -2537,13 +2606,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1486
+#: ../dgit.1:1528
 #, no-wrap
 msgid "B<--force-reusing-version>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1493
+#: ../dgit.1:1535
 msgid ""
 "Carry on even though this involves reusing a version number of a previous "
 "push or upload.  It is normally best to give different versions different "
@@ -2552,26 +2621,26 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1493
+#: ../dgit.1:1535
 #, no-wrap
 msgid "B<--force-uploading-binaries>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1498
+#: ../dgit.1:1540
 msgid ""
 "Carry on and upload binaries even though dgit thinks your distro does not "
 "permit that."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1498
+#: ../dgit.1:1540
 #, no-wrap
 msgid "B<--force-uploading-source-only>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1504
+#: ../dgit.1:1546
 msgid ""
 "Carry on and do a source-only upload, without any binaries, even though dgit "
 "thinks your distro does not permit that, or does not permit that in this "
@@ -2579,13 +2648,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1504
+#: ../dgit.1:1546
 #, no-wrap
 msgid "B<--force-unrepresentable>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1511
+#: ../dgit.1:1553
 msgid ""
 "Carry on even if dgit thinks that your git tree contains changes (relative "
 "to your .orig tarballs)  which dpkg-source is not able to represent.  Your "
@@ -2593,65 +2662,65 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1511
+#: ../dgit.1:1553
 #, no-wrap
 msgid "B<--force-changes-origs-exactly>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1516
+#: ../dgit.1:1558
 msgid ""
 "Use the set of .origs specified in your .changes, exactly, without regard to "
 "what is in the archive already.  The archive may well reject your upload."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1516
+#: ../dgit.1:1558
 #, no-wrap
 msgid "B<--force-unsupported-source-format>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1520
+#: ../dgit.1:1562
 msgid ""
 "Carry on despite dgit not understanding your source package format.  dgit "
 "will probably mishandle it."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1520
+#: ../dgit.1:1562
 #, no-wrap
 msgid "B<--force-dsc-changes-mismatch>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1524
+#: ../dgit.1:1566
 msgid ""
 "Do not check whether .dsc and .changes match.  The archive will probably "
 "reject your upload."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1524
+#: ../dgit.1:1566
 #, no-wrap
 msgid "B<--force-import-gitapply-absurd> | B<--force-import-gitapply-no-absurd>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1530
+#: ../dgit.1:1572
 msgid ""
 "Force on or off the use of the absurd git-apply emulation when running gbp "
 "pq import when importing a package from a .dsc.  See Debian bug #841867."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1530
+#: ../dgit.1:1572
 #, no-wrap
 msgid "B<--force-push-tainted>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1540
+#: ../dgit.1:1582
 msgid ""
 "Go ahead and try to push even tainted git objects hat the server says it is "
 "going to reject, but without declaring any --deliberately.  This option is "
@@ -2661,13 +2730,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1540
+#: ../dgit.1:1582
 #, no-wrap
 msgid "B<--for-push>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1546
+#: ../dgit.1:1588
 msgid ""
 "Override the dgit-distro.distro.readonly configuration setting, to specify "
 "that we have read/write access and should use the corresponding git and "
@@ -2675,52 +2744,52 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1546
+#: ../dgit.1:1588
 #, no-wrap
 msgid "B<--expect-suite>=I<suite>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1551
+#: ../dgit.1:1593
 msgid ""
 "Specifies that the dgit rpush invoking host should be willing to sign only "
 "a .dsc or .changes file with target suite I<suite>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1551
+#: ../dgit.1:1593
 #, no-wrap
 msgid "B<--expect-version>=I<version>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1556
+#: ../dgit.1:1598
 msgid ""
 "Specifies that the dgit rpush invoking host should be willing to sign only "
 "a .dsc or .changes file with version I<version>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1556
+#: ../dgit.1:1598
 #, no-wrap
-msgid "B<--tag2upload-builder-mode>, B<--tag2upload-upstream=>I<TAG>, B<--tag2upload-upstream-commit=>I<COMMIT>"
+msgid "B<--tag2upload-builder-mode>, B<--t2u->I<...>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1562
+#: ../dgit.1:1604
 msgid ""
 "These options activate configuration and behavioural changes needed when the "
 "tag2upload robot invokes dgit.  They are not intended for users."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1562
+#: ../dgit.1:1604
 #, no-wrap
 msgid "B<--allow-unrelated-histories>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1569
+#: ../dgit.1:1611
 msgid ""
 "Pass --allow-unrelated-histories to git merge command when running dgit "
 "pull.  This makes dgit pull easier to use when the main repository has never "
@@ -2728,18 +2797,18 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1569
+#: ../dgit.1:1611
 #, no-wrap
 msgid "B<--dsc-control-add=>I<FIELD>B<=>I<VALUE>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1572
+#: ../dgit.1:1614
 msgid "Add an additional control file field to the .dsc."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1579
+#: ../dgit.1:1621
 msgid ""
 "This is similar to using B<--dpkg-source:-D>I<FIELD>B<=>I<VALUE> except that "
 "(i) you can only add an additional field, not override a value; and (ii) for "
@@ -2748,24 +2817,139 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1579
+#: ../dgit.1:1621
 #, no-wrap
 msgid "B<--ch-control-add=>I<FIELD>B<=>I<VALUE>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1582
+#: ../dgit.1:1624
 msgid "Like B<--dsc-control-add> but for adding fields to the .changes file."
 msgstr ""
 
+#. type: SH
+#: ../dgit.1:1624
+#, no-wrap
+msgid "EXIT STATUS"
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1625
+#, no-wrap
+msgid "0"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1628
+msgid "Success."
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1628
+#, no-wrap
+msgid "3"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1634
+msgid ""
+"With B<dgit download-unfetched-origs>, the relevant origs were identified, "
+"but some of them couldn't be downloaded."
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1634
+#, no-wrap
+msgid "4"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1637
+msgid "Source package does not exist in the requested suite."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1641
+msgid ""
+"With B<dgit download-unfetched-origs>, no relevant origs exist in the "
+"archive."
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1641
+#, no-wrap
+msgid "5"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1648
+msgid ""
+"With B<dgit download-unfetched-origs>, the selection of origs in the archive "
+"is confusing: multiple files exist (for the same component), so we cannot "
+"uniquely identify which to use."
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1648
+#, no-wrap
+msgid "6"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1652
+msgid ""
+"Discrepancy between (generated) source package and git information.  See "
+"B<dgit>(7)."
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1657
+msgid ""
+"When B<dgit build-source> exits with status 6, the source package *has* been "
+"built; it just might not be what was intended."
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1657
+#, no-wrap
+msgid "8"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1660
+msgid "Bad usage."
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1660
+#, no-wrap
+msgid "12"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1663
+msgid "Invalid configuration."
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1663
+#, no-wrap
+msgid "Other"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1666
+msgid "Catastrophic failure."
+msgstr ""
+
 #. type: =head1
-#: ../dgit.1:1582 ../dgit-downstream-dsc.7.pod:150
+#: ../dgit.1:1666 ../dgit-downstream-dsc.7.pod:150
 #, no-wrap
 msgid "CONFIGURATION"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1588
+#: ../dgit.1:1672
 msgid ""
 "dgit can be configured via the git config system.  You may set keys with git-"
 "config (either in system-global or per-tree configuration), or provide B<-"
@@ -2773,31 +2957,31 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1590
+#: ../dgit.1:1674
 msgid "Settings likely to be useful for an end user include:"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1590
+#: ../dgit.1:1674
 #, no-wrap
 msgid "B<dgit.default.build-products-dir>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1596
+#: ../dgit.1:1680
 msgid ""
 "Specifies where to find the built files to be uploaded, when --build-"
 "products-dir is not specified.  The default is the parent directory (B<..>)."
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:1596 ../dgit-downstream-dsc.7.pod:286
+#: ../dgit.1:1680 ../dgit-downstream-dsc.7.pod:286
 #, no-wrap
 msgid "B<dgit-suite.>I<suite>B<.distro> I<distro>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1601
+#: ../dgit.1:1685
 msgid ""
 "Specifies the distro for a suite.  dgit keys off the suite name (which "
 "appears in changelogs etc.), and uses that to determine the distro which is "
@@ -2805,73 +2989,88 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1604
+#: ../dgit.1:1688
 msgid "I<suite> may be a glob pattern."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1604
+#: ../dgit.1:1688
 #, no-wrap
 msgid "B<dgit.default.distro>I< distro>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1607
+#: ../dgit.1:1691
 msgid "The default distro for an unknown suite."
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1611
+#: ../dgit.1:1695
 msgid ""
 "This is only used if no B</usr/share/distro-info/>I<somedistro>B<.csv> "
 "mentions the specified suite."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1611
+#: ../dgit.1:1695
 #, no-wrap
 msgid "B<dgit.default.default-suite>I< suite>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1614
+#: ../dgit.1:1698
 msgid "The default suite (eg for clone)."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1614
+#: ../dgit.1:1698
 #, no-wrap
 msgid "B<dgit.default.>*"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1619
+#: ../dgit.1:1703
 msgid ""
 "for each B<dgit-distro.>I<distro>B<.>*, the default value used if there is "
 "no distro-specific setting."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1619
+#: ../dgit.1:1703
+#, no-wrap
+msgid "B<dgit-distro.>I<distro>B<.build-source-check-correspondence>"
+msgstr ""
+
+#. type: Plain text
+#: ../dgit.1:1713
+msgid ""
+"Whether B<dgit build-source> should check that the resulting source package "
+"properly corresponds to the git HEAD.  True by default.  (Correspondence "
+"checking cannot be disabled for B<dgit push!>, since that would lead to the "
+"publication of broken outputs.)"
+msgstr ""
+
+#. type: TP
+#: ../dgit.1:1713
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.clean-mode>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1623
+#: ../dgit.1:1717
 msgid ""
 "One of the values for the command line --clean= option; used if --clean is "
 "not specified."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1623
+#: ../dgit.1:1717
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.clean-mode-newer>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1629
+#: ../dgit.1:1723
 msgid ""
 "Like .clean-mode, but ignored if the value is unknown to this version of "
 "dgit.  Setting both .clean-mode and .clean-mode-newer is useful to provide a "
@@ -2879,45 +3078,45 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1629
+#: ../dgit.1:1723
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.quilt-mode>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1633
+#: ../dgit.1:1727
 msgid ""
 "One of the values for the command line --quilt= option; used if --quilt is "
 "not specified."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1633
+#: ../dgit.1:1727
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.split-view>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1635
+#: ../dgit.1:1729
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.rm-old-changes>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1639
+#: ../dgit.1:1733
 msgid ""
 "Boolean, used if neither --rm-old-changes nor --no-rm-old-changes is "
 "specified.  The default is not to remove."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1639
+#: ../dgit.1:1733
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.readonly> B<auto>|B<a> | B<true>|B<t>|B<y>|B<1> | B<false>|B<f>|B<n>|B<0>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1646
+#: ../dgit.1:1740
 msgid ""
 "Whether you have push access to the distro.  For Debian, it is OK to use "
 "auto, which uses readonly mode if you are not pushing right now; but, "
@@ -2926,52 +3125,52 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1646
+#: ../dgit.1:1740
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.keyid>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1650
+#: ../dgit.1:1744
 msgid "See also B<-k>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1650
+#: ../dgit.1:1744
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.mirror>I< url>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1652
+#: ../dgit.1:1746
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.username>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1655
+#: ../dgit.1:1749
 msgid "Not relevant for Debian."
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:1655 ../dgit-downstream-dsc.7.pod:242
+#: ../dgit.1:1749 ../dgit-downstream-dsc.7.pod:242
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.upload-host>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1658
+#: ../dgit.1:1752
 msgid "Might be useful if you have an intermediate queue server."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1658
+#: ../dgit.1:1752
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.user-name>I< >B<dgit-distro.>I<distro>B<.user-email>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1663
+#: ../dgit.1:1757
 msgid ""
 "Values to configure for user.name and user.email in new git trees.  If not "
 "specified, the DEBFULLNAME and DEBEMAIL environment variables are used, "
@@ -2979,26 +3178,26 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1663
+#: ../dgit.1:1757
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.setup-useremail>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1667
+#: ../dgit.1:1761
 msgid ""
 "Whether to set user.name and user.email in new git trees.  True by default.  "
 "Ignored for dgit setup-useremail, which does it anyway."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1667
+#: ../dgit.1:1761
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.setup-mergechangelogs>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1672
+#: ../dgit.1:1766
 msgid ""
 "Whether to set up a merge driver which uses dpkg-mergechangelogs for debian/"
 "changelog.  True by default.  Ignored for dgit setup-mergechangelogs, which "
@@ -3006,13 +3205,13 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1672
+#: ../dgit.1:1766
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.setup-gitattributes>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1678
+#: ../dgit.1:1772
 msgid ""
 "Whether to configure .git/info/attributes to suppress checkin/checkout file "
 "content transformations in new git trees.  True by default.  Ignored for "
@@ -3020,24 +3219,24 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1678
+#: ../dgit.1:1772
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.cmd->I<cmd>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1684
+#: ../dgit.1:1778
 msgid "Program to use instead of I<cmd>.  Works like B<-->I<cmd>B<=>... ."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1684
+#: ../dgit.1:1778
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.opts->I<cmd>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1696
+#: ../dgit.1:1790
 msgid ""
 "Extra options to pass to I<cmd>.  Works like B<-->I<cmd>B<:>... .  To pass "
 "several options, configure multiple values in git config (with git config --"
@@ -3047,13 +3246,13 @@ msgid ""
 msgstr ""
 
 #. type: SH
-#: ../dgit.1:1696
+#: ../dgit.1:1790
 #, no-wrap
 msgid "ACCESS CONFIGURATION"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1701
+#: ../dgit.1:1795
 msgid ""
 "There are many other settings which specify how a particular distro's "
 "services (archive and git) are provided.  These should not normally be "
@@ -3062,226 +3261,226 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1701
+#: ../dgit.1:1795
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.nominal-distro>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1704
+#: ../dgit.1:1798
 msgid "Shown in git tags, Dgit fields, and so on."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1704
+#: ../dgit.1:1798
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.alias-canon>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1707
+#: ../dgit.1:1801
 msgid "Used for all access configuration lookup."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1707
+#: ../dgit.1:1801
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B</push.>*"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1713
+#: ../dgit.1:1807
 msgid ""
 "If set, overrides corresponding non B</push> config when B<readonly=false>, "
 "or when pushing and B<readonly=auto>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1713
+#: ../dgit.1:1807
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.git-url>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1715
+#: ../dgit.1:1809
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.git-url>[B<-suffix>]"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1717
+#: ../dgit.1:1811
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.git-proto>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1719
+#: ../dgit.1:1813
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.git-path>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1721
+#: ../dgit.1:1815
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.git-check> B<true>|B<false>|B<url>|B<ssh-cmd>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1723
+#: ../dgit.1:1817
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.git-check-suffix>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1725
+#: ../dgit.1:1819
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.policy-query-supported-ssh>I< >B<false>I<|>B<unknown>I<|>B<true>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1727
+#: ../dgit.1:1821
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.diverts.divert> B<new-distro>|B</>I<distro-suffix>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1729
+#: ../dgit.1:1823
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.git-create>I< >B<ssh-cmd>I<|>B<true>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1731
+#: ../dgit.1:1825
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.archive-query> B<ftpmasterapi:> | B<madison:>I<distro> | B<dummycat:>I</path>  | B<sshpsql:>I<user>B<@>I<host>B<:>I<dbname>B< >|B< aptget:>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1733
+#: ../dgit.1:1827
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.archive-query->(B<url>|B<tls-key>|B<curl-ca-args>)"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1735
+#: ../dgit.1:1829
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.madison-distro>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1737
+#: ../dgit.1:1831
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.archive-query-default-component>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1739
+#: ../dgit.1:1833
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.dep14tag> B<want>|B<no>[|B<always>]"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1741
+#: ../dgit.1:1835
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.dep14tag-reuse> B<must>|B<if-exists>|B<replace-unsuitable>|B<replace>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1744
+#: ../dgit.1:1838
 msgid "B<dgit-distro.>I<distro>B<.dep14tag-verify> B<true>|B<false>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1744
+#: ../dgit.1:1838
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.ssh>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1746
+#: ../dgit.1:1840
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.sshpsql-dbname>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1748
+#: ../dgit.1:1842
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.>(B<git>|B<sshpsql>)B<->(B<user>|B<host>|B<user-force>)"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1750
+#: ../dgit.1:1844
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.backports-quirk>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1752
+#: ../dgit.1:1846
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.rewrite-map-enable>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1754
+#: ../dgit.1:1848
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.source-only-uploads> B<ok>|B<always>|B<never>|B<not-wholly-new>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1756
+#: ../dgit.1:1850
 #, no-wrap
 msgid "B<dgit.default.old-dsc-distro>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1758
+#: ../dgit.1:1852
 #, no-wrap
 msgid "B<dgit.dsc-url-proto-ok.>I<protocol>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1760
+#: ../dgit.1:1854
 #, no-wrap
 msgid "B<dgit.dsc-url-proto-ok.bad-syntax>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1762
+#: ../dgit.1:1856
 #, no-wrap
 msgid "B<dgit.default.dsc-url-proto-ok>"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1764
+#: ../dgit.1:1858
 #, no-wrap
 msgid "B<dgit.default.push-subcmd>I< >B<source>I<|>B<built>I<|>B<warn,built>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1768
+#: ../dgit.1:1862
 msgid "Controls the behaviour of B<dgit push>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1768
+#: ../dgit.1:1862
 #, no-wrap
 msgid "B<dgit.vcs-git.suites> I<suite>[B<;>...]"
 msgstr ""
 
 #. type: SH
-#: ../dgit.1:1770
+#: ../dgit.1:1864
 #, no-wrap
 msgid "ENVIRONMENT VARIABLES"
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1771
+#: ../dgit.1:1865
 #, no-wrap
 msgid "B<DGIT_SSH>, B<GIT_SSH>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1780
+#: ../dgit.1:1874
 msgid ""
 "specify an alternative default program (and perhaps arguments) to use "
 "instead of ssh.  DGIT_SSH is consulted first and may contain arguments; if "
@@ -3291,26 +3490,26 @@ msgid ""
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1780
+#: ../dgit.1:1874
 #, no-wrap
 msgid "B<DEBEMAIL>, B<DEBFULLNAME>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1784
+#: ../dgit.1:1878
 msgid ""
 "Default git user.email and user.name for new trees.  See B<dgit setup-new-"
 "tree>."
 msgstr ""
 
 #. type: TP
-#: ../dgit.1:1784
+#: ../dgit.1:1878
 #, no-wrap
 msgid "B<gpg>, B<dpkg->..., B<debsign>, B<git>, [B<lib>]B<curl>, B<dput>"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1789
+#: ../dgit.1:1883
 msgid ""
 "and other subprograms and modules used by dgit are affected by various "
 "environment variables.  Consult the documentation for those programs for "
@@ -3318,13 +3517,13 @@ msgid ""
 msgstr ""
 
 #. type: SH
-#: ../dgit.1:1789
+#: ../dgit.1:1883
 #, no-wrap
 msgid "SUPPORT ON OLD DISTRIBUTIONS"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1795
+#: ../dgit.1:1889
 msgid ""
 "We aim to make modern dgit installable and useable on old versions of "
 "Debian, and on derivatives.  One reason this is helpful is that it can be "
@@ -3333,7 +3532,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1803
+#: ../dgit.1:1897
 msgid ""
 "This version of B<dgit.deb> is directly installable, and functional (with "
 "B<apt install dgit.deb>)  all the way back to Debian 10 (buster) and later; "
@@ -3342,13 +3541,13 @@ msgid ""
 msgstr ""
 
 #. type: SH
-#: ../dgit.1:1803
+#: ../dgit.1:1897
 #, no-wrap
 msgid "BUGS"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1810
+#: ../dgit.1:1904
 msgid ""
 "There should be a `dgit rebase-prep' command or some such to turn a fast-"
 "forwarding branch containing pseudo-merges back into a rebasing patch "
@@ -3356,7 +3555,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1816
+#: ../dgit.1:1910
 msgid ""
 "If the dgit push fails halfway through, it is not necessarily restartable "
 "and idempotent.  It would be good to check that the proposed signing key is "
@@ -3364,7 +3563,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1821
+#: ../dgit.1:1915
 msgid ""
 "dgit's build functions, and dgit push, may make changes to your current "
 "HEAD.  Sadly this is necessary for packages in the `3.0 (quilt)' source "
@@ -3373,7 +3572,7 @@ msgid ""
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1826
+#: ../dgit.1:1920
 msgid ""
 "--dry-run does not always work properly, as not doing some of the git "
 "fetches may result in subsequent actions being different.  Doing a non-dry-"
@@ -3381,25 +3580,25 @@ msgid ""
 msgstr ""
 
 #. type: =head1
-#: ../dgit.1:1826 ../dgit.7:23 ../dgit-user.7.pod:463
-#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:125
+#: ../dgit.1:1920 ../dgit.7:23 ../dgit-user.7.pod:446
+#: ../dgit-nmu-simple.7.pod:158 ../dgit-maint-native.7.pod:125
 #: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
 #: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
 #: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
 #: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
-#: ../git-debpush.1.pod:272 ../tag2upload.5.pod:224
+#: ../git-debpush.1.pod:341 ../git-deborig.1.pod:60 ../tag2upload.5.pod:307
 #, no-wrap
 msgid "SEE ALSO"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1835
+#: ../dgit.1:1929
 msgid ""
 "B<dgit>(7), B<dgit-*>(7), B<curl>(1), B<dput>(1), B<debsign>(1), B<git-"
 "config>(1), B<git-buildpackage>(1), B<dpkg-buildpackage>(1),"
 msgstr ""
 
 #. type: Plain text
-#: ../dgit.1:1836
+#: ../dgit.1:1930
 msgid "https://browse.dgit.debian.org/"
 msgstr ""

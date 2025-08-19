@@ -41,6 +41,7 @@ badly-raw () {
 }
 badly-late-raw () {
 	quilt-fixup
+	t-expect-exit-status 6 \
 	build-source
 	t-expect-fail "$1" \
 	run-push

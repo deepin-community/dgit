@@ -81,15 +81,10 @@ dependencies-gencontrol () {
 		GDR) gencontrol-add-deps \
 			git-debrebase git-buildpackage
 			;;
-		DEBORIG) gencontrol-add-deps \
-			devscripts libdpkg-perl \
-			libgit-wrapper-perl liblist-compare-perl \
-			libstring-shellquote-perl libtry-tiny-perl \
+		DEBORIG|DEBPUSH) gencontrol-add-deps \
+			git-debpush
 			# NB git-deborig is not compatible with
 			#  t-tstunt-parsechangelog
-			;;
-		DEBPUSH) gencontrol-add-deps \
-			git-debpush
 			;;
 		T2U) gencontrol-add-deps \
 			git-debpush autopkgtest python3-pygit2 netcat-openbsd

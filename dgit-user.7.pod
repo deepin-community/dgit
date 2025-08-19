@@ -30,7 +30,7 @@ or L<dgit(1)> and L<dgit(7)>.
 
 =over 4
 
-    % dgit clone glibc jessie,-security
+    % dgit clone glibc bookworm,-security
     % cd glibc
     % curl 'https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=28250;mbox=yes;msg=89' | patch -p1 -u
     % git commit -a -m 'Fix libc lost output bug'
@@ -55,7 +55,7 @@ Later:
 =over 4
 
     % cd glibc
-    % dgit pull jessie,-security
+    % dgit pull bookworm,-security
     % gbp dch -S --since=dgit/dgit/sid --ignore-branch --commit
     % dpkg-buildpackage -uc -b
     % sudo dpkg -i ../libc6_*.deb
@@ -66,7 +66,7 @@ Later:
 
 =over 4
 
-    % dgit clone glibc jessie,-security
+    % dgit clone glibc bookworm,-security
     % cd glibc
 
 =back
@@ -107,29 +107,22 @@ Internally,
 Debian (and derived) distros normally refer to their releases by codenames.
 Debian also has aliases which refer to the current stable release etc.
 So for example, at the time of writing
-Debian C<jessie> (Debian 8) is Debian C<stable>; and
-the current version of Ubuntu is C<yakkety> (Yakkety Yak, 16.10).
+Debian C<bookworm> (Debian 12) is Debian C<stable>; and
+the current version of Ubuntu is C<plucky> (Plucky Puffin, 25.04).
 You can specify either
-the codename C<jessie> or the alias C<stable>.
+the codename C<bookworm> or the alias C<stable>.
 If you don't say, you get C<sid>,
 which is Debian C<unstable> - the main work-in progress branch.
 
-If you don't know what you're running, try this:
-
-=over 4
-
-    % grep '^deb' /etc/apt/sources.list
-    deb http://the.earth.li/debian/ jessie main non-free contrib
-    ...
-    %
-
-=back
+If you don't know what you're running,
+please refer to your apt configuration in
+/etc/apt/sources* or in /etc/debian_version
 
 For Debian, you should add C<,-security>
 to the end of the suite name,
 unless you're on unstable or testing.
 Hence, in our example
-C<jessie> becomes C<jessie,-security>.
+C<bookworm> becomes C<bookworm,-security>.
 (Yes, with a comma.)
 
 =head1 WHAT DGIT CLONE PRODUCES
@@ -138,22 +131,22 @@ C<jessie> becomes C<jessie,-security>.
 
 dgit clone will give you a new working tree,
 and arrange for you to be on a branch named like
-C<dgit/jessie,-security> (yes, with a comma in the branch name).
+C<dgit/bookworm,-security> (yes, with a comma in the branch name).
 
-For each release (like C<jessie>)
+For each release (like C<bookworm>)
 there is a tracking branch for the contents of the archive, called
-C<remotes/dgit/dgit/jessie>
+C<remotes/dgit/dgit/bookworm>
 (and similarly for other suites).  This can be updated with
-C<dgit fetch jessie>.
+C<dgit fetch bookworm>.
 This, the I<remote suite branch>,
 is synthesized by your local copy of dgit.
 It is fast forwarding.
 
 Debian separates out the security updates, into C<*-security>.
-Telling dgit C<jessie,-security> means that it should include 
-any updates available in C<jessie-security>.
-The comma notation is a request to dgit to track jessie,
-or jessie-security if there is an update for the package there.
+Telling dgit C<bookworm,-security> means that it should include 
+any updates available in C<bookworm-security>.
+The comma notation is a request to dgit to track bookworm,
+or bookworm-security if there is an update for the package there.
 
 (You can also dgit fetch in a tree that wasn't made by dgit clone.
 If there's no C<debian/changelog>
@@ -205,7 +198,7 @@ including commits which make no changes but just serve
 to make a rebasing branch fast-forward.
 This is particularly true of
 combining branches like
-C<jessie,-security>.
+C<bookworm,-security>.
 
 If the package maintainer is using git then
 after dgit clone
@@ -307,7 +300,7 @@ main environment.  (sbuild is used by the Debian build daemons.)
 =over 4
 
     % git clean -xdf
-    % sbuild -c jessie -A --no-clean-source \
+    % sbuild -d trixie -A --no-clean-source \
              --dpkg-source-opts='-Zgzip -z1 --format=1.0 -sn'
 
 =back
@@ -321,19 +314,9 @@ For more information see Debian bug #868527.
 
 =head1 INSTALLING
 
-=head2 Debian Stretch or newer
-
 =over 4
 
     % sudo apt install ../libc6_*.deb
-
-=back
-
-=head2 Debian Jessie or older
-
-=over 4
-
-    % sudo dpkg -i ../libc6_*.deb
 
 =back
 
@@ -396,7 +379,7 @@ but passing C<--force-overwrite> to dpkg will help
 
 =head1 SHARING YOUR WORK
 
-The C<dgit/jessie,-security> branch (or whatever) is a normal git branch.
+The C<dgit/bookworm,-security> branch (or whatever) is a normal git branch.
 You can use C<git push> to publish it on any suitable git server.
 
 Anyone who gets that git branch from you

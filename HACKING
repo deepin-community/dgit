@@ -6,7 +6,9 @@ Program and source code layout
 
 Most stuff is in the toplevel.
 Debian/ contains Perl modules, notably Debian/Dgit.pm.
-That module contains much shared code and is used by every package.
+That module contains much shared code.
+There is also Debian/Dgit/Core.pm which has less code, as yet, but is
+available in every binary package.
 
 The test suite is very useful for ad-hoc work, so see "Tests" below.
 
@@ -66,8 +68,8 @@ tests in one of these two ways [1]:
 These will leave their working stuff in ./tests/tmp/<name-of-test>.
 
 The test suite is often a nice way to set up situations for ad-hoc
-testing.  You can add "xxx" in the middle of one of the test cases to
-get it to crash at the right point.  Have an absolute cd like
+testing.  You can write "CRASH" in the middle of one of the test cases
+to get it to crash at the right point.  Have an absolute cd like
   cd ~/things/Dgit/dgit/tests/tmp/<some-test>
 in your shell history, because each time you run the test it will
 blow that directory away again.

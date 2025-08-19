@@ -3,7 +3,7 @@ set -e
 . tests/lib
 . $troot/lib-baredebian
 
-t-dependencies quilt
+t-dependencies quilt DEBORIG
 
 t-setup-import baredebian
 t-tstunt-parsechangelog

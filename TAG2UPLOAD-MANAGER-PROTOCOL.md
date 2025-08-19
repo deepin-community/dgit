@@ -26,19 +26,28 @@ Extraneous whitespace is a protocol violation.
 We see things from the Oracle's point of view.  
 `<` is from Manager to Oracle.
 
+Medium- to long-term protocol states
+are shown with `[state: ]` and are as follows:
+
+ * `worker-waiting`: The worker is waiting for instructions/jobs.
+ * `processing`: The worker is processing a job;
+   the manager is waiting to see what the outcome is.
+
 ### Initial exchange
 
 ```
 $ ssh manager nc -U /srv/socket
 < t2u-manager-ready
-> t2u-oracle-version 4
+> t2u-oracle-version 5
 > worker-id WORKER-ID FIDELITY
+[state: worker-waiting]
 ```
 
 If there are multiple protocol versions,
 the Oracle gets to choose its preferred one.
 
-This document describes version `4`.
+This document describes version `5`.
+In `4` and earlier, there was no `restart-worker` message.
 In `3` and earlier, `PUTATIVE-PACKAGE` is omitted from the `job` message.
 In `2` and earlier, `FIDELITY` is omitted from the `worker-id` message.
 
@@ -65,11 +74,15 @@ The Oracle should then wait, indefinitely,
 for a job to be available.
 
 During this time,
-the Manager will periodically poll the Oracle for readiness:
+the Manager will periodically poll the Oracle for readiness,
+and may instruct an Oracle worker process to restart.
+Polling works like this:
 
 ```
+[state: worker-waiting]
 < ayt
 > ack
+[state: worker-waiting]
 ```
 
 This allows the Manager to detect a dead Oracle connection.
@@ -84,15 +97,38 @@ In particular, ideally, the Oracle would check that:
 
 The Oracle need not check anything visible to the Manager.
 For example, the Oracle need not check availability of dgit-reposs,
-the ftpmaster upload queue, or input git repository servers (eg salsa).
+the ftpmaster upload queue, or input git repository servers (eg
+salsa).
+
+The Manager instructing the Oracle to restart looks like this:
+
+```
+[state: worker-waiting]
+< restart-worker
+[connection close]
+```
+
+The Oracle worker should close the connection
+and then cause itself to be restarted.
+In particular, this means 
+the worker will establish a fresh connection to the Builder.
+(In our implementation, this means we know
+the worker will now use the latest container base image on the Builder.)
+The process supervising workers need not restart.
+
+The Manager may send restart commands 
+whenever the worker is expecting
+`ayt` or `job` messages.
 
 ### Job
 
 ```
+[state: worker-waiting]
 < job JOB-ID PUTATIVE-PACKAGE URL
 < data-block NBYTES
 < [NBYTES bytes of data for the tag (no newline)]
 < data-end
+[state: processing]
 ```
 
 JOB-ID is the "job id" assigned by the Manager,
@@ -123,15 +159,19 @@ is irrecoverable.
 ### Outcome
 
 ```
+[state: processing]
 > message MESSAGE
 > uploaded
+[state: worker-waiting]
 ```
 
 or
 
 ```
+[state: processing]
 > message MESSAGE
 > irrecoverable
+[state: worker-waiting]
 ```
 
 MESSAGE is UTF-8 text, possibly containing whitespace,

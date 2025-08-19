@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e -o pipefail
+
+default_url=https://salsa.debian.org/dgit-team/dgit
+
+git remote rm repo 2>/dev/null ||:
+git remote add repo "${CI_PROJECT_URL:-$default_url}"
+git fetch --unshallow -p repo || echo 'OK, maybe it was not shallow'
+git fetch -p repo
+
+git log --pretty=oneline --invert-grep -i --grep '^signed-off-by'	\
+    ^repo/{trixie,main}						\
+    HEAD								\
+    >../missing-sob
+
+if cmp -s ../missing-sob /dev/null; then
+    echo 'All commits signed off, OK.'
+    exit 0
+fi
+
+echo '===== commit(s) missing Signed-Off-by ====='
+cat ../missing-sob
+echo '===== ^ some commit(s) missing Signed-Off-by ====='
+exit 8

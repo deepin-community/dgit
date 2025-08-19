@@ -38,7 +38,7 @@
 #   discrepancy, since our generation script scans the available po
 #   files.
 #
-#   Generation is done by a shell script, ./list-documents.
+#   Generation is done by a shell script, ./generate-po4a.cfg.
 #
 #   make targets:  po4a.cfg           # many others imply this
 #                  po4a.cfg.check     # fails if out of date
@@ -97,12 +97,15 @@ pofiles: po4a.cfg
 translated: po4a.cfg
 	$(PO4A) $<
 
-po4a.cfg: list-documents
+po4a.cfg: generate-po4a.cfg
 	./$< $o
 
-po4a.cfg.check: list-documents
+po4a.cfg.check: generate-po4a.cfg
 	./$< >$@.tmp
 	diff po4a.cfg $@.tmp
+
+potfiles.check:
+	ls $(addsuffix .pot, $(subst .,_, $(shell ./list-documents)))
 
 pairwise-pocheck.check:
 	./pairwise-pocheck

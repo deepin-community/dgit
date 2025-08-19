@@ -4,7 +4,8 @@ NOTES FOR TRANSLATORS
 Introduction
 ------------
 
-The dgit source package contains dgit and git-debrebase.
+The dgit source package builds several binary packages:
+dgit, git-debrebase, git-debpush, and dgit-infrastructure.
 These are useful for a variety of different users and in different
 situations.  So there are various documents aimed at various users.
 
@@ -13,9 +14,7 @@ situations.  So there are various documents aimed at various users.
 * Documentation translation is handled via po4a, in the po4a
   directory.  The documeents are all manpages.
 
-* git-debrebase is currently mostly useful within the Debian project,
-  but this will change and its document translations will then be more
-  important.
+* git-debrebase is currently mostly useful within the Debian project.
 
 The en_US message translation is slightly special.  It is used for
 testing the translation machinery, and since the source native
@@ -36,19 +35,21 @@ Translatation priorities
 
   MEDIUM
 
-    po/messages.pot         All the messages for both programs
+    po/messages.pot         All the messages for all programs
 
     po4a/dgit_1
     po4a/dgit-downstream-dsc_7
     po4a/dgit-sponshorship_7
     po4a/dgit_7
+    po4a/git-deborig_1
 
-  LOW
+  LOW - For work within Debian, where one needs good English anyway:
 
-    po4a/dgit-maint-*       } For work within the Debian project
-    po4a/dgit-nmu-simple_7  }  (where one needs good English anyway)
-
-    po4a/git-debrebase_*    Currently low priority but this will change
+    po4a/dgit-maint-*
+    po4a/dgit-nmu-simple_7
+    po4a/git-debpush_1
+    po4a/git-debrebase_*
+    po4a/tag2upload_5
 
 
 Translation organisation

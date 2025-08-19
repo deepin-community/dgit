@@ -10,13 +10,17 @@ variables:
 # See:
 #   https://salsa.debian.org/salsa-ci-team/pipeline#skipping-a-job
 #   Skipping a job
-  # Very slow and resource-intensive
-  SALSA_CI_DISABLE_AUTOPKGTEST: 1
+  # Very slow and resource-intensive.   Do only the test(s)
+  # that are particularly likely to fail *only* in autopkgtest.
+  SALSA_CI_AUTOPKGTEST_ARGS: --test-name t2u-email
   # We build no arch-specific packages; thse are just wasted faff
   SALSA_CI_DISABLE_BUILD_PACKAGE_ANY: 1
   SALSA_CI_DISABLE_CROSSBUILD_ARM64: 1
   # Doesn't work with unfinalised changelogs
   SALSA_CI_DISABLE_REPROTEST: 1
+  # Doesn't like git-debpush having a Replaces without a Breaks.
+  # See <https://bugs.debian.org/592610#64>.
+  SALSA_CI_DISABLE_MISSING_BREAKS: 1
   SALSA_CI_LINTIAN_SUPPRESS_TAGS: changelog-empty-entry
   # t2usm project
   T2USM_EXECUTABLE_URL: https://salsa.debian.org/dgit-team/tag2upload-service-manager/-/jobs/artifacts/main/raw/artifacts/tag2upload-service-manager?job=build
@@ -59,12 +63,6 @@ dgit-test-suite-bullseye:
   variables:
     DGIT_TEST_CURRENT_SUITE: bullseye
 
-dgit-test-suite-buster:
-  extends: dgit-test-suite
-  image: debian:buster
-  variables:
-    DGIT_TEST_CURRENT_SUITE: buster
-
 t2u-integration:
   extends: .dgit-test-suite
   stage: test
@@ -82,3 +80,27 @@ t2u-integration-bookworm:
   image: debian:bookworm
   # Don't set DGIT_TEST_CURRENT_SUITE just in case that might suppress the
   # very test case(s) we care about.
+
+blocking-todos:
+  stage: test
+  needs: []
+  script:
+    # We reject three or more X's in a row, in a word, in either case.
+    # This is for TODOs that we want to fix before merging.
+    #
+    # We do it here, rather than in tests/, because we may want branches
+    # to have blocking todos in intermediate states, but we sometimes
+    # run the test suite on every commit on a branch.
+    #
+    - apt-get -y update
+    - apt-get -y install git
+    - set +e; git grep -P -i '\bx+xx\b'; test $? = 1
+
+signed-off-by:
+  stage: test
+  needs: []
+  allow_failure: true
+  script:
+    - apt-get -y update
+    - apt-get -y install git
+    - tests/gitlab-ci-check-sob

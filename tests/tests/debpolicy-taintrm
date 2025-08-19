@@ -30,7 +30,7 @@ t-archive-none example
 
 touch -d 'now -1 day' $tmp/git/example*
 
-t-policy-periodic # xxx maybe want test both with and without this
+t-policy-periodic # TODO maybe want test both with and without this
 
 : edit
 t-commit 'edit after cut'
