@@ -10,7 +10,7 @@ t-git-none
 
 t-gdr-gbp-import-core-with-queue
 
-git-deborig
+t-git-deborig
 
 for b in			\
 	patch-queue/quilt-tip	\

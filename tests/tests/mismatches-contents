@@ -16,6 +16,7 @@ echo foo >us-file
 git add us-file debian/changelog
 git commit -m "Commit $v"
 
+t-expect-exit-status 6 \
 t-dgit build-source
 
 t-expect-fail 'debian/TRASH' \

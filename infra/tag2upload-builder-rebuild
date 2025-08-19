@@ -19,6 +19,11 @@
 set -eo pipefail
 shopt -s inherit_errexit # #514862, wtf
 
+if [ $# != 0 ]; then
+    echo >&2 "$0 takes no arguments"
+    exit 12
+fi
+
 release=bookworm
 mirror=http://deb.debian.org/debian
 variant=minbase
@@ -51,9 +56,34 @@ late_pkgs=(
     dgit/testing
     git-debrebase/testing
 )
+savelog_options=(
+    # Default is to save 7 logfiles files, which seems OK.
+)
+
+if [ "x$TAG2UPLOAD_BUILDER_REBUILD_REINVOKED" = x ]; then
+    savelog "${savelog_options[@]}" -- image-rebuild.log
+
+    # We can't exec | tee, so we must reinvoke ourselves.
+    TAG2UPLOAD_BUILDER_REBUILD_REINVOKED=1 \
+	exec "$0" "$@" 2>&1 \
+	| tee image-rebuild.log
+    exit 0
+fi
 
 mkdir -p ~/.local/share/containers
 touch ~/.local/share/containers/.nobackup
+
+set -x
+
+# Containers are not the same as images.  A container is a bit like a
+# process, but a container can be running, or not.
+# autopkgtest-virt-podman creates and starts (makes running) a container
+# and stops and destroys it afterwards.  But its cleanup is not reliable.
+# So, delete any containers that aren't running and are at least 24h old.
+podman container prune --force --filter until=24h
+
+podman image prune --force
+set +x
 
 # Live testing is much easier if this script is self-contained,
 # so we're not using mmdebstrap's support for hook directories.
@@ -79,4 +109,7 @@ mmdebstrap \
 		 && apt-get update \
 		 && apt-get -y install '"${late_pkgs[*]}" \
     -- --network=host
-podman image prune --force
+
+ssh -i ~/.ssh/id_ed25519 \
+    tag2upload-manager@tag2upload-manager-01.debian.org \
+    /srv/manager.tag2upload.debian.org/live/bin/service-t2usm restart-workers

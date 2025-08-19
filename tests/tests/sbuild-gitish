@@ -16,7 +16,7 @@ buildrune=$(
 		next unless m/^ +\%/ .. 0;
 		next if !m/\S/ .. 0;
 		s/^ +\%//;
-		$fixchr += s/(\s-c\s*)jessie(\s|$)/$1'"$schroot"'$2/;
+		$fixchr += s/(\s-d\s*)trixie(\s|$)/$1'"$schroot"'$2/;
 		s/^\s*sbuild/$& -v/m;
 		print or die $!;
 		END { $fixchr == 1 or die $fixchr; }

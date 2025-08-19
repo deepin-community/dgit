@@ -1,1 +1,2 @@
-git-playtree-setup	/usr/share/git-debpush
+usr/share/man/*/man*/git-deborig.[1-9]
+# ^ translated manpages.  This has to be commented if they should go away.

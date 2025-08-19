@@ -7,7 +7,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2025-05-07 19:40+0100\n"
+"POT-Creation-Date: 2025-08-15 11:11+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -22,19 +22,19 @@ msgstr ""
 #: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
 #: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
 #: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
-#: ../git-debpush.1.pod:1 ../tag2upload.5.pod:1
+#: ../git-debpush.1.pod:1 ../git-deborig.1.pod:1 ../tag2upload.5.pod:1
 #, no-wrap
 msgid "NAME"
 msgstr ""
 
 #. type: =head1
-#: ../dgit.1:1826 ../dgit.7:23 ../dgit-user.7.pod:463
+#: ../dgit.1:1890 ../dgit.7:23 ../dgit-user.7.pod:446
 #: ../dgit-nmu-simple.7.pod:158 ../dgit-maint-native.7.pod:125
 #: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
 #: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
 #: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
 #: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
-#: ../git-debpush.1.pod:272 ../tag2upload.5.pod:224
+#: ../git-debpush.1.pod:341 ../git-deborig.1.pod:60 ../tag2upload.5.pod:307
 #, no-wrap
 msgid "SEE ALSO"
 msgstr ""
@@ -100,7 +100,7 @@ msgstr ""
 #: ../dgit-nmu-simple.7.pod:39
 #, no-wrap
 msgid ""
-"    % dgit clone glibc jessie\n"
+"    % dgit clone glibc bookworm\n"
 "    % cd glibc\n"
 "    % git am ~/glibc-security-fix.diff\n"
 "    % dch --nmu \"Apply upstream's fix for foo bug.\"\n"
@@ -108,9 +108,9 @@ msgid ""
 "    % dpkg-buildpackage -uc -b\n"
 "    [ run your tests ]\n"
 "    % dch -r && git add debian/changelog && git commit -m\"Finalise NMU\"\n"
-"    % dgit -wgf sbuild -A -c jessie\n"
+"    % dgit -wgf sbuild -A -d trixie\n"
 "    [ any final tests on generated .debs ]\n"
-"    % dgit -wgf [--delayed=5] push-source jessie\n"
+"    % dgit -wgf [--delayed=5] push-source bookworm\n"
 "    [ enter your gnupg passphrase as prompted ]\n"
 "    [ see that push and upload are successful ]\n"
 "    [ prepare and email NMU diff (git-diff, git-format-patch) ]\n"

@@ -29,7 +29,7 @@ test "${response:0:19}" = "protocol-violation "
 
 echo "t2u-manager-ready"
 read version
-test "$version" = "t2u-oracle-version 4"
+test "$version" = "t2u-oracle-version 5"
 
 # (3)  Check ayt/ack works.
 
@@ -37,6 +37,14 @@ read worker_id
 echo ayt
 read response
 test "$response" = ack
+
+# (4) Check restart-worker works.
+
+echo restart-worker
+' '
+echo "t2u-manager-ready"
+read version
+test "$version" = "t2u-oracle-version 5"
 
 ')
 

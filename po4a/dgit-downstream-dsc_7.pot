@@ -7,7 +7,7 @@
 msgid ""
 msgstr ""
 "Project-Id-Version: PACKAGE VERSION\n"
-"POT-Creation-Date: 2019-03-01 16:59+0000\n"
+"POT-Creation-Date: 2025-08-15 11:11+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -21,36 +21,38 @@ msgstr ""
 #: ../dgit-maint-native.7.pod:1 ../dgit-maint-merge.7.pod:1
 #: ../dgit-maint-gbp.7.pod:1 ../dgit-maint-debrebase.7.pod:1
 #: ../dgit-downstream-dsc.7.pod:1 ../dgit-sponsorship.7.pod:1
-#: ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#: ../dgit-maint-bpo.7.pod:1 ../git-debrebase.1.pod:1 ../git-debrebase.5.pod:1
+#: ../git-debpush.1.pod:1 ../git-deborig.1.pod:1 ../tag2upload.5.pod:1
 #, no-wrap
 msgid "NAME"
 msgstr ""
 
 #. type: =head1
-#: ../dgit.1:1253 ../dgit-downstream-dsc.7.pod:150
+#: ../dgit.1:1646 ../dgit-downstream-dsc.7.pod:150
 #, no-wrap
 msgid "CONFIGURATION"
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:1267 ../dgit-downstream-dsc.7.pod:286
+#: ../dgit.1:1660 ../dgit-downstream-dsc.7.pod:286
 #, no-wrap
 msgid "B<dgit-suite.>I<suite>B<.distro> I<distro>"
 msgstr ""
 
 #. type: =item
-#: ../dgit.1:1320 ../dgit-downstream-dsc.7.pod:242
+#: ../dgit.1:1719 ../dgit-downstream-dsc.7.pod:242
 #, no-wrap
 msgid "B<dgit-distro.>I<distro>B<.upload-host>"
 msgstr ""
 
 #. type: =head1
-#: ../dgit.1:1470 ../dgit.7:23 ../dgit-user.7.pod:447
-#: ../dgit-nmu-simple.7.pod:137 ../dgit-maint-native.7.pod:126
-#: ../dgit-maint-merge.7.pod:491 ../dgit-maint-gbp.7.pod:136
-#: ../dgit-maint-debrebase.7.pod:747 ../dgit-downstream-dsc.7.pod:352
-#: ../dgit-sponsorship.7.pod:321 ../git-debrebase.1.pod:619
-#: ../git-debrebase.5.pod:678
+#: ../dgit.1:1890 ../dgit.7:23 ../dgit-user.7.pod:446
+#: ../dgit-nmu-simple.7.pod:158 ../dgit-maint-native.7.pod:125
+#: ../dgit-maint-merge.7.pod:509 ../dgit-maint-gbp.7.pod:139
+#: ../dgit-maint-debrebase.7.pod:792 ../dgit-downstream-dsc.7.pod:352
+#: ../dgit-sponsorship.7.pod:326 ../dgit-maint-bpo.7.pod:140
+#: ../git-debrebase.1.pod:629 ../git-debrebase.5.pod:677
+#: ../git-debpush.1.pod:341 ../git-deborig.1.pod:60 ../tag2upload.5.pod:307
 #, no-wrap
 msgid "SEE ALSO"
 msgstr ""
@@ -59,7 +61,7 @@ msgstr ""
 #: ../dgit-user.7.pod:5 ../dgit-maint-native.7.pod:5
 #: ../dgit-maint-merge.7.pod:5 ../dgit-maint-gbp.7.pod:5
 #: ../dgit-maint-debrebase.7.pod:5 ../dgit-downstream-dsc.7.pod:5
-#: ../git-debrebase.1.pod:10 ../git-debrebase.5.pod:5
+#: ../dgit-maint-bpo.7.pod:5 ../git-debrebase.5.pod:5 ../tag2upload.5.pod:5
 msgid "INTRODUCTION"
 msgstr ""
 
@@ -160,8 +162,9 @@ msgstr ""
 msgid ""
 "In dgit and Debian archive terminology, a B<suite> is a line of development, "
 "and/or a Debian release.  For example, at the time of writing, Debian has "
-"suites like B<sid> aka B<unstable>, B<buster> aka B<testing>, and B<stretch> "
-"aka B<stable>.  There are also ancillary suites like B<stretch-security>."
+"suites like B<sid> aka B<unstable>, B<trixie> aka B<testing>, and "
+"B<bookworm> aka B<stable>.  There are also ancillary suites like B<bookworm-"
+"security>."
 msgstr ""
 
 #. type: textblock
@@ -170,7 +173,7 @@ msgid ""
 "If your releases align with Debian's releases, then your suites should "
 "contain the Debian suite names.  B<Do not> use just the Debian names.  That "
 "will cause confusion.  Instead, prepend your organisation's name and a "
-"hyphen.  For example, FSFE might end up with suites like fsfe-stretch."
+"hyphen.  For example, FSFE might end up with suites like fsfe-trixie."
 msgstr ""
 
 #. type: textblock

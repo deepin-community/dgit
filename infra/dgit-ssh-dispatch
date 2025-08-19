@@ -34,10 +34,10 @@ die unless @ARGV>=1 && @ARGV<=2 && $ARGV[0] !~ m/^-/;
 our ($dispatchdir,$authrune) = @ARGV;
 
 $authrune //= join ':',
-    '@/debian-tag2upload.gpg,a',
-    '@/keyrings/debian-keyring.gpg,a',
-    '@/keyrings/debian-maintainers.gpg,m@/dm.txt',
-    '@/keyrings/debian-nonupload.gpg,m@/dm.txt';
+    '@/keyrings/debian-tag2upload.pgp,a',
+    '@/keyrings/debian-keyring.pgp,a',
+    '@/keyrings/debian-maintainers.pgp,m@/dm.txt',
+    '@/keyrings/debian-nonupload.pgp,m@/dm.txt';
 
 our $lre = $package_re;
 our $qre = '["'."']?";

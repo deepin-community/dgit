@@ -10,6 +10,7 @@ debian/*.substvars
 debian/*.log
 debian/debhelper-build-stamp
 debian/.debhelper
+debian/*.debhelper
 dgit-user.7
 dgit-nmu-simple.7
 dgit-maint-native.7
@@ -21,6 +22,7 @@ dgit-sponsorship.7
 dgit-downstream-dsc.7
 git-debrebase.1
 git-debrebase.5
+git-deborig.1
 git-debpush.1
 tag2upload.5
 substituted

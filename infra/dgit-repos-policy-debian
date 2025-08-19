@@ -573,21 +573,42 @@ END
 	# We would reject this in push.  We need to arrange that the
 	# client will detect this.  The object tainting mechanism can
 	# be (ab)used for this: we tell the client that HEAD is tainted.
-	my $head = git_rev_parse(server_ref($suite).'~0');
-	push @$topq, {
-          gitobjtype => 'commit',
-          gitobjid => $head,
-          comment => 'Package is in NEW, need a --deliberately',
-          hint => $questionable_head_msg,
-          # If the client was told -d-i-q-h, then they can go ahead -
-          # our push will be placated.  If the client was told -d-n-f-f
-          # then presumably they aren't sending the old HEAD, so there
-          # won't be a tainted object reachable from their head - so
-          # -d-n-f-f isn't listed here.  After all, this is for controlling
-          # when the client will regard this as a blocking problem, not
-          # for advising the user about overriding options.
-          overrides => [qw(--deliberately-include-questionable-history)]
-        };
+	my %taint_base = (
+	    gitobjtype => 'commit',
+	    comment => 'Package is in NEW, need a --deliberately',
+	    hint => $questionable_head_msg,
+	    # If the client was told -d-i-q-h, then they can go ahead -
+	    # our push will be placated.  If the client was told -d-n-f-f
+	    # then presumably they aren't sending the old HEAD, so there
+	    # won't be a tainted object reachable from their head - so
+	    # -d-n-f-f isn't listed here.  After all, this is for
+	    # controlling when the client will regard this as a blocking
+	    # problem, not for advising the user about overriding options.
+	    overrides => [qw(--deliberately-include-questionable-history)],
+	);
+        my $head = git_get_ref(server_ref($suite));
+	# Maybe a different suite was previously pushed, so *this*
+	# suite ref is absent.  In that case let's find *some* cbjectid...
+	my @heads;
+	if (defined $head) {
+	    push @$topq, {
+		%taint_base,
+		gitobjid => $head,
+            };
+	} else {
+	    my $heads = cmdoutput qw(git for-each-ref), "refs/$branchprefix/";
+            foreach my $head (split /\n/, $heads) {
+                my ($objid, $suite) =
+                  m{^(\w+) commit refs/\Q$branchprefix\E/($suite_re)}
+                  or next;
+		push @$topq, {
+		    %taint_base,
+		    gitobjid => $objid,
+                    comment => 
+         "Package is in NEW ($suite), need a --deliberately"
+		};
+            }
+	}
     }
     print encode_json $topq, "\n" or die $!;
 }

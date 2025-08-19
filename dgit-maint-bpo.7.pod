@@ -17,16 +17,16 @@ you will have to pass the --new option to dgit.
 =head1 TERMINOLOGY
 
 Let the I<master> branch contain the packaging history uploaded to
-Debian unstable, and the I<buster-bpo> branch be where you prepare
-your uploads to the B<buster-backports> suite.
+Debian unstable, and the I<bookworm-bpo> branch be where you prepare
+your uploads to the B<bookworm-backports> suite.
 
 A B<merging> backports workflow means that each time an upload
 migrates to Debian testing and you want to prepare an upload to
-B<buster-backports>, you do something like this:
+B<bookworm-backports>, you do something like this:
 
 =over 4
 
-    % git checkout buster-bpo
+    % git checkout bookworm-bpo
     % git merge master
     % dch --bpo
     % # any other changes needed for backporting
@@ -36,12 +36,12 @@ B<buster-backports>, you do something like this:
 =back
 
 A B<rebasing> backports workflow means that you throw away the history
-of the I<buster-bpo> branch each time a new version migrates to Debian
+of the I<bookworm-bpo> branch each time a new version migrates to Debian
 testing, something equivalent to this:
 
 =over 4
 
-    % git checkout -B buster-bpo master
+    % git checkout -B bookworm-bpo master
     % dch --bpo
     % # any other changes needed for backporting
     % git commit -a
@@ -50,7 +50,7 @@ testing, something equivalent to this:
 =back
 
 If you use a merging backports workflow, your changelog contains
-entries for each previous upload to B<buster-backports>; in a rebasing
+entries for each previous upload to B<bookworm-backports>; in a rebasing
 workflow, it contains only the latest.
 
 =head1 CHOOSING BETWEEN THE TWO WORKFLOWS
@@ -77,16 +77,16 @@ You would use
 
 =over 4
 
-    % dgit clone foo bullseye
+    % dgit clone foo bookworm
 
 =back
 
-for a new backport of package 'foo' to B<buster-backports>, and then
+for a new backport of package 'foo' to B<bookworm-backports>, and then
 
 =over 4
 
-    % dgit fetch bullseye
-    % git merge dgit/dgit/bullseye
+    % dgit fetch bookworm
+    % git merge dgit/dgit/bookworm
 
 =back
 
@@ -103,8 +103,8 @@ would
 
 =over 4
 
-    % dgit fetch bullseye
-    % git checkout -B buster-bpo dgit/dgit/bullseye
+    % dgit fetch bookworm
+    % git checkout -B bookworm-bpo dgit/dgit/bookworm
     % # use git-cherry-pick(1) to (re)apply any needed backporting fixes
 
 =back
@@ -119,9 +119,9 @@ NMUs.
 With a rebasing backports workflow, dgit will think that every upload
 of a new version from Debian testing might be accidentally overwriting
 uploads.  You will need to explicitly indicate the upload to
-B<buster-backports> you wish to overwrite.
+B<bookworm-backports> you wish to overwrite.
 
-Suppose that the last upload to B<buster-backports> was versioned
+Suppose that the last upload to B<bookworm-backports> was versioned
 I<1.2.2-1~bpo10+1> and you have now prepared I<1.2.3-1~bpo10+1> for
 upload.  When you B<dgit push>, you will need to pass
 I<--trust-changelog=1.2.2-1~bpo10+1>.
@@ -131,8 +131,8 @@ would have done yourself:
 
 =over 4
 
-    % dgit fetch buster-backports
-    % git merge -s ours dgit/dgit/buster-backports
+    % dgit fetch bookworm-backports
+    % git merge -s ours dgit/dgit/bookworm-backports
     % dgit push-source
 
 =back

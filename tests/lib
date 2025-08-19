@@ -151,7 +151,7 @@ schroot=${DGIT_SCHROOT_CHROOT:-build}
 
 : ${t_archive_method:=aq}
 : ${tagpfx:=archive/test-dummy}
-: ${suitespecs:=sid:unstable}
+: ${suitespecs:=sid:unstable rc-buggy:experimental}
 
 t-git-next-date () {
 	GIT_COMMITTER_DATE="$(( ${GIT_COMMITTER_DATE%% *} + 1 )) ${GIT_COMMITTER_DATE#* }"
@@ -175,6 +175,15 @@ t-expect-fail () {
 	esac
 
 	t-grep-mpat "$mpat" $tmp/t.output
+}
+
+t-expect-exit-status () {
+    local exp_rc=$1; shift
+    set +e
+    (set -e; "$@")
+    local got_rc=$?
+    set -e
+    test $got_rc = $exp_rc
 }
 
 t-grep-mpat () {
@@ -755,6 +764,9 @@ t-refs-notexist () {
 	done
 }
 
+t-v-dep14-tagname () {
+	echo test-dummy/${v//\~/_}
+}
 t-v-tag () {
 	echo refs/tags/$tagpfx/${v//\~/_}
 }
@@ -872,7 +884,7 @@ t-splitbrain-pushed-good--checkdiff () {
 }
 
 t-splitbrain-pushed-good-start () {
-	dep14tag=refs/tags/test-dummy/${v//\~/_}
+	dep14tag=refs/tags/$(t-v-dep14-tagname)
 	dgittag=$(t-v-tag)
 	t-output "" git status --porcelain
 	t-ref-head
@@ -985,8 +997,8 @@ t-sponsee-dep14tag-sign () {
 	t-sponsee-dep14tag "$@" -u Hannibal
 }
 t-sponsee-dep14tag () {
-	git tag -m 'Sponsee tag' "$@" test-dummy/$v
-	dep14tagref=refs/tags/test-dummy/$v
+	git tag -m 'Sponsee tag' "$@" $(t-v-dep14-tagname)
+	dep14tagref=refs/tags/$(t-v-dep14-tagname)
 	dep14tag=$(t-git-get-ref $dep14tagref)
 }
 t-sponsee-dep14tag-check-kept () {
@@ -1247,6 +1259,15 @@ t-dch-commit () {
 	git commit -m "dch $*" debian/changelog
 }
 
+t-dch-commit-bump () {
+	message="$1"; shift
+	suite=$(perl -pe 'm{^.* (\S+)\;[^;]+$} or die; print $1; last' \
+		     debian/changelog)
+	t-dch-commit -D $suite -m "$message" "$@"
+	v=$(perl -pe 's{^\S+ \((\S+)\) .*}{$1} or die; print $1; last' \
+		 debian/changelog)
+}
+
 t-debchange () {
 	DEBEMAIL=dgit-tests@example.org $troot/tstunt/debchange "$@"
 }
@@ -1277,10 +1298,10 @@ t-drs () {
 	ln -sf $tmp/git $drs_dispatch/repos
 	ln -sf $tmp/suites $tmp/suites-master $tmp/dm.txt $drs_dispatch/
 	mkdir -p $drs_dispatch/keyrings $drs_dispatch/outgoing-mail
-	ln -sf $tmp/dd.gpg $drs_dispatch/keyrings/debian-keyring.gpg
-	ln -sf $tmp/dm.gpg $drs_dispatch/keyrings/debian-maintainers.gpg
-	touch $drs_dispatch/keyrings/debian-nonupload.gpg
-	ln -sf $tmp/t2uokr.gpg $drs_dispatch/debian-tag2upload.gpg
+	ln -sf $tmp/dd.gpg $drs_dispatch/keyrings/debian-keyring.pgp
+	ln -sf $tmp/dm.gpg $drs_dispatch/keyrings/debian-maintainers.pgp
+	ln -sf $tmp/t2uokr.gpg $drs_dispatch/keyrings/debian-tag2upload.pgp
+	touch $drs_dispatch/keyrings/debian-nonupload.pgp
 	ln -sf /bin/true $drs_dispatch/policy-hook
 	echo example.org >>$drs_dispatch/preferred-mail-domains
 }
@@ -1365,8 +1386,11 @@ t-t2u-setup-repo () {
 	(set -e; cd "$t2u_fake_salsa_repo"; git init --bare)
 	git remote add salsa "$t2u_fake_salsa_repo"
 	# git branch --set-upstream-to complains, so
-	git config branch.master.remote salsa
-	git config branch.master.merge refs/heads/master
+	local branch
+	for branch in master experimental; do
+	    git config branch.$branch.remote salsa
+	    git config branch.$branch.merge refs/heads/$branch
+	done
 }
 
 t-t2u-run-drs () {
@@ -1386,9 +1410,15 @@ t-t2u-run-drs () {
     local exp_response=$1; shift
     local version= worker_id= response= msg_rcvd=false ret=
 
+    # If we have mpack installed, the log will end up here:
+    t2u_email_report=$tmp/sendmail.munpack/part1
+    t2u_email_log=$tmp/sendmail.munpack/t2u_fake-job_log.txt 
+
     # We want to carry on even if we can't find the tag, for
     # one of the test cases in t2u.
     git cat-file tag $tagname >../t2u/raw-tag ||:
+
+    printf "%s" "$t2u_drs_tag_corruption" >>../t2u/raw-tag
 
     local size="$(wc -c <../t2u/raw-tag)"
 
@@ -1400,7 +1430,7 @@ t-t2u-run-drs () {
 
     echo "t2u-manager-ready"
     read version
-    test "$version" = "t2u-oracle-version 4"
+    test "$version" = "t2u-oracle-version 5"
     read worker_id worker_fidelity
 
     echo ayt
@@ -1475,19 +1505,30 @@ t-t2u-exec-t2u-oracled () {
     exec "${t2u_oracled_cmd[@]}"
 }
 
+t-git-deborig () {
+    ${DGIT_DEBORIG_TEST-git deborig} "$@"
+}
+
 t-git-debpush () {
 	${DGIT_DEBPUSH_TEST-git debpush}	\
+		--batch				\
 		--distro=test-dummy		\
 		-u Senatus "$@"
 }
-t-t2u-test () {
+t-t2u-test-core () {
+	local exp_response="$1"; shift
+        local tagname=${tagname-$(t-v-dep14-tagname)}
+
 	t-git-debpush "$@"
 
 	dep14tagref="refs/tags/$tagname"
 	dep14tag=$(t-git-get-ref $dep14tagref)
 
-	mkdir ../t2u
-	t-t2u-run-drs "$t2u_fake_salsa_repo" uploaded
+	mkdir -p ../t2u
+	t-t2u-run-drs "$t2u_fake_salsa_repo" "$exp_response"
+}
+t-t2u-test () {
+	t-t2u-test-core uploaded "$@"
 
 	cd "$t2u_fake_salsa_repo"
 	t-refs-same refs/heads/master
@@ -1521,13 +1562,15 @@ t-t2u-succeeded () {
     		| cat -vet >$tmp/mgtf.exp
 	diff -u $tmp/mgtf.{exp,got}
 
-	git cat-file tag test-dummy/$v >$tmp/mgtf.whole-tag-real
+	git cat-file tag $(t-v-dep14-tagname) >$tmp/mgtf.whole-tag-real
 	cat $tmp/tag $tmp/sig >$tmp/mgtf.whole-tag-reconstructed
 	diff -u	$tmp/mgtf.whole-tag-{real,reconstructed}
 
 	for f in ${p}_${v}.dsc ${p}_${v}_source.changes; do
 		f=$tmp/incoming/$f
-		fgrep "Git-Tag-Tagger: dgit test git user" $f
+		fgrep \
+          "Git-Tag-Tagger: ${GIT_COMMITTER_NAME-dgit test git user}" \
+		    $f
 		local tag=$(t-git-get-ref-exact $dep14tagref)
 		local fp=bcd22cd83243b79d3dfac33ea3dbcbc039b13d8a
 		#        ^ Senatus's key, used for all t2u tests
@@ -1543,7 +1586,7 @@ t-t2u-gittarxz-unpack () {
     t-tar-x --strip-components=1 -af $tmp/incoming/$gittarxz
     cd ..
     git config --local --bool core.bare false
-    git reset --hard $tagname
+    git reset --hard $(t-v-dep14-tagname)
 }
 
 t-t2u-gittarxz-reproduced () {

@@ -4,27 +4,28 @@ set -e
 
 t-restrict x-dgit-skip-suite,bullseye
 t-restrict x-dgit-skip-suite,buster
-t-dependencies T2U mpack
+t-dependencies T2U DEBORIG mpack
+
+t-setup-import gbp
 
 t-t2u-settings
 t-debpolicy
 export DGIT_TEST_MUNPACK=munpack
 export TAG2UPLOAD_LINE_LENGTH_LIMIT=200
 
-t-t2u-native-prep
+cd $p
 
 t-t2u-setup-repo
-
-tagname=test-dummy/$v
 
 export DGIT_TEST_DEBUG=
 export DGIT_TEST_DEBPUSH_DEBUG=
 export DGIT_DRS_DEBUG=0
 export DGIT_TEST_NDEBUG=
 
-t-t2u-test
+export GIT_COMMITTER_NAME='Outré Name'
+
+t-t2u-test --quilt=gbp
 t-t2u-succeeded
-t-pushed-good master
 
 cd ..
 
@@ -41,9 +42,9 @@ t-template-expect sendmail.last <<'END'
     X-Debian-Tag2upload-Url: ???/fake_https_dir/gitlab.test-dummy.example.org/example.git
     X-Debian-Tag2upload-Status: uploaded
     X-Debian-Tag2upload-Package: example
-    To: dgit test git user <dgit-test@debian.example.net>
+    To: =?UTF-8?Q?Outr=C3=A9=20?=Name <dgit-test@debian.example.net>
     CC: copies@example.org, spqr@example.com
-    Reply-To: reply-to@example.org, dgit test git user <dgit-test@debian.example.net>
+    Reply-To: reply-to@example.org, =?UTF-8?Q?Outr=C3=A9=20?=Name <dgit-test@debian.example.net>
 
     --???
     Content-Type: text/plain; charset="UTF-8"
@@ -64,6 +65,14 @@ t-template-expect sendmail.last <<'END'
     Content-Disposition: attachment; filename="t2u_fake-job_tag.txt"
     Content-Description: input git tag
 
+ +  ???
+    --???
+    Content-Type: text/plain; charset="UTF-8"
+    Content-Transfer-Encoding: quoted-printable
+    Content-Disposition: attachment; filename="ssh-builder"
+    Content-Description: ssh wrapper to access builder
+
+    #!/bin/sh
  *  ???
     --???--
 END
@@ -81,22 +90,22 @@ t-template-expect sendmail.munpack/part1 <<'END'
     source code fetched
     changelog parsed ok
     target: test-dummy unstable
-    package is new in this suite
-    no upstream tag/commit specified, not considering orig(s)
+    no orig(s) in archive, generating
+    created orig
     processing successful
     Uploaded to unstable
 END
 
 t-template-expect sendmail.munpack/t2u_fake-job_tag.txt <<'END'
-    object f68f0a55d4bba3833727b96b135ee8b66a049a77
+    object d8cbd33adef3936f207c15a7991dc884136a4fd7
     type commit
     tag test-dummy/1.0-1
-    tagger dgit test git user <dgit-test@debian.example.net> 1530000000 +0100
+    tagger Outré Name <dgit-test@debian.example.net> 1530000001 +0100
 
     example release 1.0-1 for unstable
 
-    [dgit distro=test-dummy split]
-    [dgit please-upload source=example version=1.0-1]
+    [dgit distro=test-dummy split --quilt=gbp]
+    [dgit please-upload source=example version=1.0-1 upstream-tag=upstream/1.0 upstream=???]
     -----BEGIN PGP SIGNATURE-----
 
  +  ???
@@ -104,11 +113,16 @@ t-template-expect sendmail.munpack/t2u_fake-job_tag.txt <<'END'
 END
 
 t-template-expect sendmail.munpack/t2u_fake-job_log.txt <<'END'
-    # builder: oracle$ ???ssh??? 'builder@t2u-b' 'env ...'
+    oracle$ ???/dgit --version
+    dgit version ???
+    # builder: oracle$ ./ssh-builder 'builder@t2u-b' ...
+    builder$ ???/dgit --version
+    dgit version ???
 
-    builder:work$ git fetch origin --no-tags refs/tags/test-dummy/1.0-1:refs/tags/test-dummy/1.0-1
+    builder:work$ git fetch origin --no-tags refs/tags/test-dummy/1.0-1:refs/tags/test-dummy/1.0-1 refs/tags/upstream/1.0:refs/tags/upstream/1.0
     From ???/fake_https_dir/gitlab.test-dummy.example.org/example
      * [new tag]         test-dummy/1.0-1 -> test-dummy/1.0-1
+     * [new tag]         upstream/1.0     -> upstream/1.0
     # [ok]
 
     builder:work$ git checkout -q refs/tags/test-dummy/1.0-1
@@ -117,17 +131,18 @@ t-template-expect sendmail.munpack/t2u_fake-job_log.txt <<'END'
     # changelog parsed ok
     # target: test-dummy unstable
 
-    builder:work$ ???/dgit -wn -pexample --build-products-dir=../bpd --for-push fetch unstable
+    builder:work$ ???tag2upload-obtain-origs p=example v=1.0-1 s=unstable u=???
+    + ???/dgit --build-products-dir=../bpd -pexample download-unfetched-origs --write-sha256sums=../bpd/origs.sha256sums
     canonical suite name for unstable is sid
-    no version available from the archive
-    dgit: source package example does not exist in suite unstable
-    # [new]
-    # package is new in this suite
-    # no upstream tag/commit specified, not considering orig(s)
+    package does not exist in target suite, looking in whole archive
+    no .origs for package example upstream version 1.0
+    # no orig(s) in archive, generating
+E   \+ .*git[- ]deborig a2403dea4c144afa18f99107a8421b53885194c4
+    # created orig
 
-    oracle$ ???/dgit -wn -pexample --build-products-dir=../bpd --force-uploading-source-only --ssh=???ssh??? --ssh:-oBatchMode=yes --dgit=env --dgit:???/dgit -k52400D7C6342821C0D2B588E108F924D8FECF890 --dput:-u --package=example --expect-suite=unstable --expect-version=1.0-1 --tag2upload-builder-mode --split-view=always --new --trust-changelog '--dsc-control-add=Git-Tag-Tagger=dgit test git user <dgit-test@debian.example.net>' '--dsc-control-add=Git-Tag-Info=tag=??? fp=bcd22cd83243b79d3dfac33ea3dbcbc039b13d8a' '--ch-control-add=Git-Tag-Tagger=dgit test git user <dgit-test@debian.example.net>' '--ch-control-add=Git-Tag-Info=tag=??? fp=bcd22cd83243b79d3dfac33ea3dbcbc039b13d8a' rpush-source 'builder@t2u-b:???/work'
+    oracle$ ???/dgit -wn -pexample --build-products-dir=../bpd --force-uploading-source-only --quilt=gbp --ssh=./ssh-builder --dgit=???/dgit -k52400D7C6342821C0D2B588E108F924D8FECF890 --dput:-u --package=example --expect-suite=unstable --expect-version=1.0-1 --tag2upload-builder-mode --split-view=always --new --trust-changelog --t2u-upstream=upstream/1.0 --t2u-upstream-commit=??? '--t2u-control-add=Git-Tag-Tagger=Outré Name <dgit-test@debian.example.net>' '--t2u-control-add=Git-Tag-Info=tag=??? fp=bcd22cd83243b79d3dfac33ea3dbcbc039b13d8a' rpush-source 'builder@t2u-b:???/work'
 
-    canonical suite name for unstable is sid
+    Format `3.0 (quilt)', need to check/update patch stack
 ##  Don't insist on particular output from dgit rpush.
  *  ???
     dgit (build host) ok: pushed and uploaded 1.0-1

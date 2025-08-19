@@ -45,17 +45,26 @@ t-expect-fail "upstream tag $upstreamtag is not an ancestor of refs/heads/master
 t-t2u-test --quilt=gbp --upstream=$upstreamtag
 
 t-expect-fail "upstream tag $upstreamtag is not an ancestor of refs/heads/master" \
-t-t2u-test --quilt=gbp --force=changed-suite --force=no-such-force-option --upstream=$upstreamtag
+t-t2u-test --quilt=gbp --force=no-such-force-option --upstream=$upstreamtag
 
-git deborig $upstreamtag
+t-git-deborig $upstreamtag
 pristine-tar commit ../${p}_${uv}.orig.tar.xz $upstreamtag
 t-expect-fail "pristine-tar data present" \
-t-t2u-test --quilt=gbp --force=changed-suite \
-           --force=upstream-nonancestor \
+t-t2u-test --quilt=gbp --force=upstream-nonancestor \
            --upstream=$upstreamtag
 git branch -D pristine-tar
 
-t-t2u-test --quilt=gbp --force=changed-suite --force=no-such-force-option-1 \
+echo foo >>src.c
+t-expect-fail "there are uncommitted changes" \
+t-t2u-test --quilt=gbp --upstream=$upstreamtag
+git checkout src.c
+
+touch src2.c
+t-expect-fail "there are untracked files," \
+t-t2u-test --quilt=gbp --upstream=$upstreamtag
+rm src2.c
+
+t-t2u-test --quilt=gbp --force=no-such-force-option-1 \
               --force=upstream-nonancestor,no-such-force-option-2 \
               --upstream=$upstreamtag
 t-t2u-succeeded
@@ -100,7 +109,8 @@ expect-email () {
 	next-mangle "$1"
 	local perl=$2
 	local mregexp=$3
-	with-mangled "$perl" irrecoverable "$mregexp"
+	with-mangled "$perl" irrecoverable
+	egrep "$mregexp" $tmp/sendmail.last
 }
 
 raw-mangled () {
@@ -217,6 +227,13 @@ cp -al ../$p ../$p.save
 cd ../$p
 
 git cat-file tag $tagname >../raw-base
+
+t2u_drs_tag_corruption=' '
+# ^ adding just a space lets the signature still verify
+#   (since we ignore the unfinished blank line after the signature)
+#   which allows us to trip this error path without faffing with two tags
+expect-email '' tag-changed 'tag changed between fetches'
+t2u_drs_tag_corruption=''
 
 next-mangle sigfail
 perl -pe <../raw-base >../tagobj-$ident 's/ split / split ignoreme /'

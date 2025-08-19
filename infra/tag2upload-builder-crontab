@@ -8,4 +8,4 @@
 
 MAILTO=dgit-owner@debian.org
 
-0 3 * * 4 chronic /usr/share/dgit-infrastructure/debian/tag2upload-builder-rebuild
+55 3 * * 4 chronic /usr/share/dgit-infrastructure/debian/tag2upload-builder-rebuild

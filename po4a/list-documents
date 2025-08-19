@@ -3,44 +3,7 @@ set -e
 set -o pipefail
 shopt -s inherit_errexit # #514862, wtf
 
-fail () { "echo >&2 $0: $*"; exit 1; }
-
-langs=( $( { ! test -f *.po || ls *.po; } \
-	   | sed 's#\.po$##; s#.*\.##' \
-           | LC_COLLATE=C.UTF-8 sort -u) )
-
-cat <<END
-[po4a_langs] $langs
-# ^ add your language here (separate with spaces)
-
-# Do not edit the rest of this file.  It is automatically maintained.
-[options] opt:"-MUTF-8" opt:"-LUTF-8" opt:"-k10"
-[po4a_paths] \$master.pot \$lang:\$master.\$lang.po
-END
-
-for manpage in $(cd .. && env -u MAKELEVEL -u MAKEFLAGS make list-manpages); do
-	manpage_done=false
-
-	try_manpage () {
-		if $manpage_done; then return; fi
-
-		type=$1; ext=$2
-
-		src=../$manpage$ext
-		if ! [ -f $src ]; then return; fi
-
-		section=${manpage##*.}
-		base=${manpage%.*}
-		page=$base.$section 
-
-		cat <<END
-[type: $type] $src \$lang:translated/man/\$lang/man$section/$page$ext master:file=${base}_${section}
-END
-
-		manpage_done=true
-	}		
-
-	try_manpage pod .pod
-	try_manpage man ''
-	$manpage_done || fail "no source for $manpage"
-done
+cd ..
+unset MAKELEVEL
+unset MAKEFLAGS
+make list-manpages
