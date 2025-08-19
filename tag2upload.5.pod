@@ -55,16 +55,25 @@ The brackets must be at the start and end of the line.
 Inside the brackets, after C<dgit>,
 are space separated metadata items.
 
-Each metadata item is C<keyword> or C<keyword=value>.
-Keywords start with one of the characters C<- + . = 0-9 a-z>.
+Each metadata item is C<keyword> or C<keyword=value>
+(splitting on the first C<=>).
+Keywords start with one of the characters C<! - + . 0-9 a-z>.
 Items may not contain whitespace.
 Any metadata line whose first item starts with a double quote C<">
 is reserved for future expansion, and the whole line is ignored.
 
-The placement and ordering of metadata items is not relevant,
-unless specified otherwise here.
-Some metadata items may be repeated.
-Unknown keywords are ignored.
+The placement and ordering of metadata items is not relevant, except
+for the relative ordering of items with the same keyword.  A keyword
+may be repeated iff this is stated in its description.  Unknown
+keywords are ignored (and may be repeated).
+
+So the abstract data model of a whole parsed but not interpeted tag is:
+map, from keyword, to nonempty sequence of optional values.
+In Rust-ish syntax, C<< Map<String, Vec<Option<String>>> >>.
+
+Keywords that start with C<!> contain information which is critical
+for correct processing by the tag2upload service; the service
+will reject tags containing unknown C<!> items.
 
 =over
 
@@ -196,6 +205,80 @@ or the orig already present in the archive --
 either patched or unpatched, according to the quilt mode.
 
 Mismatches will cause the tag2upload service's processing to fail.
+
+=head1 SEMANTICS
+
+=head2 Influences on processing at the tag2upload service
+
+The tag2upload service's processing of a particular tag is influenced
+B<only> by:
+
+=over
+
+=item git objects whose object ids are quoted in the tag,
+      and git objects they transitively reference by id
+
+=item the distro's ftp archive (e.g. ftp.debian.org)
+
+=item the distro's git deposiotry (e.g. *.dgit.debian.org)
+
+The URL and ref names in the tag2upload tag text
+are only used as aid to fetching the objects named by objectid.
+
+=back
+
+=head2 Meaning of the tag
+
+The tag, and git objects it references, uniquely determine:
+
+=over
+
+=item The canonical source tree
+
+I.e., the patches-applied tree,
+ready for building with dpkg-buildpackage.
+(Also known as the "dgit view" tree.)
+
+Depending on the quilt mode,
+this may not be identical to the tagged git tree.
+
+The service will make a tag C<archive/DISTRO/VERSION>
+on a commit whose tree is in this canonical form.
+
+=item The destination distro, suite, source package name, and version
+
+These are directly stated in the tag, or available in the tagged tree.
+
+All of the copies of the information must correspond.
+For example, C<Source> in C<debian/control> must match
+C<source=> in the tag.
+Otherwise the tag is incoherent.
+
+=back
+
+The tag does B<not> uniquely determine:
+
+=over
+
+=item The precise source package (.dsc) which should be generated
+
+This is because the source package may be influenced by
+orig tarballs present in the distro's ftp archive.
+
+=item The precice canonical view git ancestry
+
+The C<archive/DISTRO/VERSION> tag will be made on a commit
+whose tree is uniquely determined by the tag,
+as noted above.
+
+That commit will have the DEP-14 tagged commit as an ancestor.
+
+But, with C<split> in the tag,
+the canonical view's other ancestors
+can depend on the existing contents of both the git depository,
+and the ftp archive.
+
+=back
 
 =head1 REPLAY
 

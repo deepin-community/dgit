@@ -36,7 +36,7 @@ consult the appropriate C<dgit-maint-*(7)> workflow tutorial,
 
 =over 4
 
-    % dgit clone glibc jessie
+    % dgit clone glibc bookworm
     % cd glibc
     % git am ~/glibc-security-fix.diff
     % dch --nmu "Apply upstream's fix for foo bug."
@@ -44,9 +44,9 @@ consult the appropriate C<dgit-maint-*(7)> workflow tutorial,
     % dpkg-buildpackage -uc -b
     [ run your tests ]
     % dch -r && git add debian/changelog && git commit -m"Finalise NMU"
-    % dgit -wgf sbuild -A -c jessie
+    % dgit -wgf sbuild -A -d trixie
     [ any final tests on generated .debs ]
-    % dgit -wgf [--delayed=5] push-source jessie
+    % dgit -wgf [--delayed=5] push-source bookworm
     [ enter your gnupg passphrase as prompted ]
     [ see that push and upload are successful ]
     [ prepare and email NMU diff (git-diff, git-format-patch) ]

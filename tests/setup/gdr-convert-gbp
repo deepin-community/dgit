@@ -37,8 +37,7 @@ done
 git checkout master
 gbp import-orig --upstream-version=2.0 ../$ust
 
-t-dch-commit -v 2.0-1 -m 'new upstream (did gbp import-orig)'
-t-dch-commit-r
+t-dch-commit-bump 'new upstream (did gbp import-orig)' -v 2.0-1
 
 echo garbage >debian/patches/garbage
 git add debian/patches/garbage
@@ -68,9 +67,7 @@ t-git-debrebase -fupstream-has-debian -funused-patches convert-from-gbp
 
 git branch converted-from-gbp
 
-v=2.0-2
-t-dch-commit -v $v -m 'switch to git-debrebase, no other changes'
-t-dch-commit-r
+t-dch-commit-bump 'switch to git-debrebase, no other changes'
 
 $ifarchive t-dgit -wgf push-source --new
 git push

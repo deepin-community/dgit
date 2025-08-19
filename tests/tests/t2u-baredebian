@@ -25,12 +25,15 @@ sed -i '15icorruption' debian/patches/0002-Edit-the-.c-file.patch
 git add debian/patches/0002-Edit-the-.c-file.patch
 git commit -m"corrupt a quilt patch to test the patches-nonapplicable check"
 
-tagname=test-dummy/$v
-
 t-expect-fail "'git apply' failed to apply patch 0002-Edit-the-.c-file.patch ('patches-nonapplicable' check)" \
 t-t2u-test --baredebian
 
 git reset --hard HEAD~1
+
+touch debian/src2.c
+t-expect-fail "there are untracked files in debian/," \
+t-t2u-test --baredebian
+rm debian/src2.c
 
 t-t2u-test --baredebian
 t-t2u-succeeded

@@ -48,12 +48,12 @@ t-t2u-setup-repo
 
 # TODO Make split.b ref.
 
-tagname=test-dummy/$v
-
 # Check that the thing we are about to tag (still) lacks d/patches.
 test ! -e debian/patches
 # And, debpush it.
+t-expect-fail "unneeded --quilt=linear on command line, would have autodetected it" \
 t-t2u-test --quilt=linear
+t-t2u-test
 t-t2u-succeeded
 
 git branch split.p dgit/dgit/sid

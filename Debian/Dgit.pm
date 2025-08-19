@@ -2,8 +2,8 @@
 # dgit
 # Debian::Dgit: functions common to dgit and its helpers and servers
 #
-# Copyright (C)2015-2020,2022-2023 Ian Jackson
-# Copyright (C)2020                Sean Whitton
+# Copyright (C)2015-2020,2022,2023,2025 Ian Jackson
+# Copyright (C)2020,2025                Sean Whitton
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -35,6 +35,7 @@ use File::Basename;
 use Dpkg::Control::Hash;
 use Debian::Dgit::ExitStatus;
 use Debian::Dgit::I18n;
+use Debian::Dgit::Core;
 
 BEGIN {
     use Exporter   ();
@@ -112,9 +113,9 @@ our $branchprefix = 'dgit';
 our $series_filename_re = qr{(?:^|\.)series(?!\n)$}s;
 our $extra_orig_namepart_re = qr{[-0-9a-zA-Z]+};
 our $orig_f_comp_re = qr{orig(?:-$extra_orig_namepart_re)?};
-our $orig_f_sig_re = '\\.(?:asc|gpg|pgp)';
-our $tarball_f_ext_re = "\\.tar(?:\\.\\w+)?(?:$orig_f_sig_re)?";
-our $orig_f_tail_re = "$orig_f_comp_re$tarball_f_ext_re";
+our $orig_f_sig_re = qr{\.(?:asc|gpg|pgp)};
+our $tarball_f_ext_re = qr{\.tar(?:\.\w+)?(?:$orig_f_sig_re)?};
+our $orig_f_tail_re = qr{$orig_f_comp_re$tarball_f_ext_re};
 our $git_null_obj = '0' x 40;
 our $ffq_refprefix = 'ffq-prev';
 our $gdrlast_refprefix = 'debrebase-last';
@@ -234,35 +235,6 @@ sub messagequote ($) {
     s{\t}{\\t}g;
     s{[\000-\037\177]}{ sprintf "\\x%02x", ord $& }ge;
     $_;
-}
-
-sub shellquote {
-    # Quote an argument list for use as a fragment of shell text.
-    #
-    # Shell quoting doctrine in dgit.git:
-    #  * perl lists are always unquoted argument lists
-    #  * perl scalars are always individual arguments,
-    #    or if being passed to a shell, quoted shell text.
-    #
-    # So shellquote returns a scalar.
-    #
-    # When invoking ssh-like programs, that concatenate the arguments
-    # with spaces and then treat the result as a shell command, we never
-    # use the concatenation.  We pass the intended script as a single
-    # parameter (which is in accordance with the above doctrine).
-    my @out;
-    local $_;
-    defined or confess __ 'internal error' foreach @_;
-    foreach my $a (@_) {
-	$_ = $a;
-	if (!length || m{[^-=_./:0-9a-z]}i) {
-	    s{['\\]}{'\\$&'}g;
-	    push @out, "'$_'";
-	} else {
-	    push @out, $_;
-	}
-    }
-    return join ' ', @out;
 }
 
 sub printcmd {

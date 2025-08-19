@@ -2,7 +2,8 @@
 
 # git-debpush -- create & push a git tag with metadata for an ftp-master upload
 #
-# Copyright (C) 2019, 2024 Sean Whitton
+# Copyright (C) 2019, 2024-2025 Sean Whitton
+# Copyright (C) 2025            Ian Jackson
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -23,20 +24,52 @@ shopt -s inherit_errexit # #514862, wtf
 
 # DESIGN PRINCIPLES
 #
-# - do not invoke dgit, do anything involving any tarballs, no network
-#   access except `git push` right at the end
+# - Only the 'git tag' and 'git push', if we get that far, should make
+#   user-visible changes.  I.e., our checks should not leave traces.
 #
-# - do not look at the working tree, like `git push` `git tag`
+# - Minimal output.
+#   This makes the tool more approachable and ensures that messages
+#   about failed checks stand out.  If people want to know more about
+#   what the checks have found out or, in --dry-run mode, what the
+#   script would have done, we might consider adding a --verbose mode.
 #
-# - we are always in split brain mode, because that fits this workflow,
+# - Simple output.  E.g., don't mention the --force=foo options, which
+#   are for scripting, in error messages.  Just mention plain '-f'.
+#
+# - It's fine to have options to tweak things, such as --distro,
+#   --branch and --upstream, but try hard to make it so that people
+#   uploading to Debian won't usually need to pass any.
+#
+# - Do not invoke dgit, or do anything involving any tarballs.
+#
+# - Do not look at the specific contents of the working tree, like how
+#   'git push' and 'git tag' don't; the exception is determining the
+#   binary question of whether there's any uncommitted work.
+#
+# - We are always in split brain mode, because that fits this workflow,
 #   and avoids pushes failing just because dgit in the intermediary
-#   service wants to append commits
+#   service wants to append commits.
 #
-# - if there is no previous tag created by this script, require a quilt
+# - If there is no previous tag created by this script, require a quilt
 #   mode; if there is a previous tag, and no quilt mode provided, assume
-#   same quilt mode as in previous tag created by this script
+#   same quilt mode as in previous tag created by this script.
+#
+# - For consistency, we unconditionally fail only when we are in a situation
+#   where we can't make a tag, or where what tag to make would be ambiguous,
+#   or equivalent.  Otherwise it's just a failed check, even if we know that
+#   conversion at the tag2upload service will fail.
+#
+# PROGRAMMING CONVENTIONS
+#
+# - Guard all binary string comparisons like this: '[ "x$foo" = xblah ]'.
+#   It doesn't always make any possible difference, but writing these
+#   comparisons the same way everywhere is more readable.
+#
+# - Do use -n and -z rather than constructions like '[ "x$foo" != x ]'.
+#
+# - We usually don't quote constant strings.
 
-# **** Helper functions and variables ****
+#**** Helper functions and variables ****
 
 us="$(basename "$0")"
 git_playtree_setup=git-playtree-setup ###substituted###
@@ -51,6 +84,15 @@ cleanup() {
 fail () {
     echo >&2 "$us: $*";
     exit 127;
+}
+
+fail_failed_check () {
+    # We don't mention the --force=check options here as those are
+    # mainly for use by scripts, or when you already know what check
+    # is going to fail before you invoke git-debpush.  Keep the
+    # script's terminal output as simple as possible.  No "see the
+    # manpage"!
+    fail "some non-overridden check(s) failed; you can pass -f/--force to ignore them"
 }
 
 badusage () {
@@ -68,6 +110,16 @@ get_file_from_ref () {
     fi
 }
 
+convert_version_to_dep14_tag () {
+    # distro must be set
+    local version="$1"
+    local git_version
+    git_version=$(
+	echo $version | tr ':~' '%_' | sed 's/\.(?=\.|$|lock$)/.#/g'
+    )
+    echo "$distro/$git_version"
+}
+
 failed_check=false
 fail_check () {
     local check=$1; shift
@@ -80,27 +132,21 @@ fail_check () {
         echo >&2 "$us: warning: $* ('$check' check)"
     else
         echo >&2 "$us: check failed: $* ('$check' check)"
-        failed_check=true
+	# Require STDERR to be a terminal too so that we know the name
+	# of the check that failed is visible.
+	if $prompting && [ -t 0 ] && [ -t 1 ] && [ -t 2 ]; then
+	    read -p "$us: proceed anyway? (y/N) " resp
+	    [ "x${resp,,}" = xy ] || [ "x${resp,,}" = xyes ] \
+		|| fail_failed_check
+	else
+            failed_check=true
+	fi
     fi
 }
 
 fail_check_upstream_nonidentical () {
     fail_check upstream-nonidentical \
  "the upstream source in tag $upstream_tag is not identical to the upstream source in $branch"
-}
-
-find_last_tag () {
-    local prefix=$1
-
-    set +o pipefail             # perl will SIGPIPE git-log(1) here
-    git log --pretty=format:'%D' --decorate=full "$branch" \
-        | perl -MDpkg::Version -F", " -we'
-            @debian_tag_vs =
-                  sort { version_compare($b, $a) } grep defined,
-                  map m|tag: refs/tags/'"$prefix"'(.+)|, @F
-              or next;
-            print "'"$prefix"'$debian_tag_vs[0]\n"; exit'
-    set -o pipefail
 }
 
 check_treesame () {
@@ -115,7 +161,7 @@ check_treesame () {
 
     # show the user what the difference was
     if [ $git_diff_rc = 1 ]; then
-        git diff --compact-summary "$first".."$second" -- . "$@"
+        git --no-pager diff --compact-summary "$first".."$second" -- . "$@"
     fi
 
     if [ $git_diff_rc -le 1 ]; then
@@ -128,16 +174,9 @@ check_treesame () {
 check_patches_apply () {
     local should_match_branch="$1"
 
-    local playground
-    playground="$(git rev-parse --git-dir)/gdp"
-    local playtree="$playground/apply-patches"
     local git_apply_rc=0
 
-    rm -rf "$playground"
-    mkdir -p "$playtree"
-    local pwd="$(pwd)"
     cd "$playtree"
-    "$git_playtree_setup" .
 
     # checking out the upstream source and then d/patches on top
     # ensures this check will work for a variety of quilt modes
@@ -169,46 +208,81 @@ check_patches_apply () {
     fi
 
     cd "$pwd"
-    rm -rf "$playground"
 }
 
-# **** Parse command line ****
+untracked_in () {
+    local dir=$1
+    git ls-files -o --exclude-standard -- :"$dir"
+}
 
-getopt=$(getopt -s bash -o 'ntfu:' \
-              -l 'dry-run,tag-only,print-tag-text,force::,branch:,\
-remote:,distro:,upstream:,quilt:,gbp,dpm,\
+#**** Parse command line ****
+
+getopt=$(getopt -s bash -o 'ntfu:h' \
+              -l 'dry-run,tag-only,print-tag-text,batch,force::,help,\
+branch:,remote:,distro:,upstream:,quilt:,gbp,dpm,\
 baredebian,baredebian+git,baredebian+tarball' \
               -n "$us" -- "$@")
 eval "set - $getopt"
 set -e$DGIT_TEST_DEBPUSH_DEBUG
 
-git_tag_opts=()
+git_tag_sign_opts=() # -u ..., or nothing
 tagging=true
 pushing=true
 printing=false
+prompting=true
 force_all=false
 force=
 distro=debian
+qmode_opt=
 quilt_mode=
 branch="HEAD"
 
 while true; do
     case "$1" in
+	'-h'|'--help')      cat >&2 <<EOF; exit ;;
+usage: git debpush [OPTION]..
+
+For most uploads you should be able to type just 'git debpush'.
+
+The first upload of a package using tag2upload requires specifying
+your workflow with --gbp, --dpm, --baredebian or --quilt=MODE.
+
+General options
+--dry-run, -n		don't tag or push
+--tag-only, -t		just tag, don't push
+--print-tag-text	print the tag text to stdout
+--batch			disable interactive prompting
+--help, -h		print this help text and exit
+
+-u KEYID		passed through to git-tag(1)
+--distro		distribution name, defaults to "debian"
+--branch		what to tag, defaults to current branch
+--remote		where to push, defaults to this branch's remote
+--upstream		tag for upstream part of package
+
+Mutually exclusive options
+--quilt=gbp, --gbp			unapplied branch format
+--quilt=dpm, --dpm			git-dpm(1) branch format
+--quilt=baredebian, --baredebian	bare debian/ branch format
+--quilt=linear				linear, also for git-debrebase
+--quilt=smash|try-linear|nofix		rarely wanted, see the docs
+EOF
         '-n'|'--dry-run')   tagging=false; pushing=false; shift;   continue ;;
         '-t'|'--tag-only')  pushing=false;                shift;   continue ;;
         '--print-tag-text') printing=true;                shift;   continue ;;
-        '-u')               git_tag_opts+=(-u "$2");      shift 2; continue ;;
+        '--batch')          prompting=false;              shift;   continue ;;
+        '-u')               git_tag_sign_opts+=(-u "$2"); shift 2; continue ;;
         '-f')               force_all=true;               shift;   continue ;;
-        '--gbp')            quilt_mode='gbp';             shift;   continue ;;
-        '--dpm')            quilt_mode='dpm';             shift;   continue ;;
+        '--gbp')            qmode_opt=$1; quilt_mode=gbp; shift;   continue ;;
+        '--dpm')            qmode_opt=$1; quilt_mode=dpm; shift;   continue ;;
         '--branch')         branch=$2;                    shift 2; continue ;;
         '--remote')         remote=$2;                    shift 2; continue ;;
         '--distro')         distro=$2;                    shift 2; continue ;;
-        '--quilt')          quilt_mode=$2;                shift 2; continue ;;
+        '--quilt')      qmode_opt="$1=$2"; quilt_mode=$2; shift 2; continue ;;
         '--upstream')       upstream_tag=$2;              shift 2; continue ;;
 
         '--baredebian'|'--baredebian+git')
-            quilt_mode=baredebian;                        shift;   continue ;;
+            qmode_opt=$1; quilt_mode=baredebian;          shift;   continue ;;
         '--baredebian+tarball')
             fail "--baredebian+tarball quilt mode not supported"
             ;;
@@ -235,40 +309,53 @@ if [ $# != 0 ]; then
 fi
 
 case "$quilt_mode" in
-    linear|auto|smash|nofix|gbp|dpm|unapplied|baredebian|'') ;;
+    linear|try-linear|smash|nofix|gbp|dpm|unapplied|baredebian|'') ;;
     baredebian+git) quilt_mode="baredebian" ;;
     baredebian+tarball) fail "--baredebian+tarball quilt mode not supported" ;;
     *) badusage "invalid quilt mode: $quilt_mode" ;;
 esac
 
-# **** Early sanity check ****
+#**** Very early sanity checks ****
 
-if [ "$branch" = "HEAD" ] \
-       && ! git symbolic-ref --quiet HEAD >/dev/null; then
-    fail_check detached \
-               "HEAD is detached; you probably don't want to debpush it"
+#---- Detached HEAD
+
+set +e
+headref="$(git symbolic-ref --quiet HEAD)"
+git_sym_ref_rc=$?
+set -e
+if [ $git_sym_ref_rc = 0 ]; then
+    detached=false
+elif [ $git_sym_ref_rc = 1 ]; then
+    detached=true
+else
+    fail "git-symbolic-ref unexpectedly exited with exit code >1"
 fi
 
-# **** Gather git information ****
+if [ "x$branch" = xHEAD ] && $detached; then
+    fail_check detached \
+ "HEAD is detached; you probably don't want to debpush it"
+fi
+
+#**** Gather git information ****
 
 remoteconfigs=()
 to_push=()
 
 # Maybe $branch is a symbolic ref.  If so, resolve it
 branchref="$(git symbolic-ref -q "$branch" || test $? = 1)"
-if [ "x$branchref" != x ]; then
+if [ -n "$branchref" ]; then
    branch="$branchref"
 fi
 # If $branch is the name of a branch but it does not start with
 # 'refs/heads/', prepend 'refs/heads/', so that we can know later
 # whether we are tagging a branch or some other kind of committish
 case "$branch" in
-    refs/heads/*) ;;
+    refs/heads/?*) ;;
     *)
         branchref="$(git for-each-ref --format='%(objectname)' \
                          "[r]efs/heads/$branch")"
 	# TODO test this code path
-        if [ "x$branchref" != x ]; then
+        if [ -n "$branchref" ]; then
             branch="refs/heads/$branch"
         fi
         ;;
@@ -278,10 +365,12 @@ esac
 # pushRemote and remote to the things we'll check if the user didn't
 # supply a remote
 case "$branch" in
-    refs/heads/*)
-        b=${branch#refs/heads/}
-        to_push+=("$b")
-        remoteconfigs+=( "branch.$b.pushRemote" "branch.$b.remote" )
+    refs/heads/?*)
+        bare_branch_name=${branch#refs/heads/}
+        remoteconfigs+=(
+	    "branch.$bare_branch_name.pushRemote"
+	    "branch.$bare_branch_name.remote"
+	)
         ;;
 esac
 
@@ -292,17 +381,31 @@ branch_commit="$(git rev-parse --verify "${branch}^{commit}")"
 # remote, whether there's a default push remote configured
 remoteconfigs+=(remote.pushDefault)
 
-if $pushing && [ "x$remote" = x ]; then
+if $pushing && [ -z "$remote" ]; then
     for c in "${remoteconfigs[@]}"; do
 	remote=$(git config "$c" || test $? = 1)
-	if [ "x$remote" != x ]; then break; fi
+	if [ -n "$remote" ]; then break; fi
     done
-    if [ "x$remote" = x ]; then
+    if [ -z "$remote" ]; then
 	fail "pushing, but could not determine remote, so need --remote="
     fi
 fi
 
-# **** Gather source package information ****
+#---- set up a playtree
+
+pwd="$(pwd)"
+
+playground="$(git rev-parse --git-dir)/git-debpush"
+playtree="$playground/check"
+
+rm -rf "$playground"
+mkdir -p "$playtree"
+
+cd "$playtree"
+"$git_playtree_setup" .
+cd "$pwd"
+
+#**** Gather source package information ****
 
 temp=$(mktemp -d)
 trap cleanup EXIT
@@ -311,6 +414,39 @@ git cat-file blob "$branch":debian/changelog >"$temp/debian/changelog"
 version=$(cd "$temp"; dpkg-parsechangelog -SVersion)
 source=$(cd "$temp"; dpkg-parsechangelog -SSource)
 target=$(cd "$temp"; dpkg-parsechangelog -SDistribution)
+
+# Find the version of the most recent maintainer upload (ie disregarding
+# NMUs), by looking at the changelog.  We use this to get the right quilt
+# mode in the face of concurrent pushes from co-maintainers.
+previous_maintainer_version=$(
+    cd $temp
+
+    # We would have preferred not to hard code this knowledge of Debian
+    # Policy, because that's distro-specific.  However, we only use this for
+    # quilt mode detection (see above).  Doing it this way seems better than
+    # inventing a distro policy config mechanism.
+
+    case "$distro" in
+	# Debian Policy 5.6.12.2 "Special version conventions"
+	# NMUs are either revision with a dot,
+	# or native version containing `nmu`.
+	debian) version_is_nmu_pcre='-.*\.|^[^-]*nmu^[^-]*$' ;;
+	*) version_is_nmu_pcre='^$' ;;
+    esac
+
+    set +o pipefail # Work around #423399
+    dpkg-parsechangelog --all --format=rfc822 -SVersion	\
+        | tail -n +2					\
+	| grep -P -v -e "$version_is_nmu_pcre"		\
+	| head -n1
+    ps="${PIPESTATUS[*]/141/0}"
+    case "$ps" in
+	'0 0 1 0' | '0 0 0 0') ;; # ok if grep findsno matches
+	*) fail 'changelog parsing failed'
+    esac
+    set -o pipefail
+)
+
 rm -rf -- "$temp"
 trap - EXIT
 
@@ -332,51 +468,53 @@ case "$format" in
 	;;
 esac
 
-# **** Gather git history information ****
+#---- information in git form, but derived from the source tree
 
-last_debian_tag=$(find_last_tag "$distro/")
-last_archive_tag=$(find_last_tag "archive/$distro/")
+debian_tag=$(convert_version_to_dep14_tag "$version")
+
+#**** Determine upstream git info ****
 
 upstream_info=""
 if $upstream; then
-    if [ "x$upstream_tag" = x ]; then
-	upstream_tag=$(
-	    set +e
-	    git deborig --just-print --version="$version" \
-			   | head -n1
-	    ps="${PIPESTATUS[*]}"
-	    set -e
-	    case "$ps" in
-		"0 0"|"141 0") ;; # ok or SIGPIPE
-		*" 0")
-		    echo >&2 \
- "$us: git-deborig failed; maybe try $us --upstream=TAG"
-		    exit 0
-		    ;;
-		*) exit 127; # presumably head will have complained
-	    esac
-	)
-	if [ "x$upstream_tag" = x ]; then exit 127; fi
+    if [ -z "$upstream_tag" ]; then
+	existing_gdo_tags=()
+	for gdo_tag in $(${DGIT_DEBORIG_TEST-git deborig} \
+			     --just-print-tag-names --version="$version"); do
+	    if [ -n "$gdo_tag" ] \
+		   && [ -n "$(git for-each-ref --format='%(objectname)' \
+	       	      	   	  "[r]efs/tags/$gdo_tag")" ]; then
+		existing_gdo_tags+=("$gdo_tag")
+	    fi
+	done
+	case ${#existing_gdo_tags[@]} in
+	    0) fail "found no upstream tag; maybe try $us --upstream=TAG" ;;
+	    1) upstream_tag=${existing_gdo_tags[0]} ;;
+            *)
+		echo >&2 "$us: found upstream tags: ${existing_gdo_tags[*]}"
+		echo >&2 "$us: use --upstream=TAG to say which one to use"
+		exit 127
+		;;
+	esac
     fi
     upstream_committish=$(git rev-parse "refs/tags/${upstream_tag}"^{})
     upstream_info=" upstream-tag=$upstream_tag upstream=$upstream_committish"
     to_push+=("$upstream_tag")
 fi
 
-# **** Useful sanity checks ****
+#**** Early sanity checks ****
 
-# ---- UNRELEASED suite
+#---- UNRELEASED suite
 
-if [ "$target" = "UNRELEASED" ]; then
+if [ "x$target" = "xUNRELEASED" ]; then
     fail_check unreleased "UNRELEASED changelog"
 fi
 
-# ---- Pushing dgit view to maintainer view
+#---- Pushing dgit view to maintainer view
 
-if ! [ "x$last_debian_tag" = x ] && ! [ "x$last_archive_tag" = x ]; then
+if [ -n "$last_debian_tag" ] && [ -n "$last_archive_tag" ]; then
     last_debian_tag_c=$(git rev-parse "$last_debian_tag"^{})
     last_archive_tag_c=$(git rev-parse "$last_archive_tag"^{})
-    if ! [ "$last_debian_tag_c" = "$last_archive_tag_c" ] \
+    if [ "x$last_debian_tag_c" != "x$last_archive_tag_c" ] \
             && git merge-base --is-ancestor \
                    "$last_debian_tag" "$last_archive_tag"; then
         fail_check dgit-view \
@@ -384,33 +522,393 @@ if ! [ "x$last_debian_tag" = x ] && ! [ "x$last_archive_tag" = x ]; then
     fi
 fi
 
-# ---- Targeting different suite
+#---- git-debrebase branch format checks
 
-if ! [ "x$last_debian_tag" = x ]; then
-    temp=$(mktemp -d)
-    trap cleanup EXIT
-    mkdir -- "$temp/debian"
-    git cat-file blob "$last_debian_tag":debian/changelog >"$temp/debian/changelog"
-    prev_target=$(cd "$temp"; dpkg-parsechangelog -SDistribution)
-    rm -rf -- "$temp"
-    trap - EXIT
+# only check branches, since you can't run `git debrebase conclude` on
+# non-branches
+case "$branch" in
+    refs/heads/?*)
+        # see "STITCHING, PSEUDO-MERGES, FFQ RECORD" in git-debrebase(5)
+        ffq_prev_ref="refs/ffq-prev/${branch#refs/}"
+        if git show-ref --quiet --verify "$ffq_prev_ref"; then
+            fail_check unstitched \
+ "this looks like an unstitched git-debrebase branch, which should not be pushed"
+        fi
+esac
 
-    if ! [ "$prev_target" = "$target" ] && ! [ "$target" = "UNRELEASED" ]; then
-        fail_check changed-suite \
-"last upload targeted $prev_target, now targeting $target; might be a mistake?"
+#---- Intent to use pristine-tar for this upload
+
+case "$version" in
+    *"-1"|*"-0.1")
+	uversion="${version%-*}"
+	tb="${source}_${uversion}.orig.tar."
+	if git rev-parse --verify --quiet refs/heads/pristine-tar >/dev/null \
+		&& { set +o pipefail # perl will SIGPIPE git-ls-tree(1)
+		     git ls-tree -z --name-only refs/heads/pristine-tar \
+			 | perl -wn0e'exit 0 if /^\Q'"$tb"'\E/; exit 1 if eof'
+		     set -o pipefail; }; then
+	    fail_check pristine-tar \
+ "pristine-tar data present for $uversion, but this will be ignored (#1106071)"
+	fi
+esac
+
+#---- Submodules
+
+# Per gitmodules(7) "FORMS", .gitmodules is always present at the
+# top-level of the tree if there are submodules.
+[ -n "$(git ls-tree --full-tree "$branch" -- .gitmodules)" ] \
+    && fail_check submodule \
+ "git submodule(s) detected; these are not supported"
+
+#---- d/source/local-options
+
+[ -n "$(git ls-tree --full-tree "$branch" -- debian/source/local-options)" ] \
+    && fail_check local-options \
+ "debian/source/local-options detected; this file is not supported"
+
+#**** Fetch from the remote ****
+
+# This is fiddly.  We want to check for the existence of various
+# remote refs and/or fetch from them:
+#
+# Specifically, the following refs on the remote:
+#
+#   * refs/tags/debian/VVVV
+#
+#     This probably doesn't exist but if it does exist we should fail.
+#     We don't actually need to see the git objects it consists of
+#     for our own purposes.  We *could* take the trouble to fetch it
+#     to the user's git namespace, but right now we don't do that.
+#
+#   * refs/tags/debian/PPPP where PPPP is the previous maintainer
+#     upload version.
+#
+#     We want to properly fetch this into our playtree's ref namespace.
+#     We want it because if the user's branch has been converted to a
+#     different branch format by their co-maintainer, we'll need it
+#     to tell us the quilt mode.  We want it *not* to be in the user's
+#     refs/tags/ because the global tag namespace means fetching tags
+#     willy-nilly can be annoying.
+#
+#   * refs/heads/BRANCH.
+#
+#     We want this for ff checks.
+#
+#     Ideally we want to fetch this into the user's remote but that
+#     would involve running git fetch outside the playtree as well
+#     as in it.
+#
+# There are some awkwardnesses:
+#
+#  a. If a ref we ask for doesn't exist on the remote, git-fetch crashes.
+#  b. git-fetch supports glob patterns but only * at the end, so
+#     we can't use it to fetch only things we want.
+#  c. Remote tracking branches are allowed to be affected by ref mapping
+#     driven by the config.
+#  d. tags have an annoying global namespace and we want to be careful
+#     not to accidentally pollute it
+#
+# Our strategy is:
+#
+#  0. Mirror the user's tag namespace in the playtree's refs/tags/.
+#
+#  1. Run git ls-remote and interpret its output to tell us what the
+#     situation is there.
+#
+#  2. For the objects we actually want (see above), check whether
+#     we have them already (with git cat-file).  If we don't seem to,
+#     run git fetch.
+
+if $pushing; then
+    fetch_url="$(git remote get-url "$remote")"
+fi
+
+cd "$playtree"
+
+# copy all tags from the main tree into the playtree
+git fetch -q "$pwd" 'refs/tags/*:refs/tags/*'
+
+get_remote_objid () {
+    # Checks the target of a (possibly nonexistent) remote ref.
+    #
+    # The ref must have been matched ls_remote_patterns (see below).
+    #
+    # If the ref exists remotely, $remote_objid is set nonempty.
+    # (Note that the object may not be available locally!
+    # If that's needed, see need_remote_commit_if_exists.)
+    #
+    # If the ref does not exist remotely, sets remote_objid to ''
+    #
+    # must be called in playtree
+    # expects playground/remote-listing from git-ls-remote (see below)
+    local remote_ref_want=$1 remote_ref_got
+    exec 5<../remote-listing
+    while IFS=$'\t' read <&5 remote_objid remote_ref_got; do
+	if [ "x$remote_ref_got" = "x$remote_ref_want" ]; then return; fi
+    done
+    remote_objid=''
+}
+
+fetch_patterns=()
+fetch_cache_updates=()
+
+need_remote_commit_if_exists () {
+    # Checks a possibly nonexistent remote ref, and schedules to fetch it.
+    #
+    # Sets remote_objid as for `get_remote_objid`,
+    # and makes arrangements fetch it if necessary.
+    #
+    # NB that on return from this function, the object may still be absent!
+    # The actual work of fetching, if necessary, is done below, driven
+    # by `fetch_patterns`.
+    #
+    # TODO rename this function (name TBD, but "commit" is wrong).
+    local remote_ref_want="$1"
+    local play_ref_save="$2"
+    get_remote_objid "$remote_ref_want"
+    if [ -z "$remote_objid" ]; then return; fi
+
+    # git cat-file -e does an existence check, but it bombs out with exit
+    # status 127 and a message to stderr if the answer is "does not exist".
+    # So error handling here is a bit shonky.  That doesn't matter much,
+    # though - it just means if git cat-file crashes we might (try to) fetch
+    # when we don't need to.
+    if git cat-file -e "$remote_objid:" >/dev/null 2>&1; then
+	git update-ref "$play_ref_save" "$remote_objid"
+	return
+    fi
+
+    fetch_patterns+=("$remote_ref_want:$play_ref_save")
+    fetch_cache_updates+=("$remote_objid:git-debpush fetch $remote_ref_want")
+}
+
+if $pushing; then
+
+    ls_remote_patterns=("refs/tags/$debian_tag")
+    case "$branch" in
+	refs/heads/?*)
+	    # We want 'git debpush' to be like 'git push' in what it chooses
+	    # to push where, but this is difficult to do completely correctly
+	    # because there are numerous git config options involved.
+	    # Git's defaults changed at one point and so people's expectations
+	    # are also divided (see push.default in git-config(1)).
+	    #
+	    # A plain 'git push' implies a remote and the name of a branch on
+	    # that remote.  We determine a remote in a principled way by
+	    # looking for push remotes and remote.pushDefault, above.  But
+	    # then we just assume, without much justification, that the branch
+	    # name on that remote is the same as the name of the local branch.
+	    #
+	    # Things that we aren't taking into account:
+	    # - the value of push.default
+	    # - the value of remote.$remote.push.
+	    #
+	    # Effectively $remote_branch is our attempt to guess what remote
+	    # branch a 'git push $remote $bare_branch_name' would push to.
+	    # We could do 'git push $remote $bare_branch_name:$remote_branch'
+	    # instead, but by using just $bare_branch_name we ensure that if
+	    # our prediction, $remote_branch, is wrong, our checks may deliver
+	    # nonsense, but if we do get to doing a git push then we will push
+	    # the branch to where the user probably expects us to push it.
+	    remote_branch="$branch"
+	    ls_remote_patterns+=("$remote_branch")
+	    ;;
+    esac
+    case "$previous_maintainer_version" in
+	*?)
+	    previous_maintainer_tag=refs/tags/$(
+		convert_version_to_dep14_tag "$previous_maintainer_version"
+            )
+	    ls_remote_patterns+=("$previous_maintainer_tag")
+	    ;;
+    esac
+
+    echo >&2 "$us: fetching from $fetch_url to check existing state"
+
+    git ls-remote "$fetch_url" "${ls_remote_patterns[@]}" >../remote-listing
+
+    get_remote_objid "refs/tags/$debian_tag"
+    if [ -n "$remote_objid" ]; then
+	fail "Tag $debian_tag already exists at $fetch_url; can't push it again.
+This version seems already to have been released."
+    fi
+
+    need_remote_commit_if_exists		\
+	"$previous_maintainer_tag"		\
+	"$previous_maintainer_tag"
+
+    if [ -n "$remote_branch" ]; then
+	need_remote_commit_if_exists		\
+	    "$remote_branch"			\
+	    refs/heads/remote-target
+    fi
+
+    if [ ${#fetch_patterns[*]} != 0 ]; then
+
+	git fetch -q "$fetch_url" "${fetch_patterns[@]}"
+
+	# We cache everything we fetched so that we avoid
+	# re-fetching the same objects in future runs.
+	#
+	# We use a single private ref in the main tree for this.
+	# The reflog will keep objects alive for long enough, we think.
+
+	cd "$pwd"
+
+	for cache_update in "${fetch_cache_updates[@]}"; do
+	    remote_objdi="${cache_update%%:*}"
+	    cache_update_desc="${cache_update#*:}"
+	    git update-ref			\
+		--create-reflog			\
+		-m "$cache_update_desc"		\
+		refs/git-debpush/cache		\
+		"$remote_objid"
+	done
+
+	cd "$playtree"
+
+    fi
+
+    # Are we ahead of, or behind, the remote target?
+
+    if [ -n "$remote_branch" ]; then
+	get_remote_objid "$remote_branch"
+
+	if [ "x$remote_objid" = "x$branch_commit" ]; then
+	    # We are tagging precisely the remote branch:
+	    # we don't even need to push it.
+	    # (And we don't, so that if we lose a push race
+	    # we don't fail to push the already-made tag.)
+	    :
+	elif [ -z "$remote_objid" ] \
+		 || git merge-base --is-ancestor \
+                        "$remote_objid" "$branch_commit"; then
+	    # We are ahead of the remote, or it doesn't exist.
+	    # We must push it.
+            to_push+=("$bare_branch_name")
+	elif git merge-base --is-ancestor \
+                 "$branch_commit" "$remote_objid"; then
+	    fail_check branch-behind \
+ "local branch $bare_branch_name is behind that at $fetch_url, can only push the tag"
+	else
+	    fail_check branch-diverged \
+ "local branch $bare_branch_name and remote branch at $fetch_url have diverged! (will only push the tag)"
+	fi
+
+    fi
+
+fi
+
+cd "$pwd"
+
+#**** Gather git history information ****
+
+cd "$playtree"
+
+find_last_tag () {
+    local prefix=$1
+
+    set +o pipefail             # perl will SIGPIPE git-log(1) here
+    git log --pretty=format:'%D' --decorate=full "$branch_commit" \
+        | perl -MDpkg::Version -F", " -we'
+            @debian_tag_vs =
+                  sort { version_compare($b, $a) } grep defined,
+                  map m|tag: refs/tags/'"$prefix"'(.+)|, @F
+              or next;
+            print "'"$prefix"'$debian_tag_vs[0]\n"; exit'
+    set -o pipefail
+}
+
+last_debian_tag=$(find_last_tag "$distro/")
+last_archive_tag=$(find_last_tag "archive/$distro/")
+
+cd "$pwd"
+
+#**** Calculate the default quilt mode ****
+
+to_push+=("$debian_tag")
+last_quilt_mode=
+quilt_mode_text=
+
+if [ "x$format" = "x3.0 (quilt)" ] && [ -n "$last_debian_tag" ]; then
+    last_debian_tag_t=$(git -C "$playtree" rev-parse "$last_debian_tag")
+    last_debian_ttext=$(git -C "$playtree" cat-file -p "$last_debian_tag_t")
+    last_quilt_modes=($(echo "$last_debian_ttext" \
+			    | perl -wne'print "$_\n" for
+                  /(?:^\[dgit|\G.*?)\s--quilt=([a-z+]+)(?=(?:\s.+)?\]$)/g'))
+    # If the tag contained more than one (syntactically valid) quilt mode,
+    # treat that as a failure to find a quilt mode in the last tag.
+    [ ${#last_quilt_modes[*]} -eq 1 ] \
+	&& last_quilt_mode=${last_quilt_modes[0]}
+fi
+
+if [ "x$format" = "x3.0 (quilt)" ]; then
+    if [ -n "$quilt_mode" ] && [ -n "$last_quilt_mode" ]; then
+	if [ "x$quilt_mode" = "x$last_quilt_mode" ]; then
+	    # It's better if people get into the habit of just typing
+	    # 'git debpush' for their regular uploads.
+	    # If we just print a warning it could easily be missed, because
+	    # this program normally does not output errors or warnings without
+	    # either prompting for confirmation or giving up completely.
+	    # So we reuse the fail_check machinery to prompt the user.
+	    # See #1108378 for further discussion.
+	    fail_check superfluous-quilt-mode \
+ "unneeded $qmode_opt on command line, would have autodetected it"
+	else
+	    # The user is explicitly changing the quilt mode.
+	    # Possibly we want to prompt them, because this is an unusual
+	    # thing to do -- packages tend to stick with their quilt modes.
+	    # But for now we just quietly follow the instruction.
+	    :
+	fi
+    elif [ -z "$quilt_mode" ] && [ -n "$last_quilt_mode" ]; then
+	# This is our autodetection.
+	quilt_mode=$last_quilt_mode
+    elif [ -n "$quilt_mode" ] && [ -z "$last_quilt_mode" ]; then
+	# The user supplied a quilt mode, we couldn't detect one.
+	# That's fine, go with theirs.
+	:
+    else
+        echo >&2 "$us: could not determine the git branch layout"
+        echo >&2 "$us: please supply a --quilt= argument"
+        exit 1
+    fi
+    quilt_mode_text=" --quilt=$quilt_mode"
+fi
+
+#**** Remaining sanity checks ****
+# (these depend on $quilt_mode autodetection)
+
+#---- Uncommitted changes
+
+# || and && have equal precedence in shell.
+if [ "x$branch" = xHEAD ] \
+       || { ! $detached && [ "x$branch" = "x$headref" ]; }; then
+    git_status_uno="$(git status -uno --porcelain)"
+    [ -n "$git_status_uno" ] && fail_check uncommitted \
+ "there are uncommitted changes, which won't be uploaded"
+
+    if [ "x$quilt_mode" = xbaredebian ]; then
+	untracked="$(untracked_in /debian)"
+	[ -n "$untracked" ] && fail_check untracked \
+ "there are untracked files in debian/, which won't be uploaded"
+    else
+	untracked="$(untracked_in /)"
+	[ -n "$untracked" ] && fail_check untracked \
+ "there are untracked files, which won't be uploaded"
     fi
 fi
 
-# ---- Upstream tag is not ancestor of $branch
+#---- Upstream tag is not ancestor of $branch
 
-if ! [ "x$upstream_tag" = x ] \
+if [ -n "$upstream_tag" ] \
         && ! git merge-base --is-ancestor "$upstream_tag" "$branch" \
-        && ! [ "$quilt_mode" = "baredebian" ]; then
+        && [ "x$quilt_mode" != xbaredebian ]; then
     fail_check upstream-nonancestor \
  "upstream tag $upstream_tag is not an ancestor of $branch; probably a mistake"
 fi
 
-# ---- Quilt mode-specific checks
+#---- Quilt mode-specific checks
 
 case "$quilt_mode" in
     gbp)
@@ -431,76 +929,7 @@ case "$quilt_mode" in
         ;;
 esac
 
-# ---- git-debrebase branch format checks
-
-# only check branches, since you can't run `git debrebase conclude` on
-# non-branches
-case "$branch" in
-    refs/heads/*)
-        # see "STITCHING, PSEUDO-MERGES, FFQ RECORD" in git-debrebase(5)
-        ffq_prev_ref="refs/ffq-prev/${branch#refs/}"
-        if git show-ref --quiet --verify "$ffq_prev_ref"; then
-            fail_check unstitched \
- "this looks like an unstitched git-debrebase branch, which should not be pushed"
-        fi
-esac
-
-# ---- Intent to use pristine-tar for this upload
-
-case "$version" in
-    *"-1"|*"-0.1")
-	uversion="${version%-*}"
-	if $upstream && type pristine-tar >/dev/null 2>/dev/null \
-		&& pristine-tar list \
-		    | grep -q "^${source}_${uversion}"'\.orig\.tar\.'
-	then
-	    fail_check pristine-tar \
- "pristine-tar data present for $uversion, but this will be ignored (#1106071)"
-	fi
-esac
-
-# ---- Summary
-
-if $failed_check; then
-    # We don't mention the --force=check options here as those are
-    # mainly for use by scripts, or when you already know what check
-    # is going to fail before you invoke git-debpush.  Keep the
-    # script's terminal output as simple as possible.  No "see the
-    # manpage"!
-    fail "some check(s) failed; you can pass --force to ignore them"
-fi
-
-# **** Create the git tag ****
-
-# convert according to DEP-14 rules
-git_version=$(echo $version | tr ':~' '%_' | sed 's/\.(?=\.|$|lock$)/.#/g')
-
-debian_tag="$distro/$git_version"
-to_push+=("$debian_tag")
-
-# If the user didn't supply a quilt mode, look for it in a previous
-# tag made by this script
-if [ "x$quilt_mode" = x ] && [ "$format" = "3.0 (quilt)" ]; then
-    set +o pipefail             # perl will SIGPIPE git-cat-file(1) here
-    if [ "x$last_debian_tag" != x ]; then
-        quilt_mode=$(git cat-file -p $(git rev-parse "$last_debian_tag") \
-                         | perl -wne'/^\[dgit.*--quilt=([a-z+]+).*\]$/
-                                       or next;
-                                     print "$1\n"; exit')
-    fi
-    set -o pipefail
-fi
-
-quilt_mode_text=
-if [ "$format" = "3.0 (quilt)" ]; then
-    if [ "x$quilt_mode" = x ]; then
-        echo >&2 "$us: could not determine the git branch layout"
-        echo >&2 "$us: please supply a --quilt= argument"
-        exit 1
-    else
-        quilt_mode_text=" --quilt=$quilt_mode"
-    fi
-fi
+#**** Create the git tag text ****
 
 tagmessage="$source release $version for $target
 
@@ -508,17 +937,89 @@ tagmessage="$source release $version for $target
 [dgit please-upload source=$source version=$version$upstream_info]
 "
 
+git_tag_main_opts_args=(-m "$tagmessage" "$debian_tag" "$branch_commit")
+
+#**** Do we have this tag already? ****
+
+existing_tag_objid=$(
+    git for-each-ref --format='%(objectname)' "[r]efs/tags/$debian_tag"
+)
+
+if [ -n "$existing_tag_objid" ]; then
+    # Generate the tag in the playtree, so we can compare it
+    cd "$playtree"
+
+    # See what tag we would make.
+
+    # Don't pass "${git_tag_sign_opts[@]}" because -u causes git tag
+    # to make the signature, which we don't want.
+    # Sadly this replicates some of the actual git tag rune, below,
+    git tag -f "${git_tag_main_opts_args[@]}" >/dev/null
+    git cat-file tag "$debian_tag" >../tag-we-will-make
+    git tag -d "$debian_tag" >/dev/null # don't leave this confusing decoy lying about
+    tagger_date_filter_perl=(-pe '
+        next if !m/\S/..0;
+        s/^(tagger .* )\d+ [-+0-9]+/${1}[date]/
+    ')
+    perl -i "${tagger_date_filter_perl[@]}" ../tag-we-will-make
+    pgp_signature_line='-----BEGIN PGP SIGNATURE-----'
+    printf "%s\n" "$pgp_signature_line" >>../tag-we-will-make
+
+    # Launder the existing tag
+
+    git cat-file tag "$existing_tag_objid"		\
+	| perl "${tagger_date_filter_perl[@]}"		\
+	| tac						\
+	| sed -n '/^'"$pgp_signature_line"'$/,$p'	\
+	| tac						\
+	>../tag-existing
+    set +e
+
+    # Compare
+
+    diff -u						\
+	 -L "existing tag $debian_tag" ../tag-existing	\
+	 -L "tag we will make" ../tag-we-will-make
+    rc=$?
+    set -e
+    case "$rc" in
+	0)
+	    # Tag is identical, we can just re-push it.
+	    echo >&2 "$us: good tag $debian_tag already exists, pushing it"
+	    tagging=false
+	    ;;
+	1)
+	    fail_check remake-tag \
+ "tag already exists, and is different to the one we propose to make"
+ 	    # if we didn't fail the check, we want to remake the tag.
+	    # git tag will do that if we pass -f.
+	    git_tag_main_opts_args=(-f ${git_tag_main_opts_args[@]})
+	    ;;
+	*)
+	    fail 'diff failed unexpectedly'
+	    ;;
+    esac
+
+    cd "$pwd"
+fi
+
+#**** Actually produce and deliver the output ****
+
+$failed_check && fail_failed_check
+fail_check () { fail "internal error - fail_check called too late $*"; }
+
 if $printing; then
     printf "%s" "$tagmessage"
 fi
 
 if $tagging; then
-    git tag "${git_tag_opts[@]}" -s -m "$tagmessage" \
-	"$debian_tag" "$branch"
+    echo >&2 "$us: making signed tag with 'git tag -s'"
+    git tag -s "${git_tag_sign_opts[@]}" "${git_tag_main_opts_args[@]}"
 fi
-
-# **** Do a git push ****
 
 if $pushing; then
+    echo >&2 "$us: pushing to git remote '$remote'"
     git push "$remote" "${to_push[@]}"
 fi
+
+rm -rf "$playground"

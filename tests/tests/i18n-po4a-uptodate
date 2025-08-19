@@ -2,10 +2,12 @@
 set -e
 . tests/lib
 
+# When this fails, `make i18n-commit` will usually fix it.
+
 t-restrict x-dgit-git-only
 
 cd $root
 
-make -C po4a po4a.cfg.check
+make -C po4a po4a.cfg.check potfiles.check
 
 t-ok

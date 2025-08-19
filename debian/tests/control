@@ -1,6 +1,6 @@
 Tests: baredebian-multitar baredebian-plusgit baredebian-push baredebian-tarball
 Tests-Directory: tests/tests
-Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, quilt, git-debrebase, git-buildpackage, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, quilt, git-debpush, git-debrebase, git-buildpackage
 
 Tests: build-modes-gbp
 Tests-Directory: tests/tests
@@ -86,11 +86,11 @@ Restrictions: x-dgit-git-only
 
 Tests: t2u
 Tests-Directory: tests/tests
-Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl, mpack, pristine-tar
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, mpack, pristine-tar
 
 Tests: t2u-baredebian
 Tests-Directory: tests/tests
-Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, quilt, git-debrebase, git-buildpackage, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, quilt, git-debrebase, git-buildpackage
 
 Tests: t2u-debpush-gbp
 Tests-Directory: tests/tests
@@ -100,26 +100,22 @@ Tests: t2u-debpush-minimal
 Tests-Directory: tests/tests
 Depends: git-debpush
 
-Tests: t2u-email
-Tests-Directory: tests/tests
-Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, mpack
-
-Tests: t2u-gbp
-Tests-Directory: tests/tests
-Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl
-
 Tests: t2u-gdr
 Tests-Directory: tests/tests
-Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, libdpkg-perl, libgit-wrapper-perl, liblist-compare-perl, libstring-shellquote-perl, libtry-tiny-perl, git-debrebase, git-buildpackage
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, git-debrebase, git-buildpackage
 
 Tests: t2u-integration
 Tests-Directory: tests/tests
 Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, jq
 Restrictions: x-tag2upload-service-manager
 
-Tests: t2u-native
+Tests: t2u-gbp t2u-native
 Tests-Directory: tests/tests
 Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd
+
+Tests: t2u-email t2u-origs
+Tests-Directory: tests/tests
+Depends: dgit, dgit-infrastructure, devscripts, debhelper (>=8), fakeroot, build-essential, chiark-utils-bin, bc, faketime, liburi-perl, git-debpush, autopkgtest, python3-pygit2, netcat-openbsd, mpack
 
 Tests: tag2upload-oracled
 Tests-Directory: tests/tests

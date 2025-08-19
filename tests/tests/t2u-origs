@@ -1,0 +1,91 @@
+#!/bin/bash
+set -e
+. tests/lib
+
+# See also tests/tests/t2u-gbp, which has some more tests of orig handling.
+
+t-restrict x-dgit-skip-suite,bullseye
+t-restrict x-dgit-skip-suite,buster
+t-dependencies T2U DEBORIG mpack
+export DGIT_TEST_MUNPACK=munpack
+
+t-t2u-settings
+t-debpolicy
+
+t-archive-none example
+t-git-none
+t-worktree 1.0
+
+cd $p
+t-t2u-setup-repo
+
+: "prepare an initial upload"
+
+git rm -rf debian
+git checkout --orphan upstream
+git commit -m 'Fresh upstream for testing'
+git tag upstream/1.0
+
+git checkout master
+git merge -s ours --allow-unrelated-histories upstream
+
+mkdir -p debian/source
+echo 1.0 debian/source/format
+echo "-sk" >debian/source/options
+git add debian/source
+git commit -m 'Set source format 1.0 to non-native'
+
+v=1.0-1
+t-dch-commit -D unstable -v $v -m Upload
+
+# We generate a "strange" orig, so if we accidentally regenerate it
+# the tests will fail.
+GZIP=-2 ${DGIT_DEBORIG_TEST-git deborig}
+
+t-dgit -wgfa push-source --new
+t-archive-process-incoming sid
+
+: "run tag2upload, with reused origs"
+
+v=1.0-2
+t-dch-commit -D unstable -v $v -m 'reusing origs from suite'
+t-refs-same-start
+t-t2u-test
+t-t2u-succeeded
+grep -P 'suite has origs for this upstream version' $t2u_email_log
+grep -P 'using existing orig\(s\)' $t2u_email_report
+
+: "run tag2upload, with origs from other suite"
+
+git checkout -b experimental
+v=1.0-3~exp1
+t-dch-commit -D experimental -v $v -m 'origs from other suite'
+t-refs-same-start
+t-t2u-test
+t-t2u-succeeded
+grep -P 'looking in whole archive' $t2u_email_log
+grep -P 'using existing orig\(s\)' $t2u_email_report
+git checkout master
+
+: "run tag2upload, with missing origs"
+
+rm $tmp/mirror/pool/main/${p}_1.0.orig.tar.gz
+
+# test what happens if we regenerate wrongly
+v=1.0-3
+t-dch-commit -D unstable -v $v -m 'failed to download or reproduce origs'
+t-t2u-test-core irrecoverable
+grep -P 'orig file is missing \(404\) at archive mirror' $t2u_email_log
+grep -P 'some orig\(s\) not available from archive mirrors' $t2u_email_report
+grep -P 'computed checksum did NOT match' $t2u_email_log
+
+v=1.0-4
+t-dch-commit -D unstable -v $v -m 'reproduced download origs'
+t-refs-same-start
+GZIP=-2 t-t2u-test
+t-t2u-succeeded
+grep -P 'orig file is missing \(404\) at archive mirror' $t2u_email_log
+grep -P 'some orig\(s\) not available from archive mirrors' $t2u_email_report
+grep -P 'successfully regenerated orig' $t2u_email_report
+
+t-ok

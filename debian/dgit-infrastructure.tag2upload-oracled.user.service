@@ -39,7 +39,7 @@ ExecStart=/usr/bin/tag2upload-oracled					\
 	--copies=debian-tag2upload@lists.debian.org			\
 	debian								\
 	/srv/oracle.tag2upload.debian.org/distro=debian			\
-	"/srv/keyring.debian.org/keyrings/debian-keyring.gpg,a:/srv/keyring.debian.org/keyrings/debian-maintainers.gpg,m/srv/oracle.tag2upload.debian.org/data/dm.txt:/srv/keyring.debian.org/keyrings/debian-nonupload.gpg,m/srv/oracle.tag2upload.debian.org/data/dm.txt"
+	"/srv/keyring.debian.org/keyrings/debian-keyring.pgp,a:/srv/keyring.debian.org/keyrings/debian-maintainers.pgp,m/srv/oracle.tag2upload.debian.org/data/dm.txt:/srv/keyring.debian.org/keyrings/debian-nonupload.pgp,m/srv/oracle.tag2upload.debian.org/data/dm.txt"
 IgnoreSIGPIPE=false
 
 # Let workers finish up any builds they might be doing.

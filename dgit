@@ -2,9 +2,9 @@
 # dgit
 # Integration between git and Debian-style archives
 #
-# Copyright (C)2013-2024 Ian Jackson
+# Copyright (C)2013-2024           Ian Jackson
 # Copyright (C)2017-2019,2023-2025 Sean Whitton
-# Copyright (C)2019      Matthew Vernon / Genome Research Limited
+# Copyright (C)2019                Matthew Vernon / Genome Research Limited
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -101,6 +101,7 @@ our $quilt_options_re = 'gbp|dpm|baredebian(?:\+tarball|\+git)?';
 our $quilt_modes_re = "linear|smash|try-linear|auto|single|nofix|nocheck|unapplied|$quilt_options_re";
 our $splitview_mode;
 our $splitview_modes_re = qr{auto|always|never};
+our $dgitview_saved;
 our $dodep14tag;
 our $dep14tag_reuse;
 our $dep14tag_reuse_re = qr{replace|replace-unsuitable|if-exists|must};
@@ -300,7 +301,8 @@ sub badcfg {
 sub forceable_fail ($$) {
     my ($forceoptsl, $msg) = @_;
     fail $msg unless grep { $forceopts{$_} } @$forceoptsl;
-    print STDERR +(__ "warning: overriding problem due to --force:\n"). $msg;
+    print STDERR +(__ "warning: overriding problem due to --force:\n"),
+      $msg. "\n";
 }
 
 sub forceing ($) {
@@ -1202,6 +1204,19 @@ sub url_fetch ($;@) {
     # Ok404 => 1   means give undef for 404
     # AccessBase => 'archive-query' (eg)
     # CurlOpts => { key => value }
+    #
+    # The return value is the fetched body, or simply `1`
+    # if CURLOPT_WRITEDATA is set in CurlOpts.
+
+    printdebug "query: fetching $url...\n";
+
+    if ($xopts{Ok404} && $url =~ m{^file:/+(?=/)}) {
+	my $file = $';
+	$file =~ s{\%([0-9a-f][0-9a-f])}{chr hex $1}ge;
+	# curl doesn't call this 404, it just fails
+	printdebug "file: URL, checking for existence manually: $file\n";
+	return undef unless stat_exists $file;
+    }
 
     my $curl  = WWW::Curl::Easy->new;
     my $setopt = sub {
@@ -1229,8 +1244,6 @@ sub url_fetch ($;@) {
 	}
     }
 
-    printdebug "query: fetching $url...\n";
-
     local $SIG{PIPE} = 'IGNORE';
 
     my $x = $curl->perform();
@@ -1243,6 +1256,10 @@ sub url_fetch ($;@) {
     
     fail f_ "fetch of %s gave HTTP code %s", $url, $code
 	unless $url =~ m#^file://# or $code =~ m/^2/;
+
+    if (defined $xopts{CurlOpts}{CURLOPT_WRITEDATA()}) {
+	return 1;
+    }
 
     confess unless defined $response_body;
     return $response_body;
@@ -1322,10 +1339,12 @@ sub archive_query_ftpmasterapi {
     return archive_query_prepend_mirror @rows;
 }
 
+# $filename is the leafname.  It may contain `*` for globbing.
 sub file_in_archive_ftpmasterapi {
     my ($proto,$data,$filename) = @_;
     my $pat = $filename;
     $pat =~ s/_/\\_/g;
+    $pat =~ s/\*/%/g;
     $pat = "%/$pat";
     $pat =~ s#[^-+_.0-9a-z/]# sprintf '%%%02x', ord $& #ge;
     my $info = api_query($data, "file_in_archive/$pat", 1);
@@ -1542,8 +1561,8 @@ sub file_in_archive_dummycatapi ($$$) {
 	while (<FIA>) {
 	    chomp or die;
 	    printdebug "| $_\n";
-	    m/^(\w+)  (\S+)$/ or die "$_ ?";
-	    push @out, { sha256sum => $1, filename => $2 };
+	    m{^(\w+)  \./pool/($component_re)/(\S+)$} or die "$_ ?";
+	    push @out, { sha256sum => $1, component => $2, filename => $3 };
 	}
     };
     return \@out;
@@ -1889,15 +1908,11 @@ sub remove_stray_gits ($) {
     $!=0; $?=0; close GITS or failedcmd @gitscmd;
 }
 
-sub mktree_in_ud_from_only_subdir ($;$) {
+sub mktree_in_ud_from_unpacked ($;$) {
     my ($what,$raw) = @_;
-    # changes into the subdir
+    # changes into the `unpacked` subdir
 
-    my (@dirs) = <*/.>;
-    confess "expected one subdir but found @dirs ?" unless @dirs==1;
-    $dirs[0] =~ m#^([^/]+)/\.$# or die;
-    my $dir = $1;
-    changedir $dir;
+    changedir 'unpacked';
 
     remove_stray_gits($what);
     mktree_in_ud_here();
@@ -1909,7 +1924,7 @@ sub mktree_in_ud_from_only_subdir ($;$) {
     }
 
     my $tree=git_add_write_tree();
-    return ($tree,$dir);
+    return $tree;
 }
 
 our @files_csum_info_fields = 
@@ -1919,7 +1934,7 @@ our @files_csum_info_fields =
 
 sub dsc_files_info () {
     foreach my $csumi (@files_csum_info_fields) {
-	my ($fname, $module, $method) = @$csumi;
+	my ($fname, $module, $method, $digest_name) = @$csumi;
 	my $field = $dsc->{$fname};
 	next unless defined $field;
 	eval "use $module; 1;" or die $@;
@@ -1933,6 +1948,7 @@ sub dsc_files_info () {
 		Hash => $1,
 		Bytes => $2,
 		Filename => $3,
+                DigestName => $digest_name,
 		Digester => $digester,
 	    };
 	}
@@ -2499,7 +2515,7 @@ sub import_tarball_tartrees ($$) {
             Sort => (!$orig_f_part         ? 2 :
 		     $orig_f_part =~ m/-/g ? 1 :
 		                             0),
-            OrigPart => $orig_f_part, # 'orig', 'orig-XXX', or undef 
+            OrigPart => $orig_f_part, # 'orig', 'orig-PART', or undef 
             F => $f,
             Tree => $tree,
         };
@@ -2657,10 +2673,10 @@ sub generate_commits_from_dsc () {
 	push @cmd, '--skip-patches';
 	$treeimporthow = 'unpatched';
     }
-    push @cmd, qw(-x --), $dscfn;
+    push @cmd, qw(-x --), $dscfn, qw(unpacked);
     runcmd @cmd;
 
-    my ($tree,$dir) = mktree_in_ud_from_only_subdir(__ "source package");
+    my $tree = mktree_in_ud_from_unpacked(__ "source package");
     if (madformat $dsc->{format}) { 
 	check_for_vendor_patches();
     }
@@ -2874,12 +2890,19 @@ END
     return @output;
 }
 
-sub complete_file_from_dsc ($$;$) {
-    our ($dstdir, $fi, $refetched) = @_;
+sub complete_file_from_dsc ($$;$$) {
+    our ($dstdir, $fi, $refetched, $allow_404) = @_;
     # Ensures that we have, in $dstdir, the file $fi, with the correct
     # contents.  (Downloading it from alongside $dscurl if necessary.)
     # If $refetched is defined, can overwrite "$dstdir/$fi->{Filename}"
     # and will set $$refetched=1 if it did so (or tried to).
+    #
+    # Uses $fi->{Url} if it is defined; otherwise, sets it.
+    #
+    # Return value:
+    # -1   we got HTTP 404 (with $allow_404 only)
+    #  0   we didn't fetch the file because act_locak()
+    #  1   the file was obtained (or reused) OK
 
     my $f = $fi->{Filename};
     my $tf = "$dstdir/$f";
@@ -2887,6 +2910,7 @@ sub complete_file_from_dsc ($$;$) {
 
     my $got;
     my $checkhash = sub {
+	my ($tf) = @_;
 	open F, "<", "$tf" or die "$tf: $!";
 	$fi->{Digester}->reset();
 	$fi->{Digester}->addfile(*F);
@@ -2896,12 +2920,12 @@ sub complete_file_from_dsc ($$;$) {
     };
 
     if (stat_exists $tf) {
-	if ($checkhash->()) {
+	if ($checkhash->($tf)) {
 	    progress f_ "using existing %s", $f;
 	    return 1;
 	}
 	if (!$refetched) {
-	    fail f_ "file %s has hash %s but .dsc demands hash %s".
+	    fail f_ "file %s has hash %s but we need hash %s".
 		    " (perhaps you should delete this file?)",
 		    $f, $got, $fi->{Hash};
 	}
@@ -2912,18 +2936,31 @@ sub complete_file_from_dsc ($$;$) {
 	printdebug "$tf does not exist, need to fetch\n";
     }
 
-    my $furl = $dscurl;
-    $furl =~ s{/[^/]+$}{};
-    $furl .= "/$f";
-    die "$f ?" unless $f =~ m/^\Q${package}\E_/;
-    die "$f ?" if $f =~ m#/#;
-    runcmd_ordryrun_local @curl,qw(-f -o),$tf,'--',"$furl";
+    my $furl = $fi->{Url};
+    if (!defined $furl) {
+	$furl = $dscurl;
+	$furl =~ s{/[^/]+$}{};
+	$furl .= "/$f";
+	die "$f ?" unless $f =~ m/^\Q${package}\E_/;
+	die "$f ?" if $f =~ m#/#;
+	$fi->{Url} = $furl;
+    }
+
+    open my $out, '>', "$tf.tmp" // confess "$tf.tmp: $!";
+    my $found = url_fetch($furl,
+              Ok404 => $allow_404,
+	      CurlOpts => { CURLOPT_WRITEDATA() => $out });
+    close $out or confess "$tf.tmp: $!";
+    return -1 if !$found;
     return 0 if !act_local();
 
-    $checkhash->() or
-	fail f_ "file %s has hash %s but .dsc demands hash %s".
+    $checkhash->("$tf.tmp") or
+	fail f_ "file %s has hash %s but we need hash %s".
 	        " (got wrong file from archive!)",
 		$f, $got, $fi->{Hash};
+        # In this exit path, we leave the .tmp file around, for debugging.
+
+    rename "$tf.tmp", "$tf" or confess "$tf: $!";
 
     return 1;
 }
@@ -2933,8 +2970,7 @@ sub ensure_we_have_orig () {
     foreach my $fi (@dfi) {
 	my $f = $fi->{Filename};
 	next unless is_orig_file_in_dsc($f, \@dfi);
-	complete_file_from_dsc($buildproductsdir, $fi)
-	    or next;
+	complete_file_from_dsc($buildproductsdir, $fi);
     }
 }
 
@@ -4200,6 +4236,7 @@ sub maybe_split_brain_save ($$$) {
     my ($headref, $dgitview, $msg) = @_;
     # => message fragment "$saved" describing disposition of $dgitview
     #    (used inside parens, in the English texts)
+    $dgitview_saved = $dgitview;
     my $save = $internal_object_save{'dgit-view'};
     return f_ "commit id %s", $dgitview unless defined $save;
     my @cmd = (shell_cmd 'cd "$1"; shift', $maindir,
@@ -4612,17 +4649,88 @@ sub push_tagwants ($$$$) {
     return @tagwants;
 }
 
+sub check_dsc_vs_git ($$) {
+    my ($dscfn, $dgithead) = @_;
+    my $dscpath = "$buildproductsdir/$dscfn";
+    # call in $playground
+    progress f_ "checking that %s corresponds to HEAD", $dscfn;
+    runcmd qw(dpkg-source -x --),
+        ($dscpath =~ m#^/# ? $dscpath : "$maindir/$dscpath"),
+	qw(unpacked);
+    my $tree = mktree_in_ud_from_unpacked("source package");
+    check_for_vendor_patches() if madformat($dsc->{format});
+    changedir $maindir;
+    my @diffcmd = (@git, qw(diff --quiet), $tree, $dgithead);
+    debugcmd "+",@diffcmd;
+    $!=0; $?=-1;
+    my $r = system @diffcmd;
+    if ($r) {
+	if ($r==256) {
+	    my $referent = $made_splitbrain_playtree ? $dgithead : 'HEAD';
+	    my $diffs = cmdoutput @git, qw(diff --stat), $tree, $dgithead;
+
+	    my @mode_changes;
+	    my $raw = cmdoutput @git,
+		qw(diff --no-renames -z -r --raw), $tree, $dgithead;
+	    my $changed;
+	    foreach (split /\0/, $raw) {
+		if (defined $changed) {
+		    push @mode_changes, "$changed: $_\n" if $changed;
+		    $changed = undef;
+		    next;
+		} elsif (m/^:0+ 0+ /) {
+		    $changed = '';
+		} elsif (m/^:(?:10*)?(\d+) (?:10*)?(\d+) /) {
+		    $changed = "Mode change from $1 to $2"
+		} else {
+		    die "$_ ?";
+		}
+	    }
+	    my $fail = sub {
+		print STDERR failmsg @_;
+		finish 6;
+	    };
+	    if (@mode_changes) {
+		$fail->((f_ <<ENDT, $dscfn).<<END
+HEAD specifies a different tree to %s:
+ENDT
+$diffs
+END
+		    .(join '', @mode_changes)
+		    .(f_ <<ENDT, $tree, $referent));
+There is a problem with your source tree (see dgit(7) for some hints).
+To see a full diff, run git diff %s %s
+ENDT
+	    }
+
+	    $fail->((f_ <<ENDT, $dscfn).<<END.(f_ <<ENDT, $tree, $referent));
+HEAD specifies a different tree to %s:
+ENDT
+$diffs
+END
+Perhaps you forgot to build.  Or perhaps there is a problem with your
+ source tree (see dgit(7) for some hints).  To see a full diff, run
+   git diff %s %s
+ENDT
+	} else {
+	    failedcmd @diffcmd;
+	}
+    }
+}
+
 sub push_mktags ($$ $$ $) {
     my ($clogp,$dscfn,
 	$changesfile,$changesfilewhat,
         $tagwants) = @_;
 
     my $add_fields = sub {
-	my ($file, $desc) = @_;
-	foreach my $field (sort keys $control_add{$desc}->%*) {
-	    fail f_ "%s already contains field %s", $desc, $field
-	      if exists $file->{$field};
-	    $file->{$field} = $control_add{$desc}{$field};
+	my ($file, $desc, $opt_abbrevs) = @_;
+	foreach my $opt_abbrev (@$opt_abbrevs) {
+	    foreach my $field (sort keys $control_add{$opt_abbrev}->%*) {
+		fail f_ "%s already contains field %s", $desc, $field
+		  if exists $file->{$field};
+		$file->{$field} = $control_add{$opt_abbrev}{$field};
+	    }
 	}
     };
 
@@ -4633,14 +4741,14 @@ sub push_mktags ($$ $$ $) {
     $dsc->{$ourdscfield[0]} = join " ",
 	$tagwants->[0]{Objid}, $declaredistro, $tagwants->[0]{Tag},
 	$reader_giturl;
-    $add_fields->($dsc, "dsc");
+    $add_fields->($dsc, "dsc", [qw(dsc t2u)]);
     $dsc->save("$dscfn.tmp") or confess "$!";
 
     # Do this unconditionally, even if there are no entries in
     # $control_add{changes}, so that elsewhere we can assume there is
     # always a .tmp file for the .changes, too, which is simpler.
     my $changes = parsecontrol($changesfile,$changesfilewhat);
-    $add_fields->($changes, "changes");
+    $add_fields->($changes, "changes", [qw(ch t2u)]);
     $changes->save("$changesfile.tmp") or confess $!;
 
     # Calling check_expected is redundant with the proceeding check
@@ -4977,64 +5085,8 @@ END
     }
 
     changedir $playground;
-    progress f_ "checking that %s corresponds to HEAD", $dscfn;
-    runcmd qw(dpkg-source -x --),
-        $dscpath =~ m#^/# ? $dscpath : "$maindir/$dscpath";
-    my ($tree,$dir) = mktree_in_ud_from_only_subdir("source package");
-    check_for_vendor_patches() if madformat($dsc->{format});
-    changedir $maindir;
-    my @diffcmd = (@git, qw(diff --quiet), $tree, $dgithead);
-    debugcmd "+",@diffcmd;
-    $!=0; $?=-1;
-    my $r = system @diffcmd;
-    if ($r) {
-	if ($r==256) {
-	    my $referent = $made_splitbrain_playtree ? $dgithead : 'HEAD';
-	    my $diffs = cmdoutput @git, qw(diff --stat), $tree, $dgithead;
+    check_dsc_vs_git $dscfn, $dgithead;
 
-	    my @mode_changes;
-	    my $raw = cmdoutput @git,
-		qw(diff --no-renames -z -r --raw), $tree, $dgithead;
-	    my $changed;
-	    foreach (split /\0/, $raw) {
-		if (defined $changed) {
-		    push @mode_changes, "$changed: $_\n" if $changed;
-		    $changed = undef;
-		    next;
-		} elsif (m/^:0+ 0+ /) {
-		    $changed = '';
-		} elsif (m/^:(?:10*)?(\d+) (?:10*)?(\d+) /) {
-		    $changed = "Mode change from $1 to $2"
-		} else {
-		    die "$_ ?";
-		}
-	    }
-	    if (@mode_changes) {
-		fail +(f_ <<ENDT, $dscfn).<<END
-HEAD specifies a different tree to %s:
-ENDT
-$diffs
-END
-		    .(join '', @mode_changes)
-		    .(f_ <<ENDT, $tree, $referent);
-There is a problem with your source tree (see dgit(7) for some hints).
-To see a full diff, run git diff %s %s
-ENDT
-	    }
-
-	    fail +(f_ <<ENDT, $dscfn).<<END.(f_ <<ENDT, $tree, $referent);
-HEAD specifies a different tree to %s:
-ENDT
-$diffs
-END
-Perhaps you forgot to build.  Or perhaps there is a problem with your
- source tree (see dgit(7) for some hints).  To see a full diff, run
-   git diff %s %s
-ENDT
-	} else {
-	    failedcmd @diffcmd;
-	}
-    }
     if (!$changesfile) {
 	my $pat = changespat $cversion;
 	my @cs = glob "$buildproductsdir/$pat";
@@ -7773,11 +7825,23 @@ sub build_source {
     changedir $maindir;
 }
 
+sub build_source_check_dsc_vs_git () {
+    return if $includedirty; # well that's not going to work
+    return unless access_cfg_bool(1, 'build-source-check-correspondence');
+
+    my $dgithead = $dgitview_saved || git_rev_parse('HEAD');
+    my $dscfn = dscfn $version;
+    changedir $playground;
+    check_dsc_vs_git $dscfn, $dgithead;
+    changedir $maindir;
+}
+
 sub cmd_build_source {
     badusage __ "build-source takes no additional arguments" if @ARGV;
     build_prep(WANTSRC_SOURCE);
     build_source();
     maybe_unapply_patches_again();
+    build_source_check_dsc_vs_git();
     printdone f_ "source built, results in %s and %s",
 	         $dscfn, $sourcechanges;
 }
@@ -8144,6 +8208,169 @@ sub cmd_print_dgit_repos_server_source_url {
     print $url, "\n" or confess "$!";
 }
 
+sub unfetched_origs_identify_by_suite ($) {
+    my ($uversion) = @_;
+
+    get_archive_dsc();
+    if (!$dsc) {
+	print STDERR __
+	  "package does not exist in target suite, looking in whole archive\n";
+	return undef;
+    }
+
+    my $dsc_uversion = upstreamversion getfield $dsc, 'Version';
+    if ($dsc_uversion ne $uversion) {
+	print STDERR f_
+	  "package in target suite is different upstream version, %s\n",
+	  $dsc_uversion;
+	return undef;
+    }
+
+    my @dsc_files = dsc_files_info();
+    my @origs = ();
+    foreach my $fi (@dsc_files) {
+	next unless is_orig_file_in_dsc $fi->{Filename}, \@dsc_files;
+	push @origs, $fi;
+    }
+    if (!@origs) {
+	print STDERR __ "suite has this upstream version, but no origs\n";
+	finish 4;
+    }
+
+    print STDERR __ "suite has origs for this upstream version\n";
+    return \@origs;
+}
+
+sub unfetched_origs_whole_archive_search ($) {
+    my ($uversion) = @_;
+    my $u_f_version = stripepoch $uversion;
+    my $pat = source_file_leafname $package, $u_f_version, '.orig*.tar.*';
+    my $info = archive_query('file_in_archive', $pat);
+
+    printdebug "package $package, orig filename version $u_f_version\n";
+
+    my %by_comp;
+    foreach my $ent (@$info) {
+	printdebug "considering $ent->{sha256sum} $ent->{filename} ";
+	$ent->{filename} =~ m{
+            ^ (?: .* / )?
+            \Q$package\E _ \Q$u_f_version\E
+            \. ($orig_f_comp_re) \. .* $
+        }x or ((printdebug "irrelevant\n"), next);
+	my $comp = $1;
+	printdebug " ours, $comp\n";
+	push @{ $by_comp{$1} }, $ent;
+    }
+
+    if (!%by_comp) {
+	print STDERR f_ "no .origs for package %s upstream version %s\n",
+	  $package, $uversion;
+	finish 4;
+    }
+    my $mirror = access_cfg('mirror');
+
+    # Convert from ftpmaster API schema to .dsc-ish dsc_files_info schema
+    my @origs = ();
+    # Also, check that each comp (FOO for orig_FOO) has only one .orig.
+    # This ought to prevent us from accidentally mixing origs from
+    # different uploads, since any upload which has a different set of
+    # secondary origs ought to have a different primary orig too.
+    my $ambiguous = 0;
+    foreach my $comp (sort keys %by_comp) {
+	my $ents = $by_comp{$comp};
+	foreach my $ent (@$ents) {
+	    my $leaf =  $ent->{filename}; $leaf =~ s{.*/}{};
+	    my $rel_path = "pool/$ent->{component}/$ent->{filename}";
+	    my $url = $mirror.$rel_path;
+	    # We're hardcoding the hash as SHA-256, because that's
+	    # what the fptmaster API currently provides.  If and when
+	    # we want to change this, more complex code will be needed here.
+	    push @origs, {
+		Hash => $ent->{sha256sum},
+		Digester => Digest::SHA->new(256),
+		DigestName => 'sha256sum',
+		Filename => $leaf,
+		Url => $url,
+            }
+	}
+	if (@$ents != 1) {
+	    print STDERR f_
+	      "multiple possibilities for orig component %s:\n",
+	      $comp;
+	    foreach my $ent (@$ents) {
+		# Don't try to translate this, so no f_.
+		print STDERR
+		  "  $ent->{component}: $ent->{sha256sum} $ent->{filename}\n";
+	    }
+	    $ambiguous++;
+	}
+    }
+
+    if ($ambiguous) {
+	print STDERR __
+	  "failed to resolve, unambiguously, which .origs are intended\n";
+	finish 5;
+    }
+
+    return \@origs;
+}
+
+sub cmd_download_unfetched_origs {
+    my $write_checksums = '/dev/null';
+
+    while (@ARGV && $ARGV[0] =~ m/^-/) {
+	$_ = shift @ARGV;
+	if ($_ eq '--') {
+	    last;
+	} elsif (s/^--write-sha256sums=//) {
+	    $write_checksums = $_;
+	} else {
+	    badusage f_
+	      "unknown long option to download-unfetched-origs \`%s'", $_;
+	}
+    }
+    badusage __ "download-unfetched-origs takes no non-option arguments"
+      if @ARGV;
+
+    open CHECKSUMS, ">", $write_checksums or die "open $write_checksums: $!";
+
+    my $clogp = parsechangelog();
+    $isuite = getfield $clogp, 'Distribution';
+    my $uversion = upstreamversion getfield $clogp, 'Version';
+    $package //= getfield $clogp, 'Source';
+
+    notpushing();
+
+    my $origs =
+      unfetched_origs_identify_by_suite($uversion) //
+      unfetched_origs_whole_archive_search($uversion);
+
+    # Write out checksums for our caller (in case we don't obtain them!)
+    foreach my $fi (@$origs) {
+	confess $fi->{DigestName} unless $fi->{DigestName} eq 'sha256sum';
+	printf CHECKSUMS "%s  %s\n", $fi->{Hash}, $fi->{Filename}
+	  or die $!;
+    }
+    close CHECKSUMS or die $!;
+
+    my $missing;
+    foreach my $fi (@$origs) {
+	my $found = complete_file_from_dsc $buildproductsdir, $fi, undef, 1;
+	if ($found < 0) {
+	    $missing++;
+	    print f_
+		  "orig file is missing (404) at archive mirror: %s\n",
+		  $fi->{Url};
+	    next;
+	}
+    }
+
+    if ($missing) {
+	print STDERR f_ "%d orig file(s) could not be obtained\n", $missing;
+	finish 3;
+    }
+}
+
 sub pre_print_dpkg_source_ignores {
     not_necessarily_a_tree();
 }
@@ -8182,7 +8409,10 @@ sub cmd_setup_new_tree {
 #---------- argument parsing and main program ----------
 
 sub cmd_version {
-    print "dgit version $our_version\n" or confess "$!";
+    # We don't let DGIT_VERSION influence anything else
+    # (eg commits we generate), just the --version output.
+    my $v = $ENV{DGIT_VERSION} // $our_version;
+    print "dgit version $v\n" or confess "$!";
     finish 0;
 }
 
@@ -8212,8 +8442,9 @@ defvalopt '--package',   '-p',   $package_re, \$package;
 defvalopt '--expect-suite','',     $suite_re, \$expected_suite;
 defvalopt '--expect-version','',   '.+',      \$expected_version;
 defvalopt '--quilt',     '', $quilt_modes_re, \$quilt_mode;
-defvalopt '--tag2upload-upstream','','.+',    \$t2u_upstream;
-defvalopt '--tag2upload-upstream-commit','','.+',\$t2u_upstreamc;
+# See comment next to --tag2upload-builder-mode option impl, below.
+defvalopt '--t2u-upstream','','.+',           \$t2u_upstream;
+defvalopt '--t2u-upstream-commit','','.+',    \$t2u_upstreamc;
 
 defvalopt '', '-C', '.+', sub {
     ($changesfile) = (@_);
@@ -8230,9 +8461,12 @@ defvalopt '--initiator-tempdir','','.*', sub {
 };
 
 # We leave validating the field names to Dpkg::Control::Hash.
-foreach my $outfile ([qw(dsc dsc)], [qw(ch changes)]) {
-    defvalopt "--@$outfile[0]-control-add", '', '([^=]+)=(.+)',
-      sub { $control_add{@$outfile[1]}{$1} = $2 };
+#
+# We abbreviate `t2u`, so the options are --t2u-*-add;
+# see comment next to --tag2upload-builder-mode, below.
+foreach my $abbrev (qw(dsc ch t2u)) {
+    defvalopt "--$abbrev-control-add", '', '([^=]+)=(.+)',
+      sub { $control_add{$abbrev}{$1} = $2 };
 }
 
 sub defoptmodes ($@) {
@@ -8384,6 +8618,16 @@ sub parseopts () {
 		push @ropts, $_;
 		$access_forpush = 1;
 	    } elsif (/^--tag2upload-builder-mode$/) {
+		# All tag2upload-specific private options are --t2u-*,
+		# except this one, where we spell it out for clarity.
+		#
+		# --tag2upload-builder-mode (and therefore $t2u_bmode)
+		# should not imply any options which change the behaviour
+		# in a way that would be relevant for a local repro:
+		#
+		# That way the logs in tag2upload email reports are clear,
+		# and useful for a local repro attempt
+		# omitting t2u-specific private options.
 		push @ropts, $_;
 		$t2u_bmode = 1;
 	    } elsif (/^--allow-unrelated-histories$/) {

@@ -11,17 +11,18 @@ t-setup-import gbp
 t-t2u-settings
 t-debpolicy
 
+export XZ_OPT=-0
+
 cd $p
 
-git deborig
+t-git-deborig
 
 t-t2u-setup-repo
 
-tagname=test-dummy/$v
 t-expect-fail "please supply a --quilt= argument" t-t2u-test
 
-# Seed a quilt mode with an upload that never was.
-# Also test git-debpush's --print-tag-text option.
+: "Seed a quilt mode with an upload that never was."
+: "Also test git-debpush's --print-tag-text option."
 t-git-debpush --tag-only --print-tag-text \
 				 --quilt=gbp \
 				 >$tmp/t.output
@@ -34,8 +35,11 @@ t-dch-commit-r
 
 t-dgit -wgf --quilt=gbp --dgit-view-save=split.b quilt-fixup
 
-# Test that git-debpush can now figure out the quilt mode for itself.
-tagname=test-dummy/$v
+: 'Test that git-debpush can now figure out the quilt mode for itself.'
+
+t-expect-fail "unneeded --gbp on command line, would have autodetected it" \
+t-t2u-test --gbp
+
 t-t2u-test
 t-t2u-succeeded
 
@@ -46,5 +50,47 @@ t-gbp-pushed-good sid
 t-t2u-gittarxz-unpack
 t-dgit --quilt=gbp --dgit-view-save=split.t quilt-fixup
 t-t2u-gittarxz-reproduced
+
+: 'Test changing suite while in NEW'
+
+v=1.0-3
+t-dch-commit -v $v -m bump
+t-dch-commit-r experimental
+t-t2u-test-core irrecoverable
+grep 'Package is in NEW and has not been accepted or rejected yet' \
+    ../t2u/worker-cwd/w0/dgit-tmp/t2u.log
+
+: 'Test orig handling when we change suites (#1105766)'
+
+v=1.0-2
+t-archive-process-incoming unstable
+
+t-refs-same-start
+export XZ_OPT=-1 # change the generated orig
+
+v=1.0-4
+t-dch-commit -v $v -m bump
+t-dch-commit-r experimental
+t-t2u-test
+t-t2u-succeeded
+
+origs_from_dsc () { grep -P "^ [0-9a-f].* ${p}.*orig.tar"; }
+
+origs_from_dsc >../old-orig <../mirror/pool/main/${p}_1.0-2.dsc
+origs_from_dsc >../new-orig <../incoming/${p}_${v}.dsc
+diff -u ../{old,new}-orig
+
+: "Test git-debpush's use of git-deborig"
+
+v=1.0-5
+t-dch-commit -v $v -m bump
+t-dch-commit-r experimental
+
+git tag 1.0 upstream/1.0
+t-expect-fail "use --upstream=TAG to say which one to use" t-t2u-test
+
+git tag -d 1.0
+git tag -d upstream/1.0
+t-expect-fail "found no upstream tag" t-t2u-test
 
 t-ok
